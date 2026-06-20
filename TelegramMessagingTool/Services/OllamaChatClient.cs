@@ -3,7 +3,7 @@ using System.Text.Json;
 
 namespace TelegramMessagingTool.Services;
 
-public sealed class OllamaChatClient
+public sealed class OllamaChatClient : IChatClient
 {
     private readonly HttpClient _httpClient;
     private readonly BotSettings _settings;

@@ -45,7 +45,7 @@ public sealed class ToolRegistry
         }
 
         var builder = new StringBuilder();
-        builder.AppendLine("You can request exactly one safe tool call when needed.");
+        builder.AppendLine("You can request one safe tool call at a time when needed. The app may allow another safe tool call after each tool observation, up to its configured step limit.");
         builder.AppendLine("To call a tool, reply only with strict JSON in this exact shape:");
         builder.AppendLine("{\"type\":\"tool_call\",\"tool\":\"tool_name\",\"input\":\"input text\"}");
         builder.AppendLine("Never mix tool-call JSON with normal text. The app will hide the JSON and run the tool for you.");

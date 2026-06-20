@@ -11,7 +11,7 @@ TelegramMessagingTool is a C#/.NET console application that connects a Telegram 
 - Optional admin notification when a new user connects
 - Optional chat allowlist via environment variable
 - Long Telegram responses are split into safe chunks
-- Safe agent tool system with one-step tool calling
+- Safe agent tool system with bounded multi-step tool calling
 - Built-in tools: `datetime`, `calculator`, `status`, and `online_search`
 - `/tools` command to show available tools
 - Agent-style startup console panel with commands, model, safety, and tool status
@@ -99,7 +99,7 @@ Run the released app:
 
 ## Agent tools
 
-The bot can now use one safe tool per normal user request when the model replies with this strict JSON protocol:
+The bot can now use up to three safe tool steps per normal user request when the model replies with this strict JSON protocol:
 
 ```json
 {"type":"tool_call","tool":"calculator","input":"25 * 19"}
@@ -120,6 +120,12 @@ Search behavior notes:
 - The bot now hides raw `tool_call` JSON from the final answer after the tool runs.
 - For clear misspellings such as `Mitsubateie Lanser 1992`, the search tool tries corrected/expanded variants such as `Mitsubishi Lancer 1992 price specs review`.
 - Final search answers should summarize only what the returned search results support and include useful source links.
+
+Multi-step tool loop notes:
+
+- The agent can chain safe tools for up to three tool observations before it must produce a final answer.
+- After each safe tool result, the model receives a structured observation and can either request one more safe tool or answer.
+- If the model keeps requesting tools after the limit, the bot stops and asks the user to narrow or continue with a smaller task.
 
 Risky tools such as shell, file write/delete, database mutation, or outbound messaging are intentionally not included yet. Use the approval flow before adding dangerous tools.
 

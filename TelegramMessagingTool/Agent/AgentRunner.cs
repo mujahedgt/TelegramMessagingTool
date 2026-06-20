@@ -6,13 +6,17 @@ namespace TelegramMessagingTool.Agent;
 
 public sealed class AgentRunner
 {
-    private readonly OllamaChatClient _ollamaClient;
-    private readonly ToolRegistry _toolRegistry;
+    public const int DefaultMaxToolIterations = 3;
 
-    public AgentRunner(OllamaChatClient ollamaClient, ToolRegistry toolRegistry)
+    private readonly IChatClient _chatClient;
+    private readonly ToolRegistry _toolRegistry;
+    private readonly int _maxToolIterations;
+
+    public AgentRunner(IChatClient chatClient, ToolRegistry toolRegistry, int maxToolIterations = DefaultMaxToolIterations)
     {
-        _ollamaClient = ollamaClient;
+        _chatClient = chatClient;
         _toolRegistry = toolRegistry;
+        _maxToolIterations = Math.Max(1, maxToolIterations);
     }
 
     public async Task<string> RunAsync(List<OllamaMessageDto> conversationContext, CancellationToken cancellationToken)
@@ -25,51 +29,69 @@ public sealed class AgentRunner
             return await BuildOnlineSearchAnswerAsync(conversationContext, directSearchQuery, searchResult, cancellationToken);
         }
 
-        string firstResponse = await _ollamaClient.AskAsync(conversationContext, cancellationToken);
-        ToolCallParseResult toolCall = ToolCallParser.Parse(firstResponse);
-
-        if (!toolCall.IsToolCall)
+        for (int step = 1; step <= _maxToolIterations; step++)
         {
-            return firstResponse;
+            string assistantResponse = await _chatClient.AskAsync(conversationContext, cancellationToken);
+            ToolCallParseResult toolCall = ToolCallParser.Parse(assistantResponse);
+
+            if (!toolCall.IsToolCall)
+            {
+                return assistantResponse;
+            }
+
+            if (string.IsNullOrWhiteSpace(toolCall.ToolName) || !_toolRegistry.TryGet(toolCall.ToolName, out IAgentTool? tool) || tool is null)
+            {
+                return $"I tried to call an unknown tool: {toolCall.ToolName}. Use /tools to see available tools.";
+            }
+
+            if (tool.RequiresApproval)
+            {
+                return $"Tool '{tool.Name}' requires approval. Use /pending, /approve <id>, and /deny <id> for risky actions once that tool is wired into the approval flow.";
+            }
+
+            ToolResult result = await tool.ExecuteAsync(toolCall.Input, cancellationToken);
+
+            if (string.Equals(tool.Name, "online_search", StringComparison.OrdinalIgnoreCase))
+            {
+                return await BuildOnlineSearchAnswerAsync(conversationContext, toolCall.Input, result, cancellationToken);
+            }
+
+            conversationContext.Add(new OllamaMessageDto("assistant", assistantResponse));
+            conversationContext.Add(new OllamaMessageDto(
+                "user",
+                BuildToolObservationPrompt(tool.Name, result, step, _maxToolIterations)));
         }
 
-        if (string.IsNullOrWhiteSpace(toolCall.ToolName) || !_toolRegistry.TryGet(toolCall.ToolName, out IAgentTool? tool) || tool is null)
+        string finalResponse = await _chatClient.AskAsync(conversationContext, cancellationToken);
+        if (ToolCallParser.Parse(finalResponse).IsToolCall)
         {
-            return $"I tried to call an unknown tool: {toolCall.ToolName}. Use /tools to see available tools.";
+            return "I reached the safe tool-step limit before a final answer. Please narrow the request or ask me to continue with a smaller task.";
         }
 
-        if (tool.RequiresApproval)
-        {
-            return $"Tool '{tool.Name}' requires approval, but approval flow is not implemented yet.";
-        }
+        return finalResponse;
+    }
 
-        ToolResult result = await tool.ExecuteAsync(toolCall.Input, cancellationToken);
+    public static string BuildToolObservationPrompt(string toolName, ToolResult result, int step, int maxSteps)
+    {
+        bool canUseAnotherTool = step < maxSteps;
+        string nextStepRule = canUseAnotherTool
+            ? "If another safe tool is truly needed, you may reply with exactly one more strict tool_call JSON object. Otherwise, give the final answer now."
+            : "You have reached the safe tool-step limit. Do not request another tool. Give the final answer now using only the observations above.";
 
-        if (string.Equals(tool.Name, "online_search", StringComparison.OrdinalIgnoreCase))
-        {
-            return await BuildOnlineSearchAnswerAsync(conversationContext, toolCall.Input, result, cancellationToken);
-        }
-
-        string toolResultPrompt = $"""
-Tool result from {tool.Name}:
+        return $"""
+Tool observation {step}/{maxSteps} from {toolName}:
 Success: {result.Success}
 Output:
 {result.Output}
 
-Now answer the user's original request clearly and briefly using ONLY the tool result above.
-Rules for the final answer:
-- Do not include or repeat the raw tool_call JSON.
-- Do not use memory, general knowledge, or invented examples to fill gaps.
-- If the search query was corrected or expanded, mention the correction briefly.
-- For web search answers, cite only URLs that appear in the tool output.
-- If the user asked for prices but the tool output does not show actual prices, say that the search found relevant pages but did not expose exact prices in the returned snippets; then give the likely next source links to check.
-- Do not name sources, prices, specs, trims, or years unless they appear in the tool output.
-- Do not claim more than the tool result shows.
+Next step rule:
+{nextStepRule}
+
+Final answer rules:
+- Do not include or repeat raw tool_call JSON.
+- Do not invent facts beyond tool observations and the conversation.
+- If the tool failed, explain the failure clearly and suggest a safe next step.
 """;
-
-        conversationContext.Add(new OllamaMessageDto("user", toolResultPrompt));
-
-        return await _ollamaClient.AskAsync(conversationContext, cancellationToken);
     }
 
     private async Task<string> BuildOnlineSearchAnswerAsync(List<OllamaMessageDto> conversationContext, string query, ToolResult result, CancellationToken cancellationToken)
@@ -98,7 +120,14 @@ Rules:
 """;
 
         conversationContext.Add(new OllamaMessageDto("user", finalSearchPrompt));
-        return await _ollamaClient.AskAsync(conversationContext, cancellationToken);
+        string finalResponse = await _chatClient.AskAsync(conversationContext, cancellationToken);
+
+        if (ToolCallParser.Parse(finalResponse).IsToolCall)
+        {
+            return "I searched online for: " + query + "\n\n" + result.Output;
+        }
+
+        return finalResponse;
     }
 
     public static bool TryBuildDirectSearchQuery(List<OllamaMessageDto> conversationContext, out string query)

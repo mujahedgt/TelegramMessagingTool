@@ -108,6 +108,22 @@ ToolResult dateTimeResult = await dateTimeTool.ExecuteAsync("", CancellationToke
 AssertTrue(dateTimeResult.Success, "DateTimeTool succeeds");
 AssertTrue(dateTimeResult.Output.Contains("UTC"), "DateTimeTool reports UTC time");
 
+string observationPrompt = AgentRunner.BuildToolObservationPrompt("calculator", ToolResult.Ok("475"), 1, 3);
+AssertTrue(observationPrompt.Contains("Tool observation 1/3"), "AgentRunner labels tool observations with step count");
+AssertTrue(observationPrompt.Contains("one more strict tool_call"), "AgentRunner allows another tool before the limit");
+string finalObservationPrompt = AgentRunner.BuildToolObservationPrompt("datetime", ToolResult.Ok("UTC now"), 3, 3);
+AssertTrue(finalObservationPrompt.Contains("Do not request another tool"), "AgentRunner blocks further tools at the step limit");
+
+var scriptedChatClient = new ScriptedChatClient([
+    "{\"type\":\"tool_call\",\"tool\":\"calculator\",\"input\":\"25 * 19\"}",
+    "{\"type\":\"tool_call\",\"tool\":\"datetime\",\"input\":\"\"}",
+    "The calculation is 475, and I also checked the current time."
+]);
+var multiStepRunner = new AgentRunner(scriptedChatClient, new ToolRegistry([calculator, dateTimeTool]), maxToolIterations: 3);
+string multiStepAnswer = await multiStepRunner.RunAsync([new OllamaMessageDto("user", "Calculate 25 * 19 and then check the time.")], CancellationToken.None);
+AssertTrue(multiStepAnswer.Contains("475"), "AgentRunner returns final answer after multiple tool observations");
+AssertEqual(3, scriptedChatClient.Calls, "AgentRunner asks model again after each safe tool observation until final answer");
+
 var registry = new ToolRegistry([
     dateTimeTool,
     calculator,
@@ -365,3 +381,21 @@ await using (var cleanupContext = new TelegramDbContext())
 Environment.SetEnvironmentVariable("TELEGRAM_DB_CONNECTION", previousConnection);
 
 Console.WriteLine("All TelegramMessagingTool helper tests passed.");
+
+sealed class ScriptedChatClient : IChatClient
+{
+    private readonly Queue<string> _responses;
+
+    public ScriptedChatClient(IEnumerable<string> responses)
+    {
+        _responses = new Queue<string>(responses);
+    }
+
+    public int Calls { get; private set; }
+
+    public Task<string> AskAsync(List<OllamaMessageDto> conversationContext, CancellationToken cancellationToken)
+    {
+        Calls++;
+        return Task.FromResult(_responses.Count > 0 ? _responses.Dequeue() : "No scripted response left.");
+    }
+}
