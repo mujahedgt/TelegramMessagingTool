@@ -121,7 +121,18 @@ try
     );
 
     WriteConsoleEvent("START", me.Username ?? "bot", "long polling is running", ConsoleEventLevel.Success);
-    Console.ReadLine();
+    WriteConsoleEvent("CONSOLE", "local", "type a message or command here; use /exit to stop", ConsoleEventLevel.Info);
+
+    _ = RunConsoleInputLoopAsync(cts.Token);
+    try
+    {
+        await Task.Delay(Timeout.InfiniteTimeSpan, cts.Token);
+    }
+    catch (OperationCanceledException)
+    {
+        // Graceful shutdown requested from console, Ctrl+C, or host termination.
+    }
+
     WriteConsoleEvent("STOP", "system", "shutdown requested", ConsoleEventLevel.Warning);
     cts.Cancel();
 }
@@ -146,6 +157,135 @@ catch (Exception ex)
         LogType.Error);
 
     Console.WriteLine($"Unexpected Error: {ex.Message}");
+}
+
+async Task RunConsoleInputLoopAsync(CancellationToken cancellationToken)
+{
+    while (!cancellationToken.IsCancellationRequested)
+    {
+        Console.Write("> ");
+        string? line = await Task.Run(Console.ReadLine, cancellationToken);
+        if (line is null)
+        {
+            cts.Cancel();
+            return;
+        }
+
+        string input = line.Trim();
+        if (input.Length == 0)
+        {
+            continue;
+        }
+
+        if (input.Equals("/exit", StringComparison.OrdinalIgnoreCase)
+            || input.Equals("exit", StringComparison.OrdinalIgnoreCase)
+            || input.Equals("quit", StringComparison.OrdinalIgnoreCase))
+        {
+            cts.Cancel();
+            return;
+        }
+
+        try
+        {
+            string answer = await ProcessConsoleInputAsync(input, cancellationToken);
+            Console.WriteLine();
+            Console.WriteLine(answer);
+            Console.WriteLine();
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            WriteConsoleEvent("ERROR", "console", ex.Message, ConsoleEventLevel.Error);
+        }
+    }
+}
+
+async Task<string> ProcessConsoleInputAsync(string input, CancellationToken cancellationToken)
+{
+    await using TelegramDbContext dbContext = new();
+    ConnectedUser consoleUser = await GetOrCreateConsoleUserAsync(dbContext, cancellationToken);
+
+    var consoleMessage = new Message
+    {
+        Text = input,
+        Chat = new Chat
+        {
+            Id = consoleUser.ChatId,
+            Username = "local_console",
+            FirstName = "Local",
+            LastName = "Console"
+        }
+    };
+
+    CommandResult commandResult = await commandRouter.TryHandleAsync(consoleMessage, consoleUser, dbContext, cancellationToken);
+    if (commandResult.Handled)
+    {
+        WriteConsoleEvent("COMMAND", "console", input.Split(' ', 2)[0], ConsoleEventLevel.Success);
+        return commandResult.ReplyText ?? "Command completed.";
+    }
+
+    dbContext.Messages.Add(new ChatMessage
+    {
+        ConnectedUserId = consoleUser.Id,
+        ChatId = consoleUser.ChatId,
+        Content = input,
+        Role = ChatRoles.User,
+        Timestamp = DateTime.UtcNow
+    });
+    await dbContext.SaveChangesAsync(cancellationToken);
+
+    List<OllamaMessageDto> conversationContext = await conversationService.CreateConversationContextAsync(
+        dbContext,
+        consoleUser.Id,
+        maxHistory: 8,
+        cancellationToken: cancellationToken,
+        toolInstructions: toolRegistry.RenderToolInstructions());
+
+    string finalAnswer = await agentRunner.RunAsync(conversationContext, cancellationToken);
+    WriteConsoleEvent("MESSAGE", "console", $"answered {finalAnswer.Length} chars", ConsoleEventLevel.Success);
+
+    dbContext.Messages.Add(new ChatMessage
+    {
+        ConnectedUserId = consoleUser.Id,
+        ChatId = consoleUser.ChatId,
+        Content = finalAnswer,
+        Role = ChatRoles.Assistant,
+        Timestamp = DateTime.UtcNow
+    });
+    await dbContext.SaveChangesAsync(cancellationToken);
+
+    return finalAnswer;
+}
+
+async Task<ConnectedUser> GetOrCreateConsoleUserAsync(TelegramDbContext dbContext, CancellationToken cancellationToken)
+{
+    const long consoleChatId = 0;
+    ConnectedUser? user = await dbContext.Users.FirstOrDefaultAsync(x => x.ChatId == consoleChatId, cancellationToken);
+    if (user is not null)
+    {
+        user.Name = "local_console";
+        user.FirstName = "Local";
+        user.LastName = "Console";
+        user.LastSeenAt = DateTime.UtcNow;
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return user;
+    }
+
+    user = new ConnectedUser
+    {
+        ChatId = consoleChatId,
+        Name = "local_console",
+        FirstName = "Local",
+        LastName = "Console",
+        CreatedAt = DateTime.UtcNow,
+        LastSeenAt = DateTime.UtcNow
+    };
+    dbContext.Users.Add(user);
+    await dbContext.SaveChangesAsync(cancellationToken);
+    return user;
 }
 
 async Task HandleUpdateAsync(

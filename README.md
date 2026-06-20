@@ -15,6 +15,7 @@ TelegramMessagingTool is a C#/.NET console application that connects a Telegram 
 - Built-in tools: `datetime`, `calculator`, `status`, and `online_search`
 - `/tools` command to show available tools
 - Agent-style startup console panel with commands, model, safety, and tool status
+- Local console chat/command input using the same command router, memory, tools, and agent runner as Telegram
 - Live console event lines for startup, commands, messages, denied users, shutdown, and errors
 - Sandboxed document/file support for `.txt`, `.md`, `.json`, `.csv`, `.pdf`, `.docx`, and `.xlsx`
 - File commands: `/files`, `/readfile <id>`, and `/createfile <filename> <content>`
@@ -204,15 +205,28 @@ On startup the console shows a readable agent dashboard:
 - runtime status: bot username, model, Ollama endpoint, database summary, migrations, allowlist, logging
 - command list in compact columns
 - registered agent tools
-- quick-start Telegram examples
+- quick-start examples that work from either Telegram or the local console
 - safety warnings when `ALLOWED_CHAT_IDS` is missing or message-content logging is enabled
 - live event stream for startup, commands, normal messages, denied users, shutdown, and errors
+
+You can now use the agent directly from the console while the Telegram bot is running:
+
+```text
+> /help
+> /tools
+> Calculate 25 * 19 and then check the time
+> /plan prepare document Q&A support
+> /exit
+```
+
+Console input uses the same command router, local Ollama model, safe tool loop, memory tables, task planner, and sandboxed file commands as Telegram. The console identity is stored as a local user named `local_console` with chat ID `0`.
 
 Sensitive connection-string fields such as passwords and user IDs are not printed in the startup panel.
 
 ## Runtime notes
 
-- Press `Enter` in the console to stop the bot.
+- Type normal messages or slash commands directly in the console to use the same local agent without Telegram.
+- Use `/exit` in the console to stop the bot gracefully.
 - `Ctrl+C` also requests graceful shutdown.
 - If `ALLOWED_CHAT_IDS` is empty, any Telegram user who finds the bot can use it. Set an allowlist before real use.
 - By default, logs do **not** contain full message or response text. Set `LOG_MESSAGE_CONTENT=true` only for debugging and avoid sharing log files.

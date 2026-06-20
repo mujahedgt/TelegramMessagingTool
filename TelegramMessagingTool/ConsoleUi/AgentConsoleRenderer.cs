@@ -50,12 +50,13 @@ public static class AgentConsoleRenderer
         builder.AppendLine();
         builder.AppendLine("Quick start");
         builder.AppendLine("-----------");
-        builder.AppendLine("Ask Telegram:");
+        builder.AppendLine("Type directly in this console or ask Telegram:");
         builder.AppendLine("  /help                         Show commands");
         builder.AppendLine("  /tools                        Show available tools");
         builder.AppendLine("  What time is it?              Uses datetime when needed");
         builder.AppendLine("  Calculate 25 * 19             Uses calculator when needed");
         builder.AppendLine("  Search online for .NET news   Uses online_search when needed");
+        builder.AppendLine("  /exit                         Stop the console app gracefully");
         builder.AppendLine();
         builder.AppendLine("Safety warnings");
         builder.AppendLine("---------------");
@@ -80,7 +81,8 @@ public static class AgentConsoleRenderer
         builder.AppendLine();
         builder.AppendLine("Runtime keys");
         builder.AppendLine("------------");
-        builder.AppendLine("Press Enter to stop gracefully. Ctrl+C also requests shutdown.");
+        builder.AppendLine("Type a message or command in the console to use the same local agent as Telegram.");
+        builder.AppendLine("Use /exit or Ctrl+C to stop gracefully.");
         builder.AppendLine();
         builder.AppendLine("Live events");
         builder.AppendLine("-----------");

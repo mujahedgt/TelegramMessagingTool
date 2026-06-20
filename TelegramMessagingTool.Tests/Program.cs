@@ -183,7 +183,8 @@ AssertTrue(consolePanel.Contains("TelegramMessagingTool Agent Console"), "Consol
 AssertTrue(consolePanel.Contains("/tools"), "Console renderer lists commands");
 AssertTrue(consolePanel.Contains("online_search"), "Console renderer lists tools");
 AssertTrue(consolePanel.Contains("Quick start"), "Console renderer shows quick start guidance");
-AssertTrue(consolePanel.Contains("Ask Telegram"), "Console renderer shows Telegram usage examples");
+AssertTrue(consolePanel.Contains("Type directly in this console"), "Console renderer shows console and Telegram usage examples");
+AssertTrue(consolePanel.Contains("/exit"), "Console renderer documents console exit command");
 AssertTrue(consolePanel.Contains("Safety warnings"), "Console renderer shows safety warning section");
 AssertTrue(consolePanel.Contains("ALLOWED_CHAT_IDS is not set"), "Console renderer warns when allowlist is disabled");
 
