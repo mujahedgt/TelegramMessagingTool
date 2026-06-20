@@ -32,6 +32,11 @@ TelegramMessagingTool Agent Commands
 /files - List saved files and uploaded documents
 /readfile <id> - Read a saved text/PDF/DOCX/XLSX document
 /createfile <filename> <content> - Create a sandboxed .txt/.md/.json/.csv/.pdf/.docx/.xlsx file
+/indexfile <id> - Index one saved document for Q&A
+/indexdocs - Index all your saved documents for Q&A
+/docchunks <id> - Show index status for one document
+/askfile <id> <question> - Ask a question about one document
+/askdocs <question> - Ask across all indexed documents
 /tools - List available safe agent tools
 /pending - List actions waiting for your approval
 /approve <id> - Approve a pending risky action

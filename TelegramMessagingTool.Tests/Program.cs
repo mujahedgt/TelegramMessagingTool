@@ -228,6 +228,25 @@ UploadedFile createdPdf = await documentStorage.CreateFileAsync(storageTestUser,
 string extractedPdf = await documentStorage.ExtractTextAsync(createdPdf, CancellationToken.None);
 AssertTrue(extractedPdf.Contains("PDF capability works"), "ExtractTextAsync reads created PDF document");
 
+IReadOnlyList<string> documentChunks = DocumentChunker.Split(string.Join(" ", Enumerable.Repeat("alpha beta gamma delta", 500)), chunkSize: 300, overlap: 50);
+AssertTrue(documentChunks.Count > 1, "DocumentChunker splits long text into multiple chunks");
+AssertTrue(documentChunks.All(x => x.Length <= 300), "DocumentChunker respects maximum chunk size");
+AssertEqual(0, DocumentChunker.Split("   ").Count, "DocumentChunker ignores blank text");
+
+var retrievalService = new DocumentRetrievalService();
+IReadOnlyList<DocumentChunk> rankedChunks = DocumentRetrievalService.RankChunks([
+    new DocumentChunk { Id = 1, OriginalFileName = "a.txt", ChunkNumber = 1, Text = "payment deadline is Sunday" },
+    new DocumentChunk { Id = 2, OriginalFileName = "b.txt", ChunkNumber = 1, Text = "shipping details only" }
+], "what is the payment deadline?", limit: 1);
+AssertEqual(1, rankedChunks.Count, "DocumentRetrievalService returns requested limit");
+AssertTrue(rankedChunks[0].Text.Contains("payment deadline"), "DocumentRetrievalService ranks relevant chunks first");
+
+string qaPrompt = DocumentQuestionAnsweringService.BuildPrompt(
+    "what is the payment deadline?",
+    [new DocumentChunk { UploadedFileId = 9, OriginalFileName = "contract.pdf", ChunkNumber = 2, Text = "The payment deadline is Sunday." }]);
+AssertTrue(qaPrompt.Contains("Use ONLY the document excerpts"), "DocumentQuestionAnsweringService restricts answers to excerpts");
+AssertTrue(qaPrompt.Contains("File #9 contract.pdf, chunk 2"), "DocumentQuestionAnsweringService includes chunk citation labels");
+
 static Message TextMessage(string text) => new()
 {
     Text = text,
@@ -259,6 +278,12 @@ await using (var dbContext = new TelegramDbContext())
 
     var pendingActionService = new PendingActionService();
     var agentTaskService = new AgentTaskService();
+    var documentIndexingService = new DocumentIndexingService(documentStorage);
+    var documentRetrievalService = new DocumentRetrievalService();
+    var documentQuestionAnsweringService = new DocumentQuestionAnsweringService(new ScriptedChatClient([
+        "The payment deadline is Sunday. Source: File #1 notes.md, chunk 1.",
+        "The saved note says this is a saved note. Source: File #1 notes.md, chunk 1."
+    ]));
     var commandRouter = new CommandRouter([
         new HelpCommand(),
         new StatusCommand(new BotSettings(
@@ -277,6 +302,11 @@ await using (var dbContext = new TelegramDbContext())
         new FilesCommand(documentStorage),
         new ReadFileCommand(documentStorage),
         new CreateFileCommand(documentStorage),
+        new IndexFileCommand(documentIndexingService),
+        new IndexDocsCommand(documentIndexingService),
+        new DocChunksCommand(),
+        new AskFileCommand(documentIndexingService, documentRetrievalService, documentQuestionAnsweringService),
+        new AskDocsCommand(documentRetrievalService, documentQuestionAnsweringService),
         new ToolsCommand(registry),
         new PendingCommand(pendingActionService),
         new ApproveCommand(pendingActionService),
@@ -370,6 +400,23 @@ await using (var dbContext = new TelegramDbContext())
     CommandResult readFileResult = await commandRouter.TryHandleAsync(TextMessage($"/readfile {uploadedFileId}"), testUser, dbContext, CancellationToken.None);
     AssertTrue(readFileResult.Handled, "/readfile is handled");
     AssertTrue(readFileResult.ReplyText?.Contains("This is a saved note") == true, "/readfile returns file contents");
+
+    CommandResult indexFileResult = await commandRouter.TryHandleAsync(TextMessage($"/indexfile {uploadedFileId}"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(indexFileResult.Handled, "/indexfile is handled");
+    AssertTrue(indexFileResult.ReplyText?.Contains("Chunks created") == true, "/indexfile reports chunk count");
+    AssertTrue(await dbContext.DocumentChunks.AnyAsync(x => x.UploadedFileId == uploadedFileId), "/indexfile stores document chunks");
+
+    CommandResult docChunksResult = await commandRouter.TryHandleAsync(TextMessage($"/docchunks {uploadedFileId}"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(docChunksResult.Handled, "/docchunks is handled");
+    AssertTrue(docChunksResult.ReplyText?.Contains("Chunks:") == true, "/docchunks reports index status");
+
+    CommandResult askFileResult = await commandRouter.TryHandleAsync(TextMessage($"/askfile {uploadedFileId} what does the note say?"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(askFileResult.Handled, "/askfile is handled");
+    AssertTrue(askFileResult.ReplyText?.Contains("payment deadline", StringComparison.OrdinalIgnoreCase) == true, "/askfile returns model answer grounded in chunks");
+
+    CommandResult askDocsResult = await commandRouter.TryHandleAsync(TextMessage("/askdocs what saved note do I have?"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(askDocsResult.Handled, "/askdocs is handled");
+    AssertTrue(askDocsResult.ReplyText?.Contains("saved note", StringComparison.OrdinalIgnoreCase) == true, "/askdocs returns model answer across documents");
 
     dbContext.Messages.Add(new ChatMessage
     {

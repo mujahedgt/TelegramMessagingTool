@@ -13,6 +13,8 @@ public class TelegramDbContext : DbContext
 
     public DbSet<UploadedFile> UploadedFiles => Set<UploadedFile>();
 
+    public DbSet<DocumentChunk> DocumentChunks => Set<DocumentChunk>();
+
     public DbSet<PendingAction> PendingActions => Set<PendingAction>();
 
     public DbSet<AgentTask> AgentTasks => Set<AgentTask>();
@@ -133,6 +135,36 @@ public class TelegramDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(x => x.ConnectedUserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<DocumentChunk>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.OriginalFileName)
+                .HasMaxLength(255);
+
+            entity.Property(x => x.Text)
+                .HasColumnType("nvarchar(max)");
+
+            entity.Property(x => x.CreatedAt)
+                .HasDefaultValueSql("GETUTCDATE()");
+
+            entity.HasIndex(x => x.ConnectedUserId);
+            entity.HasIndex(x => x.ChatId);
+            entity.HasIndex(x => x.UploadedFileId);
+            entity.HasIndex(x => new { x.ConnectedUserId, x.UploadedFileId, x.ChunkNumber })
+                .IsUnique();
+
+            entity.HasOne(x => x.UploadedFile)
+                .WithMany()
+                .HasForeignKey(x => x.UploadedFileId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(x => x.User)
+                .WithMany()
+                .HasForeignKey(x => x.ConnectedUserId)
+                .OnDelete(DeleteBehavior.NoAction);
         });
 
         modelBuilder.Entity<PendingAction>(entity =>

@@ -58,6 +58,9 @@ var toolRegistry = new ToolRegistry([
 var documentStorage = new DocumentStorageService(Path.Combine(AppContext.BaseDirectory, "UserFiles"));
 var pendingActionService = new PendingActionService();
 var agentTaskService = new AgentTaskService();
+var documentIndexingService = new DocumentIndexingService(documentStorage);
+var documentRetrievalService = new DocumentRetrievalService();
+var documentQuestionAnsweringService = new DocumentQuestionAnsweringService(ollamaClient);
 var agentRunner = new AgentRunner(ollamaClient, toolRegistry);
 var conversationService = new ConversationService();
 var commandRouter = new CommandRouter([
@@ -70,6 +73,11 @@ var commandRouter = new CommandRouter([
     new FilesCommand(documentStorage),
     new ReadFileCommand(documentStorage),
     new CreateFileCommand(documentStorage),
+    new IndexFileCommand(documentIndexingService),
+    new IndexDocsCommand(documentIndexingService),
+    new DocChunksCommand(),
+    new AskFileCommand(documentIndexingService, documentRetrievalService, documentQuestionAnsweringService),
+    new AskDocsCommand(documentRetrievalService, documentQuestionAnsweringService),
     new ToolsCommand(toolRegistry),
     new PendingCommand(pendingActionService),
     new ApproveCommand(pendingActionService),
