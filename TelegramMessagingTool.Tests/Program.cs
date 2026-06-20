@@ -257,6 +257,7 @@ await using (var dbContext = new TelegramDbContext())
     await dbContext.SaveChangesAsync();
 
     var pendingActionService = new PendingActionService();
+    var agentTaskService = new AgentTaskService();
     var commandRouter = new CommandRouter([
         new HelpCommand(),
         new StatusCommand(new BotSettings(
@@ -278,7 +279,12 @@ await using (var dbContext = new TelegramDbContext())
         new ToolsCommand(registry),
         new PendingCommand(pendingActionService),
         new ApproveCommand(pendingActionService),
-        new DenyCommand(pendingActionService)
+        new DenyCommand(pendingActionService),
+        new PlanCommand(agentTaskService),
+        new TasksCommand(agentTaskService),
+        new TaskCommand(agentTaskService),
+        new DoneCommand(agentTaskService),
+        new CancelCommand(agentTaskService)
     ]);
 
     CommandResult helpResult = await commandRouter.TryHandleAsync(TextMessage("/help"), testUser, dbContext, CancellationToken.None);
@@ -324,6 +330,28 @@ await using (var dbContext = new TelegramDbContext())
     CommandResult denyResult = await commandRouter.TryHandleAsync(TextMessage($"/deny {secondPendingAction.Id}"), testUser, dbContext, CancellationToken.None);
     AssertTrue(denyResult.Handled, "/deny is handled");
     AssertEqual(PendingActionStatuses.Denied, (await dbContext.PendingActions.FindAsync([secondPendingAction.Id], CancellationToken.None))!.Status, "/deny marks action denied");
+
+    CommandResult planResult = await commandRouter.TryHandleAsync(TextMessage("/plan build a small inventory API"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(planResult.Handled, "/plan is handled");
+    AssertEqual(1, await dbContext.AgentTasks.CountAsync(x => x.ConnectedUserId == testUser.Id), "/plan creates task");
+    int taskId = await dbContext.AgentTasks.Where(x => x.ConnectedUserId == testUser.Id).Select(x => x.Id).SingleAsync();
+    AssertEqual(5, await dbContext.AgentTaskSteps.CountAsync(x => x.AgentTaskId == taskId), "/plan creates default task steps");
+
+    CommandResult tasksResult = await commandRouter.TryHandleAsync(TextMessage("/tasks"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(tasksResult.Handled, "/tasks is handled");
+    AssertTrue(tasksResult.ReplyText?.Contains("inventory API", StringComparison.OrdinalIgnoreCase) == true, "/tasks lists planned goal");
+
+    CommandResult taskResult = await commandRouter.TryHandleAsync(TextMessage($"/task {taskId}"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(taskResult.Handled, "/task is handled");
+    AssertTrue(taskResult.ReplyText?.Contains("[ ] 1.") == true, "/task shows task steps");
+
+    CommandResult doneStepResult = await commandRouter.TryHandleAsync(TextMessage($"/done {taskId} 1"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(doneStepResult.Handled, "/done step is handled");
+    AssertTrue((await dbContext.AgentTaskSteps.FirstAsync(x => x.AgentTaskId == taskId && x.StepNumber == 1)).IsDone, "/done marks step done");
+
+    CommandResult cancelTaskResult = await commandRouter.TryHandleAsync(TextMessage($"/cancel {taskId}"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(cancelTaskResult.Handled, "/cancel is handled");
+    AssertEqual(AgentTaskStatuses.Cancelled, (await dbContext.AgentTasks.FindAsync([taskId], CancellationToken.None))!.Status, "/cancel marks task cancelled");
 
     CommandResult createFileResult = await commandRouter.TryHandleAsync(TextMessage("/createfile notes.md This is a saved note"), testUser, dbContext, CancellationToken.None);
     AssertTrue(createFileResult.Handled, "/createfile is handled");

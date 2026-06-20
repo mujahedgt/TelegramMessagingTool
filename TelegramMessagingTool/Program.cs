@@ -57,6 +57,7 @@ var toolRegistry = new ToolRegistry([
 ]);
 var documentStorage = new DocumentStorageService(Path.Combine(AppContext.BaseDirectory, "UserFiles"));
 var pendingActionService = new PendingActionService();
+var agentTaskService = new AgentTaskService();
 var agentRunner = new AgentRunner(ollamaClient, toolRegistry);
 var conversationService = new ConversationService();
 var commandRouter = new CommandRouter([
@@ -72,7 +73,12 @@ var commandRouter = new CommandRouter([
     new ToolsCommand(toolRegistry),
     new PendingCommand(pendingActionService),
     new ApproveCommand(pendingActionService),
-    new DenyCommand(pendingActionService)
+    new DenyCommand(pendingActionService),
+    new PlanCommand(agentTaskService),
+    new TasksCommand(agentTaskService),
+    new TaskCommand(agentTaskService),
+    new DoneCommand(agentTaskService),
+    new CancelCommand(agentTaskService)
 ]);
 
 using CancellationTokenSource cts = new();

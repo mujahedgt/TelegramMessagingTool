@@ -20,6 +20,7 @@ TelegramMessagingTool is a C#/.NET console application that connects a Telegram 
 - File commands: `/files`, `/readfile <id>`, and `/createfile <filename> <content>`
 - Safe approval foundation for future risky tools
 - Approval commands: `/pending`, `/approve <id>`, and `/deny <id>`
+- Task planner commands: `/plan <goal>`, `/tasks`, `/task <id>`, `/done <task-id> [step-number]`, and `/cancel <task-id>`
 
 ## Development note
 
@@ -142,6 +143,23 @@ Commands:
 | `/deny <id>` | Deny a pending action |
 
 Pending actions expire automatically if they are not approved before their expiry time.
+
+## Task planner
+
+The bot can create and track simple step-by-step plans per Telegram user.
+
+Commands:
+
+| Command | Purpose |
+|---|---|
+| `/plan <goal>` | Create a new task plan with practical steps |
+| `/tasks` | List active task plans |
+| `/tasks all` | List active, completed, and cancelled plans |
+| `/task <id>` | Show one task plan with its steps |
+| `/done <task-id> [step-number]` | Mark a step done, or mark the full task done if no step is given |
+| `/cancel <task-id>` | Cancel an active task plan |
+
+The first version uses deterministic plan templates for software/project, study/learning, and general goals. Later versions can connect this to the LLM for richer planning.
 
 ## File and document support
 

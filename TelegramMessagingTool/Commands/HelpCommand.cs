@@ -36,6 +36,11 @@ TelegramMessagingTool Agent Commands
 /pending - List actions waiting for your approval
 /approve <id> - Approve a pending risky action
 /deny <id> - Deny a pending risky action
+/plan <goal> - Create a step-by-step task plan
+/tasks - List active task plans
+/task <id> - Show a task plan
+/done <task-id> [step-number] - Mark a task or step done
+/cancel <task-id> - Cancel a task plan
 
 Normal messages are answered by the local Ollama model.
 """;

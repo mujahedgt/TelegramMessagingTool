@@ -15,6 +15,10 @@ public class TelegramDbContext : DbContext
 
     public DbSet<PendingAction> PendingActions => Set<PendingAction>();
 
+    public DbSet<AgentTask> AgentTasks => Set<AgentTask>();
+
+    public DbSet<AgentTaskStep> AgentTaskSteps => Set<AgentTaskStep>();
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
         if (!optionsBuilder.IsConfigured)
@@ -164,6 +168,53 @@ public class TelegramDbContext : DbContext
             entity.HasOne(x => x.User)
                 .WithMany()
                 .HasForeignKey(x => x.ConnectedUserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<AgentTask>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.Goal)
+                .HasMaxLength(500);
+
+            entity.Property(x => x.Status)
+                .HasMaxLength(30);
+
+            entity.Property(x => x.CreatedAt)
+                .HasDefaultValueSql("GETUTCDATE()");
+
+            entity.Property(x => x.UpdatedAt)
+                .HasDefaultValueSql("GETUTCDATE()");
+
+            entity.HasIndex(x => x.ConnectedUserId);
+            entity.HasIndex(x => x.ChatId);
+            entity.HasIndex(x => x.Status);
+            entity.HasIndex(x => x.UpdatedAt);
+
+            entity.HasOne(x => x.User)
+                .WithMany()
+                .HasForeignKey(x => x.ConnectedUserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<AgentTaskStep>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.Description)
+                .HasMaxLength(1000);
+
+            entity.Property(x => x.CreatedAt)
+                .HasDefaultValueSql("GETUTCDATE()");
+
+            entity.HasIndex(x => x.AgentTaskId);
+            entity.HasIndex(x => new { x.AgentTaskId, x.StepNumber })
+                .IsUnique();
+
+            entity.HasOne(x => x.AgentTask)
+                .WithMany(x => x.Steps)
+                .HasForeignKey(x => x.AgentTaskId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }
