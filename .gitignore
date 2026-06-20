@@ -1,0 +1,13 @@
+bin/
+obj/
+.vs/
+.vscode/
+*.user
+*.suo
+logs/
+*.log
+publish/
+release/
+UserFiles/
+*.html
+NUL

@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="TelegramMessagingTool/TelegramMessagingTool.csproj" />
+  <Project Path="TelegramMessagingTool.Tests/TelegramMessagingTool.Tests.csproj" />
+</Solution>
