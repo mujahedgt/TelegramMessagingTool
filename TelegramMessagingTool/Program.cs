@@ -56,6 +56,7 @@ var toolRegistry = new ToolRegistry([
     new OnlineSearchTool(searchClient)
 ]);
 var documentStorage = new DocumentStorageService(Path.Combine(AppContext.BaseDirectory, "UserFiles"));
+var pendingActionService = new PendingActionService();
 var agentRunner = new AgentRunner(ollamaClient, toolRegistry);
 var conversationService = new ConversationService();
 var commandRouter = new CommandRouter([
@@ -68,7 +69,10 @@ var commandRouter = new CommandRouter([
     new FilesCommand(documentStorage),
     new ReadFileCommand(documentStorage),
     new CreateFileCommand(documentStorage),
-    new ToolsCommand(toolRegistry)
+    new ToolsCommand(toolRegistry),
+    new PendingCommand(pendingActionService),
+    new ApproveCommand(pendingActionService),
+    new DenyCommand(pendingActionService)
 ]);
 
 using CancellationTokenSource cts = new();

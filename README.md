@@ -18,6 +18,12 @@ TelegramMessagingTool is a C#/.NET console application that connects a Telegram 
 - Live console event lines for startup, commands, messages, denied users, shutdown, and errors
 - Sandboxed document/file support for `.txt`, `.md`, `.json`, `.csv`, `.pdf`, `.docx`, and `.xlsx`
 - File commands: `/files`, `/readfile <id>`, and `/createfile <filename> <content>`
+- Safe approval foundation for future risky tools
+- Approval commands: `/pending`, `/approve <id>`, and `/deny <id>`
+
+## Development note
+
+Major agent-upgrade work on this project was implemented with help from **Hermes Ghost**, Mujahed Issa's local AI development assistant, including the command system, memory, tools, document handling, startup launcher, search improvements, and approval foundation.
 
 ## Requirements
 
@@ -115,7 +121,21 @@ Search behavior notes:
 - For clear misspellings such as `Mitsubateie Lanser 1992`, the search tool tries corrected/expanded variants such as `Mitsubishi Lancer 1992 price specs review`.
 - Final search answers should summarize only what the returned search results support and include useful source links.
 
-Risky tools such as shell, file write/delete, database mutation, or outbound messaging are intentionally not included yet. Add approval flow before adding dangerous tools.
+Risky tools such as shell, file write/delete, database mutation, or outbound messaging are intentionally not included yet. Use the approval flow before adding dangerous tools.
+
+## Approval flow
+
+The bot now includes a database-backed approval foundation for future risky actions. This does not execute dangerous tools yet; it stores and tracks approval decisions so future tools can be gated safely.
+
+Commands:
+
+| Command | Purpose |
+|---|---|
+| `/pending` | List pending actions waiting for your approval |
+| `/approve <id>` | Approve a pending action |
+| `/deny <id>` | Deny a pending action |
+
+Pending actions expire automatically if they are not approved before their expiry time.
 
 ## File and document support
 

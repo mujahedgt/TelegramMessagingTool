@@ -13,6 +13,8 @@ public class TelegramDbContext : DbContext
 
     public DbSet<UploadedFile> UploadedFiles => Set<UploadedFile>();
 
+    public DbSet<PendingAction> PendingActions => Set<PendingAction>();
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
         if (!optionsBuilder.IsConfigured)
@@ -122,6 +124,42 @@ public class TelegramDbContext : DbContext
             entity.HasIndex(x => x.ConnectedUserId);
             entity.HasIndex(x => x.ChatId);
             entity.HasIndex(x => x.CreatedAt);
+
+            entity.HasOne(x => x.User)
+                .WithMany()
+                .HasForeignKey(x => x.ConnectedUserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<PendingAction>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.ToolName)
+                .HasMaxLength(100);
+
+            entity.Property(x => x.Description)
+                .HasMaxLength(1000);
+
+            entity.Property(x => x.PayloadJson)
+                .HasColumnType("nvarchar(max)");
+
+            entity.Property(x => x.RiskLevel)
+                .HasMaxLength(50);
+
+            entity.Property(x => x.Status)
+                .HasMaxLength(30);
+
+            entity.Property(x => x.DecisionNote)
+                .HasMaxLength(500);
+
+            entity.Property(x => x.CreatedAt)
+                .HasDefaultValueSql("GETUTCDATE()");
+
+            entity.HasIndex(x => x.ConnectedUserId);
+            entity.HasIndex(x => x.ChatId);
+            entity.HasIndex(x => x.Status);
+            entity.HasIndex(x => x.ExpiresAt);
 
             entity.HasOne(x => x.User)
                 .WithMany()

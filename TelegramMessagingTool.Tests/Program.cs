@@ -240,6 +240,7 @@ await using (var dbContext = new TelegramDbContext())
     dbContext.Users.Add(testUser);
     await dbContext.SaveChangesAsync();
 
+    var pendingActionService = new PendingActionService();
     var commandRouter = new CommandRouter([
         new HelpCommand(),
         new StatusCommand(new BotSettings(
@@ -258,7 +259,10 @@ await using (var dbContext = new TelegramDbContext())
         new FilesCommand(documentStorage),
         new ReadFileCommand(documentStorage),
         new CreateFileCommand(documentStorage),
-        new ToolsCommand(registry)
+        new ToolsCommand(registry),
+        new PendingCommand(pendingActionService),
+        new ApproveCommand(pendingActionService),
+        new DenyCommand(pendingActionService)
     ]);
 
     CommandResult helpResult = await commandRouter.TryHandleAsync(TextMessage("/help"), testUser, dbContext, CancellationToken.None);
@@ -272,6 +276,38 @@ await using (var dbContext = new TelegramDbContext())
     CommandResult toolsResult = await commandRouter.TryHandleAsync(TextMessage("/tools"), testUser, dbContext, CancellationToken.None);
     AssertTrue(toolsResult.Handled, "/tools is handled");
     AssertTrue(toolsResult.ReplyText?.Contains("online_search") == true, "/tools lists online search");
+
+    PendingAction pendingAction = await pendingActionService.CreateAsync(
+        dbContext,
+        testUser,
+        "project_patch_file",
+        "Patch a source file after user approval.",
+        "{\"path\":\"Program.cs\"}",
+        "high",
+        TimeSpan.FromMinutes(30),
+        CancellationToken.None);
+
+    CommandResult pendingResult = await commandRouter.TryHandleAsync(TextMessage("/pending"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(pendingResult.Handled, "/pending is handled");
+    AssertTrue(pendingResult.ReplyText?.Contains($"#{pendingAction.Id}") == true, "/pending lists pending action");
+
+    CommandResult approveResult = await commandRouter.TryHandleAsync(TextMessage($"/approve {pendingAction.Id}"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(approveResult.Handled, "/approve is handled");
+    AssertEqual(PendingActionStatuses.Approved, (await dbContext.PendingActions.FindAsync([pendingAction.Id], CancellationToken.None))!.Status, "/approve marks action approved");
+
+    PendingAction secondPendingAction = await pendingActionService.CreateAsync(
+        dbContext,
+        testUser,
+        "git_push",
+        "Push committed changes after approval.",
+        "{}",
+        "high",
+        TimeSpan.FromMinutes(30),
+        CancellationToken.None);
+
+    CommandResult denyResult = await commandRouter.TryHandleAsync(TextMessage($"/deny {secondPendingAction.Id}"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(denyResult.Handled, "/deny is handled");
+    AssertEqual(PendingActionStatuses.Denied, (await dbContext.PendingActions.FindAsync([secondPendingAction.Id], CancellationToken.None))!.Status, "/deny marks action denied");
 
     CommandResult createFileResult = await commandRouter.TryHandleAsync(TextMessage("/createfile notes.md This is a saved note"), testUser, dbContext, CancellationToken.None);
     AssertTrue(createFileResult.Handled, "/createfile is handled");

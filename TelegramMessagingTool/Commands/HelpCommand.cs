@@ -33,6 +33,9 @@ TelegramMessagingTool Agent Commands
 /readfile <id> - Read a saved text/PDF/DOCX/XLSX document
 /createfile <filename> <content> - Create a sandboxed .txt/.md/.json/.csv/.pdf/.docx/.xlsx file
 /tools - List available safe agent tools
+/pending - List actions waiting for your approval
+/approve <id> - Approve a pending risky action
+/deny <id> - Deny a pending risky action
 
 Normal messages are answered by the local Ollama model.
 """;
