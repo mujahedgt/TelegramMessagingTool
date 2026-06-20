@@ -141,6 +141,17 @@ IReadOnlyList<SearchResult> parsedSearchResults = OnlineSearchTool.ParseSearchHt
 AssertEqual(1, parsedSearchResults.Count, "OnlineSearchTool parses Startpage-style results");
 AssertTrue(parsedSearchResults[0].Title.Contains("Surface Laptop 8th"), "OnlineSearchTool parses result title");
 AssertTrue(parsedSearchResults[0].Snippet.Contains("Snapdragon"), "OnlineSearchTool parses result snippet");
+string readablePageText = OnlineSearchTool.ExtractReadablePageText("<html><head><script>ignore()</script></head><body><h1>New Mitsubishi</h1><p>Official latest model details.</p></body></html>");
+AssertTrue(readablePageText.Contains("New Mitsubishi"), "OnlineSearchTool extracts readable page text");
+AssertFalse(readablePageText.Contains("ignore()"), "OnlineSearchTool removes script content from page extracts");
+string renderedSearchWithExtract = OnlineSearchTool.RenderResults(
+    "newest mitsubishi",
+    "newest mitsubishi 2026 official latest model",
+    [new SearchResult("Mitsubishi Motors: What's new for 2026", "https://example.com/mitsubishi", "Official 2026 lineup")],
+    "fixture",
+    [new PageExtract("Mitsubishi Motors: What's new for 2026", "https://example.com/mitsubishi", "The 2026 lineup includes updated Outlander details.")]);
+AssertTrue(renderedSearchWithExtract.Contains("Read page extracts"), "OnlineSearchTool renders read page extracts");
+AssertTrue(renderedSearchWithExtract.Contains("updated Outlander"), "OnlineSearchTool includes page extract text in tool output");
 
 string consolePanel = AgentConsoleRenderer.RenderStartupPanel(new AgentConsoleSnapshot(
     BotUsername: "test_bot",

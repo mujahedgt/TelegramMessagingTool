@@ -63,7 +63,8 @@ public sealed partial class OnlineSearchTool : IAgentTool
                         continue;
                     }
 
-                    return ToolResult.Ok(RenderResults(query, searchQuery, results, uri.Host));
+                    IReadOnlyList<PageExtract> pageExtracts = await ReadTopResultPagesAsync(results, cancellationToken);
+                    return ToolResult.Ok(RenderResults(query, searchQuery, results, uri.Host, pageExtracts));
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
@@ -224,17 +225,86 @@ public sealed partial class OnlineSearchTool : IAgentTool
         return unique;
     }
 
-    private static string RenderResults(string originalQuery, string searchedQuery, IReadOnlyList<SearchResult> results, string provider)
+    public static string RenderResults(string originalQuery, string searchedQuery, IReadOnlyList<SearchResult> results, string provider, IReadOnlyList<PageExtract>? pageExtracts = null)
     {
         string correctionNote = string.Equals(originalQuery, searchedQuery, StringComparison.OrdinalIgnoreCase)
             ? string.Empty
             : $"\nCorrected/expanded query used: {searchedQuery}";
 
-        return "Search results for: " + originalQuery + correctionNote + $"\nProvider: {provider}\n" + string.Join("\n", results.Select((x, index) =>
+        string renderedResults = string.Join("\n", results.Select((x, index) =>
         {
             string snippet = string.IsNullOrWhiteSpace(x.Snippet) ? string.Empty : $"\n   {x.Snippet}";
             return $"{index + 1}. {x.Title}\n   {x.Url}{snippet}";
         }));
+
+        string renderedExtracts = pageExtracts is { Count: > 0 }
+            ? "\n\nRead page extracts:\n" + string.Join("\n", pageExtracts.Select((x, index) =>
+                $"{index + 1}. {x.Title}\n   {x.Url}\n   Extract: {x.Text}"))
+            : "\n\nRead page extracts: none available from the top links.";
+
+        return "Search results for: " + originalQuery + correctionNote + $"\nProvider: {provider}\n" + renderedResults + renderedExtracts;
+    }
+
+    private async Task<IReadOnlyList<PageExtract>> ReadTopResultPagesAsync(IReadOnlyList<SearchResult> results, CancellationToken cancellationToken)
+    {
+        var extracts = new List<PageExtract>();
+
+        foreach (SearchResult result in results.Take(3))
+        {
+            if (!Uri.TryCreate(result.Url, UriKind.Absolute, out Uri? uri) || uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp)
+            {
+                continue;
+            }
+
+            try
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+                ApplyBrowserLikeHeaders(request);
+
+                using HttpResponseMessage response = await _httpClient.SendAsync(request, cancellationToken);
+                if (!response.IsSuccessStatusCode)
+                {
+                    continue;
+                }
+
+                string contentType = response.Content.Headers.ContentType?.MediaType ?? string.Empty;
+                if (!contentType.Contains("html", StringComparison.OrdinalIgnoreCase) && !contentType.Contains("text", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                string html = await response.Content.ReadAsStringAsync(cancellationToken);
+                if (LooksLikeBotChallenge(html))
+                {
+                    continue;
+                }
+
+                string text = ExtractReadablePageText(html, maxCharacters: 900);
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    extracts.Add(new PageExtract(result.Title, result.Url, text));
+                }
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidOperationException)
+            {
+                // Search results are still useful if a result page blocks or times out.
+            }
+        }
+
+        return extracts;
+    }
+
+    public static string ExtractReadablePageText(string html, int maxCharacters = 900)
+    {
+        string withoutNoise = ScriptStyleRegex().Replace(html, " ");
+        string text = CleanHtml(withoutNoise);
+        text = WhitespaceRegex().Replace(text, " ").Trim();
+        if (text.Length > maxCharacters)
+        {
+            text = text[..maxCharacters].TrimEnd() + "...";
+        }
+
+        return text;
     }
 
     private static string CorrectCommonSearchTypos(string query)
@@ -313,6 +383,9 @@ public sealed partial class OnlineSearchTool : IAgentTool
     [GeneratedRegex("<.*?>", RegexOptions.Singleline)]
     private static partial Regex TagRegex();
 
+    [GeneratedRegex("<(script|style|noscript)[^>]*>.*?</\\1>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    private static partial Regex ScriptStyleRegex();
+
     [GeneratedRegex("\\s+", RegexOptions.Singleline)]
     private static partial Regex WhitespaceRegex();
 
@@ -321,3 +394,4 @@ public sealed partial class OnlineSearchTool : IAgentTool
 }
 
 public sealed record SearchResult(string Title, string Url, string Snippet);
+public sealed record PageExtract(string Title, string Url, string Text);

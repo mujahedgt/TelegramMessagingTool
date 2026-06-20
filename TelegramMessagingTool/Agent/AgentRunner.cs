@@ -22,7 +22,7 @@ public sealed class AgentRunner
             && searchTool is not null)
         {
             ToolResult searchResult = await searchTool.ExecuteAsync(directSearchQuery, cancellationToken);
-            return BuildOnlineSearchAnswer(directSearchQuery, searchResult);
+            return await BuildOnlineSearchAnswerAsync(conversationContext, directSearchQuery, searchResult, cancellationToken);
         }
 
         string firstResponse = await _ollamaClient.AskAsync(conversationContext, cancellationToken);
@@ -47,7 +47,7 @@ public sealed class AgentRunner
 
         if (string.Equals(tool.Name, "online_search", StringComparison.OrdinalIgnoreCase))
         {
-            return BuildOnlineSearchAnswer(toolCall.Input, result);
+            return await BuildOnlineSearchAnswerAsync(conversationContext, toolCall.Input, result, cancellationToken);
         }
 
         string toolResultPrompt = $"""
@@ -72,31 +72,33 @@ Rules for the final answer:
         return await _ollamaClient.AskAsync(conversationContext, cancellationToken);
     }
 
-    private static string BuildOnlineSearchAnswer(string query, ToolResult result)
+    private async Task<string> BuildOnlineSearchAnswerAsync(List<OllamaMessageDto> conversationContext, string query, ToolResult result, CancellationToken cancellationToken)
     {
         if (!result.Success)
         {
             return "I tried to search online for: " + query + "\n\nSearch failed:\n" + result.Output;
         }
 
-        string searchableResultLines = string.Join('\n', result.Output
-            .Split('\n')
-            .Where(line => !line.StartsWith("Search results for:", StringComparison.OrdinalIgnoreCase)
-                && !line.StartsWith("Corrected/expanded query used:", StringComparison.OrdinalIgnoreCase)
-                && !line.StartsWith("Provider:", StringComparison.OrdinalIgnoreCase)));
+        string finalSearchPrompt = $"""
+Online search was executed for the user's request.
 
-        bool queryAsksForPrice = ContainsAny(query, ["price", "prices", "market value", "current value", "for sale"]);
-        string sourceNote = queryAsksForPrice
-            ? "For prices, check the listed price/market/value result links. Exact prices are not always visible in the returned search snippets, so I will not invent a number."
-            : "Use the listed source links for the latest details. I will not add facts that are not present in the returned search results.";
+Search query used:
+{query}
 
-        return $"""
-I searched online for: {query}
-
+Tool output, including search result links and any page extracts that could be read:
 {result.Output}
 
-{sourceNote}
-""".Trim();
+Now answer the user's original question in a helpful way using ONLY the tool output above.
+Rules:
+- If page extracts are available, use them first, not just the search result titles.
+- If no page extracts are available, say that clearly and summarize only what the search result titles/snippets show.
+- Cite the source URLs you used.
+- Do not invent model names, years, prices, specs, or claims that are not present in the tool output.
+- Keep the answer concise.
+""";
+
+        conversationContext.Add(new OllamaMessageDto("user", finalSearchPrompt));
+        return await _ollamaClient.AskAsync(conversationContext, cancellationToken);
     }
 
     public static bool TryBuildDirectSearchQuery(List<OllamaMessageDto> conversationContext, out string query)
