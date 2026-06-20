@@ -85,22 +85,21 @@ Rules for the final answer:
                 && !line.StartsWith("Corrected/expanded query used:", StringComparison.OrdinalIgnoreCase)
                 && !line.StartsWith("Provider:", StringComparison.OrdinalIgnoreCase)));
 
-        string priceNote = searchableResultLines.Contains("price", StringComparison.OrdinalIgnoreCase)
-            || searchableResultLines.Contains("market", StringComparison.OrdinalIgnoreCase)
-            || searchableResultLines.Contains("value", StringComparison.OrdinalIgnoreCase)
+        bool queryAsksForPrice = ContainsAny(query, ["price", "prices", "market value", "current value", "for sale"]);
+        string sourceNote = queryAsksForPrice
             ? "For prices, check the listed price/market/value result links. Exact prices are not always visible in the returned search snippets, so I will not invent a number."
-            : "The returned search results did not expose exact prices in the snippets, so I will not invent a number. Open the listed source links for current asking prices or market values.";
+            : "Use the listed source links for the latest details. I will not add facts that are not present in the returned search results.";
 
         return $"""
 I searched online for: {query}
 
 {result.Output}
 
-{priceNote}
+{sourceNote}
 """.Trim();
     }
 
-    private static bool TryBuildDirectSearchQuery(List<OllamaMessageDto> conversationContext, out string query)
+    public static bool TryBuildDirectSearchQuery(List<OllamaMessageDto> conversationContext, out string query)
     {
         query = string.Empty;
         string? userText = conversationContext
@@ -113,8 +112,9 @@ I searched online for: {query}
         }
 
         bool asksForSearch = ContainsAny(userText, ["search", "searsh", "google", "look up", "find online", "online", "web"]);
+        bool asksForCurrentInfo = ContainsAny(userText, ["latest", "newest", "recent", "current", "currently", "today", "this year", "new model", "new car", "just released", "released", "upcoming", "2025", "2026"]);
         bool asksForCurrentMarketData = ContainsAny(userText, ["price", "prices", "market value", "current value", "for sale"]);
-        if (!asksForSearch && !asksForCurrentMarketData)
+        if (!asksForSearch && !asksForCurrentInfo && !asksForCurrentMarketData)
         {
             return false;
         }
@@ -125,6 +125,11 @@ I searched online for: {query}
         if (asksForCurrentMarketData && !ContainsAny(query, ["price", "prices", "market", "value", "sale", "spec", "specs"]))
         {
             query += " price specs";
+        }
+
+        if (asksForCurrentInfo && !ContainsAny(query, ["official", "2025", "2026", "latest model", "new model"]))
+        {
+            query += " 2026 official latest model";
         }
 
         return !string.IsNullOrWhiteSpace(query);

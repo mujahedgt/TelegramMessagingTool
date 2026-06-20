@@ -90,6 +90,12 @@ ToolCallParseResult embeddedToolCall = ToolCallParser.Parse("I will search now:\
 AssertTrue(embeddedToolCall.IsToolCall, "ToolCallParser extracts embedded tool call JSON from chatty model output");
 AssertEqual("online_search", embeddedToolCall.ToolName, "ToolCallParser extracts embedded tool name");
 
+AssertTrue(
+    AgentRunner.TryBuildDirectSearchQuery([new OllamaMessageDto("user", "what is the newest car from mitsubishi")], out string newestMitsubishiQuery),
+    "AgentRunner directly searches newest/current factual questions");
+AssertTrue(newestMitsubishiQuery.Contains("Mitsubishi", StringComparison.OrdinalIgnoreCase), "AgentRunner keeps the requested brand in direct search query");
+AssertTrue(newestMitsubishiQuery.Contains("official", StringComparison.OrdinalIgnoreCase), "AgentRunner expands newest/current direct search query with official/latest context");
+
 var calculator = new CalculatorTool();
 ToolResult calculation = await calculator.ExecuteAsync("25 * 19", CancellationToken.None);
 AssertTrue(calculation.Success, "CalculatorTool accepts safe math");
