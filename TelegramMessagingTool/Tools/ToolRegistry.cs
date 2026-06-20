@@ -60,6 +60,7 @@ public sealed class ToolRegistry
         }
 
         builder.AppendLine("If no tool is needed, answer normally with plain text.");
+        builder.AppendLine("After a tool runs, the application will send you the tool output. In that final answer, use only the provided tool output. Do not invent prices, specs, source names, or facts that are not present in the tool output.");
         return builder.ToString().TrimEnd();
     }
 }

@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using TelegramMessagingTool.Services;
 using TelegramMessagingTool.Tools;
 
@@ -16,6 +17,14 @@ public sealed class AgentRunner
 
     public async Task<string> RunAsync(List<OllamaMessageDto> conversationContext, CancellationToken cancellationToken)
     {
+        if (TryBuildDirectSearchQuery(conversationContext, out string directSearchQuery)
+            && _toolRegistry.TryGet("online_search", out IAgentTool? searchTool)
+            && searchTool is not null)
+        {
+            ToolResult searchResult = await searchTool.ExecuteAsync(directSearchQuery, cancellationToken);
+            return BuildOnlineSearchAnswer(directSearchQuery, searchResult);
+        }
+
         string firstResponse = await _ollamaClient.AskAsync(conversationContext, cancellationToken);
         ToolCallParseResult toolCall = ToolCallParser.Parse(firstResponse);
 
@@ -35,22 +44,94 @@ public sealed class AgentRunner
         }
 
         ToolResult result = await tool.ExecuteAsync(toolCall.Input, cancellationToken);
+
+        if (string.Equals(tool.Name, "online_search", StringComparison.OrdinalIgnoreCase))
+        {
+            return BuildOnlineSearchAnswer(toolCall.Input, result);
+        }
+
         string toolResultPrompt = $"""
 Tool result from {tool.Name}:
 Success: {result.Success}
 Output:
 {result.Output}
 
-Now answer the user's original request clearly and briefly using the tool result.
+Now answer the user's original request clearly and briefly using ONLY the tool result above.
 Rules for the final answer:
 - Do not include or repeat the raw tool_call JSON.
+- Do not use memory, general knowledge, or invented examples to fill gaps.
 - If the search query was corrected or expanded, mention the correction briefly.
-- For web search answers, summarize the useful facts and include the most relevant source links.
+- For web search answers, cite only URLs that appear in the tool output.
+- If the user asked for prices but the tool output does not show actual prices, say that the search found relevant pages but did not expose exact prices in the returned snippets; then give the likely next source links to check.
+- Do not name sources, prices, specs, trims, or years unless they appear in the tool output.
 - Do not claim more than the tool result shows.
 """;
 
         conversationContext.Add(new OllamaMessageDto("user", toolResultPrompt));
 
         return await _ollamaClient.AskAsync(conversationContext, cancellationToken);
+    }
+
+    private static string BuildOnlineSearchAnswer(string query, ToolResult result)
+    {
+        if (!result.Success)
+        {
+            return "I tried to search online for: " + query + "\n\nSearch failed:\n" + result.Output;
+        }
+
+        string searchableResultLines = string.Join('\n', result.Output
+            .Split('\n')
+            .Where(line => !line.StartsWith("Search results for:", StringComparison.OrdinalIgnoreCase)
+                && !line.StartsWith("Corrected/expanded query used:", StringComparison.OrdinalIgnoreCase)
+                && !line.StartsWith("Provider:", StringComparison.OrdinalIgnoreCase)));
+
+        string priceNote = searchableResultLines.Contains("price", StringComparison.OrdinalIgnoreCase)
+            || searchableResultLines.Contains("market", StringComparison.OrdinalIgnoreCase)
+            || searchableResultLines.Contains("value", StringComparison.OrdinalIgnoreCase)
+            ? "For prices, check the listed price/market/value result links. Exact prices are not always visible in the returned search snippets, so I will not invent a number."
+            : "The returned search results did not expose exact prices in the snippets, so I will not invent a number. Open the listed source links for current asking prices or market values.";
+
+        return $"""
+I searched online for: {query}
+
+{result.Output}
+
+{priceNote}
+""".Trim();
+    }
+
+    private static bool TryBuildDirectSearchQuery(List<OllamaMessageDto> conversationContext, out string query)
+    {
+        query = string.Empty;
+        string? userText = conversationContext
+            .LastOrDefault(x => string.Equals(x.role, "user", StringComparison.OrdinalIgnoreCase))
+            ?.content;
+
+        if (string.IsNullOrWhiteSpace(userText))
+        {
+            return false;
+        }
+
+        bool asksForSearch = ContainsAny(userText, ["search", "searsh", "google", "look up", "find online", "online", "web"]);
+        bool asksForCurrentMarketData = ContainsAny(userText, ["price", "prices", "market value", "current value", "for sale"]);
+        if (!asksForSearch && !asksForCurrentMarketData)
+        {
+            return false;
+        }
+
+        Match quoted = Regex.Match(userText, "[\"“”'](?<query>[^\"“”']{2,120})[\"“”']");
+        query = quoted.Success ? quoted.Groups["query"].Value.Trim() : userText.Trim();
+
+        if (asksForCurrentMarketData && !ContainsAny(query, ["price", "prices", "market", "value", "sale", "spec", "specs"]))
+        {
+            query += " price specs";
+        }
+
+        return !string.IsNullOrWhiteSpace(query);
+    }
+
+    private static bool ContainsAny(string text, IReadOnlyList<string> terms)
+    {
+        return terms.Any(term => text.Contains(term, StringComparison.OrdinalIgnoreCase));
     }
 }

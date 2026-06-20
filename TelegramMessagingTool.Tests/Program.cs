@@ -86,6 +86,9 @@ ToolCallParseResult parsedToolCall = ToolCallParser.Parse("{\"type\":\"tool_call
 AssertTrue(parsedToolCall.IsToolCall, "ToolCallParser accepts strict tool call JSON");
 AssertEqual("calculator", parsedToolCall.ToolName, "ToolCallParser extracts tool name");
 AssertEqual("25*19", parsedToolCall.Input, "ToolCallParser extracts tool input");
+ToolCallParseResult embeddedToolCall = ToolCallParser.Parse("I will search now:\n{\"type\":\"tool_call\",\"tool\":\"online_search\",\"input\":\"Mitsubishi Lancer 1992 price specs\"}");
+AssertTrue(embeddedToolCall.IsToolCall, "ToolCallParser extracts embedded tool call JSON from chatty model output");
+AssertEqual("online_search", embeddedToolCall.ToolName, "ToolCallParser extracts embedded tool name");
 
 var calculator = new CalculatorTool();
 ToolResult calculation = await calculator.ExecuteAsync("25 * 19", CancellationToken.None);

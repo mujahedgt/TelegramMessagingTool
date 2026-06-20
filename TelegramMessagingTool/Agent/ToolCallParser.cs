@@ -25,14 +25,35 @@ public static class ToolCallParser
         }
 
         string trimmed = text.Trim();
-        if (!trimmed.StartsWith('{') || !trimmed.EndsWith('}'))
+
+        ToolCallParseResult fullTextResult = TryParseJsonToolCall(trimmed);
+        if (fullTextResult.IsToolCall || fullTextResult.Error is not null)
+        {
+            return fullTextResult;
+        }
+
+        foreach (string candidate in ExtractJsonObjectCandidates(trimmed))
+        {
+            ToolCallParseResult candidateResult = TryParseJsonToolCall(candidate);
+            if (candidateResult.IsToolCall || candidateResult.Error is not null)
+            {
+                return candidateResult;
+            }
+        }
+
+        return ToolCallParseResult.NotToolCall();
+    }
+
+    private static ToolCallParseResult TryParseJsonToolCall(string json)
+    {
+        if (!json.TrimStart().StartsWith('{') || !json.TrimEnd().EndsWith('}'))
         {
             return ToolCallParseResult.NotToolCall();
         }
 
         try
         {
-            using JsonDocument document = JsonDocument.Parse(trimmed);
+            using JsonDocument document = JsonDocument.Parse(json);
             JsonElement root = document.RootElement;
 
             if (!root.TryGetProperty("type", out JsonElement typeElement)
@@ -61,6 +82,63 @@ public static class ToolCallParser
         catch (JsonException)
         {
             return ToolCallParseResult.NotToolCall();
+        }
+    }
+
+    private static IEnumerable<string> ExtractJsonObjectCandidates(string text)
+    {
+        for (int start = 0; start < text.Length; start++)
+        {
+            if (text[start] != '{')
+            {
+                continue;
+            }
+
+            bool inString = false;
+            bool escaped = false;
+            int depth = 0;
+
+            for (int index = start; index < text.Length; index++)
+            {
+                char current = text[index];
+
+                if (escaped)
+                {
+                    escaped = false;
+                    continue;
+                }
+
+                if (current == '\\' && inString)
+                {
+                    escaped = true;
+                    continue;
+                }
+
+                if (current == '"')
+                {
+                    inString = !inString;
+                    continue;
+                }
+
+                if (inString)
+                {
+                    continue;
+                }
+
+                if (current == '{')
+                {
+                    depth++;
+                }
+                else if (current == '}')
+                {
+                    depth--;
+                    if (depth == 0)
+                    {
+                        yield return text[start..(index + 1)];
+                        break;
+                    }
+                }
+            }
         }
     }
 }
