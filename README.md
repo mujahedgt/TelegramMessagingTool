@@ -50,7 +50,8 @@ Configuration is read from environment variables.
 |---|---:|---|---|
 | `TELEGRAM_BOT_TOKEN` | Yes | none | Telegram bot token from BotFather |
 | `ADMIN_CHAT_ID` | No | `0` | Admin chat ID for new-user and blocked-user notifications |
-| `ALLOWED_CHAT_IDS` | No | empty | Comma-separated Telegram chat IDs allowed to use the bot. Empty means allow all. |
+| `ALLOWED_CHAT_IDS` | No | empty | Comma-separated Telegram chat IDs allowed to use the bot. Empty no longer means allow all unless `ALLOW_PUBLIC_ACCESS=true`. `ADMIN_CHAT_ID` is always allowed. |
+| `ALLOW_PUBLIC_ACCESS` | No | `false` | If true and `ALLOWED_CHAT_IDS` is empty, any Telegram user who finds the bot can use it. Accepts `true`, `1`, or `yes`. Keep false for real use. |
 | `OLLAMA_URL` | No | `http://localhost:11434/api/chat` | Ollama chat API endpoint |
 | `OLLAMA_MODEL` | No | `llama3.2:3b` | Ollama model name |
 | `OLLAMA_EMBEDDING_URL` | No | derived from `OLLAMA_URL` as `/api/embed` | Ollama embedding API endpoint |
@@ -66,6 +67,7 @@ Example Git Bash setup:
 export TELEGRAM_BOT_TOKEN='123456:your-token'
 export ADMIN_CHAT_ID='123456789'
 export ALLOWED_CHAT_IDS='123456789,987654321'
+export ALLOW_PUBLIC_ACCESS='false'
 export OLLAMA_MODEL='llama3.2:3b'
 export OLLAMA_EMBEDDING_MODEL='nomic-embed-text'
 export ENABLE_DOCUMENT_EMBEDDINGS='false'
@@ -253,11 +255,11 @@ Safety model:
 
 On startup the console shows a readable agent dashboard:
 
-- runtime status: bot username, model, Ollama endpoint, database summary, migrations, allowlist, logging
+- runtime status: bot username, model, Ollama endpoint, database summary, migrations, access mode, logging
 - command list in compact columns
 - registered agent tools
 - quick-start examples that work from either Telegram or the local console
-- safety warnings when `ALLOWED_CHAT_IDS` is missing or message-content logging is enabled
+- safety warnings when access is locked, public access is explicitly enabled, or message-content logging is enabled
 - live event stream for startup, commands, normal messages, denied users, shutdown, and errors
 
 You can now use the agent directly from the console while the Telegram bot is running:
@@ -279,7 +281,7 @@ Sensitive connection-string fields such as passwords and user IDs are not printe
 - Type normal messages or slash commands directly in the console to use the same local agent without Telegram.
 - Use `/exit` in the console to stop the bot gracefully.
 - `Ctrl+C` also requests graceful shutdown.
-- If `ALLOWED_CHAT_IDS` is empty, any Telegram user who finds the bot can use it. Set an allowlist before real use.
+- By default, the bot fails closed for Telegram access. Configure `ADMIN_CHAT_ID` or `ALLOWED_CHAT_IDS`. Use `ALLOW_PUBLIC_ACCESS=true` only for intentional local/public testing.
 - By default, logs do **not** contain full message or response text. Set `LOG_MESSAGE_CONTENT=true` only for debugging and avoid sharing log files.
 - Short Telegram network resets such as `SocketException (10054)` are treated as transient receiver errors. The console logs a compact `NET` warning and long polling continues automatically.
 - The default database is:
@@ -312,7 +314,7 @@ TelegramMessagingTool/
 
 ## Security recommendations
 
-1. Set `ALLOWED_CHAT_IDS` in production.
+1. Set `ADMIN_CHAT_ID` and/or `ALLOWED_CHAT_IDS` in production. Keep `ALLOW_PUBLIC_ACCESS=false` unless public access is intentional.
 2. Keep `LOG_MESSAGE_CONTENT=false` unless actively debugging.
 3. Store secrets in environment variables or a secret manager, not in source files.
 4. Use a production database connection string outside local development.

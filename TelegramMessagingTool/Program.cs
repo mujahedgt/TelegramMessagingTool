@@ -138,7 +138,7 @@ try
         OllamaUrl: settings.OllamaUrl,
         OllamaModel: settings.OllamaModel,
         DatabaseConnection: settings.DatabaseConnectionString,
-        AllowlistEnabled: settings.AllowedChatIds.Count > 0,
+        AccessMode: BotAccessPolicy.DescribeAccessMode(settings.AllowedChatIds, settings.AdminChatId, settings.AllowPublicAccess),
         MessageContentLoggingEnabled: settings.LogMessageContent,
         ApplyMigrations: settings.ApplyMigrations,
         Commands: commandRouter.Commands.Select(x => x.Name).ToList(),
@@ -340,7 +340,11 @@ async Task HandleUpdateAsync(
 
     try
     {
-        if (!BotAccessPolicy.IsAllowed(message.Chat.Id, settings.AllowedChatIds))
+        if (!BotAccessPolicy.IsAllowed(
+                message.Chat.Id,
+                settings.AllowedChatIds,
+                settings.AdminChatId,
+                settings.AllowPublicAccess))
         {
             WriteConsoleEvent("DENIED", message.Chat.Username ?? message.Chat.Id.ToString(), "chat ID is not allowed", ConsoleEventLevel.Warning);
 
@@ -348,12 +352,15 @@ async Task HandleUpdateAsync(
                 message.Chat.Id,
                 message.Chat.Username ?? "Unknown",
                 "Access denied",
-                "Chat ID is not in ALLOWED_CHAT_IDS",
+                "Chat ID is not allowed by current access mode",
                 LogType.Warning);
 
             await bot.SendMessage(
                 chatId: message.Chat.Id,
-                text: "Access denied. Ask the bot administrator to add your chat ID.",
+                text: BotAccessPolicy.AccessDeniedMessage(
+                    settings.AllowPublicAccess,
+                    settings.AllowedChatIds,
+                    settings.AdminChatId),
                 cancellationToken: cancellationToken);
 
             if (settings.AdminChatId > 0)

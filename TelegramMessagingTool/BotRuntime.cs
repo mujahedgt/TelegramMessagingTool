@@ -9,6 +9,7 @@ public sealed record BotSettings(
     bool EnableDocumentEmbeddings,
     long AdminChatId,
     IReadOnlySet<long> AllowedChatIds,
+    bool AllowPublicAccess,
     string DatabaseConnectionString,
     bool ApplyMigrations,
     bool LogMessageContent);
@@ -26,6 +27,7 @@ public static class BotConfiguration
             ?? Services.OllamaEmbeddingClient.BuildEmbedUrl(ollamaUrl);
         string ollamaEmbeddingModel = NormalizeEmbeddingModel(Environment.GetEnvironmentVariable("OLLAMA_EMBEDDING_MODEL"));
         bool enableDocumentEmbeddings = IsEnabled(Environment.GetEnvironmentVariable("ENABLE_DOCUMENT_EMBEDDINGS"), defaultValue: false);
+        bool allowPublicAccess = IsEnabled(Environment.GetEnvironmentVariable("ALLOW_PUBLIC_ACCESS"), defaultValue: false);
         string databaseConnectionString = Environment.GetEnvironmentVariable("TELEGRAM_DB_CONNECTION")
             ?? @"Server=(localdb)\MSSQLLocalDB;Database=TelegramMessagingTool;Trusted_Connection=True;TrustServerCertificate=True";
 
@@ -40,6 +42,7 @@ public static class BotConfiguration
             EnableDocumentEmbeddings: enableDocumentEmbeddings,
             AdminChatId: adminChatId,
             AllowedChatIds: BotAccessPolicy.ParseAllowedChatIds(Environment.GetEnvironmentVariable("ALLOWED_CHAT_IDS")),
+            AllowPublicAccess: allowPublicAccess,
             DatabaseConnectionString: databaseConnectionString,
             ApplyMigrations: IsEnabled(Environment.GetEnvironmentVariable("APPLY_MIGRATIONS"), defaultValue: true),
             LogMessageContent: IsEnabled(Environment.GetEnvironmentVariable("LOG_MESSAGE_CONTENT"), defaultValue: false));
@@ -82,9 +85,53 @@ public static class BotAccessPolicy
             .ToHashSet();
     }
 
-    public static bool IsAllowed(long chatId, IReadOnlySet<long> allowedChatIds)
+    public static bool IsAllowed(
+        long chatId,
+        IReadOnlySet<long> allowedChatIds,
+        long adminChatId,
+        bool allowPublicAccess)
     {
-        return allowedChatIds.Count == 0 || allowedChatIds.Contains(chatId);
+        if (IsAdmin(chatId, adminChatId))
+        {
+            return true;
+        }
+
+        if (allowedChatIds.Contains(chatId))
+        {
+            return true;
+        }
+
+        return allowPublicAccess && allowedChatIds.Count == 0;
+    }
+
+    public static string AccessDeniedMessage(bool allowPublicAccess, IReadOnlySet<long> allowedChatIds, long adminChatId)
+    {
+        if (!allowPublicAccess && allowedChatIds.Count == 0 && adminChatId <= 0)
+        {
+            return "Access denied. The bot is locked because ALLOWED_CHAT_IDS is empty, ADMIN_CHAT_ID is not configured, and ALLOW_PUBLIC_ACCESS is not enabled.";
+        }
+
+        return "Access denied. Ask the bot administrator to add your chat ID.";
+    }
+
+    public static string DescribeAccessMode(IReadOnlySet<long> allowedChatIds, long adminChatId, bool allowPublicAccess)
+    {
+        if (allowPublicAccess && allowedChatIds.Count == 0)
+        {
+            return "public override";
+        }
+
+        if (allowedChatIds.Count > 0)
+        {
+            return "allowlist";
+        }
+
+        if (adminChatId > 0)
+        {
+            return "admin-only";
+        }
+
+        return "locked";
     }
 
     public static bool IsAdmin(long chatId, long adminChatId)

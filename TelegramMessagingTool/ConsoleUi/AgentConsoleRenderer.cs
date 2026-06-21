@@ -7,7 +7,7 @@ public sealed record AgentConsoleSnapshot(
     string OllamaUrl,
     string OllamaModel,
     string DatabaseConnection,
-    bool AllowlistEnabled,
+    string AccessMode,
     bool MessageContentLoggingEnabled,
     bool ApplyMigrations,
     IReadOnlyList<string> Commands,
@@ -37,7 +37,7 @@ public static class AgentConsoleRenderer
         builder.AppendLine($"Ollama endpoint     : {snapshot.OllamaUrl}");
         builder.AppendLine($"Database            : {SummarizeDatabaseConnection(snapshot.DatabaseConnection)}");
         builder.AppendLine($"Apply migrations    : {(snapshot.ApplyMigrations ? "yes" : "no")}");
-        builder.AppendLine($"Allowlist           : {(snapshot.AllowlistEnabled ? "enabled" : "disabled")}");
+        builder.AppendLine($"Access mode         : {snapshot.AccessMode}");
         builder.AppendLine($"Message content logs: {(snapshot.MessageContentLoggingEnabled ? "enabled" : "disabled")}");
         builder.AppendLine();
         builder.AppendLine("Commands");
@@ -61,10 +61,15 @@ public static class AgentConsoleRenderer
         builder.AppendLine("Safety warnings");
         builder.AppendLine("---------------");
         bool hasWarning = false;
-        if (!snapshot.AllowlistEnabled)
+        if (snapshot.AccessMode.Equals("public override", StringComparison.OrdinalIgnoreCase))
         {
             hasWarning = true;
-            builder.AppendLine("! ALLOWED_CHAT_IDS is not set. Anyone who finds the bot can use it.");
+            builder.AppendLine("! ALLOW_PUBLIC_ACCESS is enabled. Anyone who finds the bot can use it.");
+        }
+        else if (snapshot.AccessMode.Equals("locked", StringComparison.OrdinalIgnoreCase))
+        {
+            hasWarning = true;
+            builder.AppendLine("! Telegram access is locked. Set ADMIN_CHAT_ID, ALLOWED_CHAT_IDS, or ALLOW_PUBLIC_ACCESS=true intentionally.");
         }
 
         if (snapshot.MessageContentLoggingEnabled)

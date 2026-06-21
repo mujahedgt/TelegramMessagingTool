@@ -54,10 +54,19 @@ AssertTrue(TelegramReceiverErrorClassifier.Summarize(transientTelegramException)
 AssertFalse(TelegramReceiverErrorClassifier.IsTransientNetworkError(new InvalidOperationException("bad config")), "TelegramReceiverErrorClassifier does not hide non-network errors");
 
 var allowlist = BotAccessPolicy.ParseAllowedChatIds("123, 456, invalid,789");
-AssertTrue(BotAccessPolicy.IsAllowed(123, allowlist), "allowlist includes 123");
-AssertTrue(BotAccessPolicy.IsAllowed(456, allowlist), "allowlist includes 456");
-AssertFalse(BotAccessPolicy.IsAllowed(999, allowlist), "allowlist blocks unknown chat when configured");
-AssertTrue(BotAccessPolicy.IsAllowed(999, new HashSet<long>()), "empty allowlist permits all for local development");
+var emptyAllowlist = new HashSet<long>();
+AssertTrue(BotAccessPolicy.IsAllowed(123, allowlist, adminChatId: 777, allowPublicAccess: false), "allowlist includes 123");
+AssertTrue(BotAccessPolicy.IsAllowed(456, allowlist, adminChatId: 777, allowPublicAccess: false), "allowlist includes 456");
+AssertFalse(BotAccessPolicy.IsAllowed(999, allowlist, adminChatId: 777, allowPublicAccess: false), "allowlist blocks unknown chat when configured");
+AssertFalse(BotAccessPolicy.IsAllowed(999, emptyAllowlist, adminChatId: 0, allowPublicAccess: false), "empty allowlist fails closed when public access is not explicitly enabled");
+AssertTrue(BotAccessPolicy.IsAllowed(999, emptyAllowlist, adminChatId: 0, allowPublicAccess: true), "public override allows unknown chat when explicitly enabled");
+AssertTrue(BotAccessPolicy.IsAllowed(777, emptyAllowlist, adminChatId: 777, allowPublicAccess: false), "admin chat is allowed even without allowlist");
+AssertTrue(BotAccessPolicy.AccessDeniedMessage(false, emptyAllowlist, 0).Contains("ALLOW_PUBLIC_ACCESS"), "AccessDeniedMessage explains fully locked configuration");
+AssertTrue(BotAccessPolicy.AccessDeniedMessage(false, allowlist, 0).Contains("administrator", StringComparison.OrdinalIgnoreCase), "AccessDeniedMessage gives normal allowlist denial text");
+AssertEqual("allowlist", BotAccessPolicy.DescribeAccessMode(allowlist, adminChatId: 0, allowPublicAccess: false), "DescribeAccessMode reports allowlist mode");
+AssertEqual("admin-only", BotAccessPolicy.DescribeAccessMode(emptyAllowlist, adminChatId: 777, allowPublicAccess: false), "DescribeAccessMode reports admin-only mode");
+AssertEqual("public override", BotAccessPolicy.DescribeAccessMode(emptyAllowlist, adminChatId: 0, allowPublicAccess: true), "DescribeAccessMode reports public override mode");
+AssertEqual("locked", BotAccessPolicy.DescribeAccessMode(emptyAllowlist, adminChatId: 0, allowPublicAccess: false), "DescribeAccessMode reports locked mode");
 
 string validOllamaJson = """
 {
@@ -137,6 +146,7 @@ var registry = new ToolRegistry([
         EnableDocumentEmbeddings: false,
         AdminChatId: 0,
         AllowedChatIds: new HashSet<long>(),
+        AllowPublicAccess: false,
         DatabaseConnectionString: "test-db",
         ApplyMigrations: true,
         LogMessageContent: false))
@@ -177,7 +187,7 @@ string consolePanel = AgentConsoleRenderer.RenderStartupPanel(new AgentConsoleSn
     OllamaUrl: "http://localhost:11434/api/chat",
     OllamaModel: "llama3.2:3b",
     DatabaseConnection: "LocalDB",
-    AllowlistEnabled: false,
+    AccessMode: "public override",
     MessageContentLoggingEnabled: false,
     ApplyMigrations: true,
     Commands: ["/help", "/status", "/tools"],
@@ -189,7 +199,33 @@ AssertTrue(consolePanel.Contains("Quick start"), "Console renderer shows quick s
 AssertTrue(consolePanel.Contains("Type directly in this console"), "Console renderer shows console and Telegram usage examples");
 AssertTrue(consolePanel.Contains("/exit"), "Console renderer documents console exit command");
 AssertTrue(consolePanel.Contains("Safety warnings"), "Console renderer shows safety warning section");
-AssertTrue(consolePanel.Contains("ALLOWED_CHAT_IDS is not set"), "Console renderer warns when allowlist is disabled");
+AssertTrue(consolePanel.Contains("ALLOW_PUBLIC_ACCESS is enabled"), "Console renderer warns when public access override is enabled");
+AssertTrue(consolePanel.Contains("Anyone who finds the bot can use it"), "Console renderer explains public override risk");
+
+string lockedConsolePanel = AgentConsoleRenderer.RenderStartupPanel(new AgentConsoleSnapshot(
+    BotUsername: "test_bot",
+    OllamaUrl: "http://localhost:11434/api/chat",
+    OllamaModel: "llama3.2:3b",
+    DatabaseConnection: "LocalDB",
+    AccessMode: "locked",
+    MessageContentLoggingEnabled: false,
+    ApplyMigrations: true,
+    Commands: ["/help"],
+    Tools: ["calculator"]));
+AssertTrue(lockedConsolePanel.Contains("Telegram access is locked"), "Console renderer warns when bot is locked");
+
+string adminOnlyConsolePanel = AgentConsoleRenderer.RenderStartupPanel(new AgentConsoleSnapshot(
+    BotUsername: "test_bot",
+    OllamaUrl: "http://localhost:11434/api/chat",
+    OllamaModel: "llama3.2:3b",
+    DatabaseConnection: "LocalDB",
+    AccessMode: "admin-only",
+    MessageContentLoggingEnabled: false,
+    ApplyMigrations: true,
+    Commands: ["/help"],
+    Tools: ["calculator"]));
+AssertTrue(adminOnlyConsolePanel.Contains("No immediate safety warnings."), "Console renderer does not warn for admin-only mode");
+AssertFalse(adminOnlyConsolePanel.Contains("Anyone who finds the bot can use it"), "Console renderer does not show public warning for admin-only mode");
 
 string maskedConnection = AgentConsoleRenderer.SummarizeDatabaseConnection("Server=(localdb)\\MSSQLLocalDB;Database=TelegramMessagingTool;User Id=admin;Password=secret-password;TrustServerCertificate=True");
 AssertTrue(maskedConnection.Contains("Database=TelegramMessagingTool"), "Database connection summary keeps useful database name");
@@ -219,6 +255,22 @@ var testEmbeddingService = new DeterministicEmbeddingService();
 var documentEmbeddingService = new DocumentEmbeddingService(testEmbeddingService, "test-embedding-model");
 AssertEqual("nomic-embed-text", BotConfiguration.NormalizeEmbeddingModel(""), "BotConfiguration defaults embedding model");
 AssertTrue(BotConfiguration.IsEnabled("true", defaultValue: false), "BotConfiguration parses enabled flag");
+string? previousAllowPublicAccess = Environment.GetEnvironmentVariable("ALLOW_PUBLIC_ACCESS");
+string? previousAllowedChatIdsForConfig = Environment.GetEnvironmentVariable("ALLOWED_CHAT_IDS");
+try
+{
+    Environment.SetEnvironmentVariable("ALLOW_PUBLIC_ACCESS", null);
+    Environment.SetEnvironmentVariable("ALLOWED_CHAT_IDS", null);
+    AssertFalse(BotConfiguration.LoadFromEnvironment().AllowPublicAccess, "BotConfiguration defaults public access override to false");
+
+    Environment.SetEnvironmentVariable("ALLOW_PUBLIC_ACCESS", "yes");
+    AssertTrue(BotConfiguration.LoadFromEnvironment().AllowPublicAccess, "BotConfiguration parses ALLOW_PUBLIC_ACCESS truthy values");
+}
+finally
+{
+    Environment.SetEnvironmentVariable("ALLOW_PUBLIC_ACCESS", previousAllowPublicAccess);
+    Environment.SetEnvironmentVariable("ALLOWED_CHAT_IDS", previousAllowedChatIdsForConfig);
+}
 AssertEqual("report.md", DocumentStorageService.SanitizeFileName("..\\..//report.md"), "SanitizeFileName removes path segments");
 AssertTrue(documentStorage.IsAllowedFileName("notes.txt"), "DocumentStorageService allows txt files");
 AssertTrue(documentStorage.IsAllowedFileName("report.md"), "DocumentStorageService allows markdown files");
@@ -343,6 +395,7 @@ await using (var dbContext = new TelegramDbContext())
         EnableDocumentEmbeddings: false,
         AdminChatId: testUser.ChatId,
         AllowedChatIds: new HashSet<long>(),
+        AllowPublicAccess: false,
         DatabaseConnectionString: Environment.GetEnvironmentVariable("TELEGRAM_DB_CONNECTION")!,
         ApplyMigrations: true,
         LogMessageContent: false);
