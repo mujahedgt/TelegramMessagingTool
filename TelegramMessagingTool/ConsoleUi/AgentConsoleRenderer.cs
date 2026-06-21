@@ -9,6 +9,7 @@ public sealed record AgentConsoleSnapshot(
     string DatabaseConnection,
     string AccessMode,
     bool MessageContentLoggingEnabled,
+    bool OnlineSearchEnabled,
     bool ApplyMigrations,
     IReadOnlyList<string> Commands,
     IReadOnlyList<string> Tools);
@@ -39,6 +40,7 @@ public static class AgentConsoleRenderer
         builder.AppendLine($"Apply migrations    : {(snapshot.ApplyMigrations ? "yes" : "no")}");
         builder.AppendLine($"Access mode         : {snapshot.AccessMode}");
         builder.AppendLine($"Message content logs: {(snapshot.MessageContentLoggingEnabled ? "enabled" : "disabled")}");
+        builder.AppendLine($"Online search      : {(snapshot.OnlineSearchEnabled ? "enabled" : "disabled")}");
         builder.AppendLine();
         builder.AppendLine("Commands");
         builder.AppendLine("--------");
@@ -55,7 +57,14 @@ public static class AgentConsoleRenderer
         builder.AppendLine("  /tools                        Show available tools");
         builder.AppendLine("  What time is it?              Uses datetime when needed");
         builder.AppendLine("  Calculate 25 * 19             Uses calculator when needed");
-        builder.AppendLine("  Search online for .NET news   Uses online_search when needed");
+        if (snapshot.OnlineSearchEnabled)
+        {
+            builder.AppendLine("  Search online for .NET news   Uses online_search when needed");
+        }
+        else
+        {
+            builder.AppendLine("  Search online for .NET news   Online search disabled; set ENABLE_ONLINE_SEARCH=true");
+        }
         builder.AppendLine("  /exit                         Stop the console app gracefully");
         builder.AppendLine();
         builder.AppendLine("Safety warnings");

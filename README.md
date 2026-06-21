@@ -12,7 +12,7 @@ TelegramMessagingTool is a C#/.NET console application that connects a Telegram 
 - Optional chat allowlist via environment variable
 - Long Telegram responses are split into safe chunks
 - Safe agent tool system with bounded multi-step tool calling
-- Built-in tools: `datetime`, `calculator`, `status`, and `online_search`
+- Built-in tools: `datetime`, `calculator`, `status`, and optional `online_search` when `ENABLE_ONLINE_SEARCH=true`
 - `/tools` command to show available tools
 - Agent-style startup console panel with commands, model, safety, and tool status
 - Local console chat/command input using the same command router, memory, tools, and agent runner as Telegram
@@ -57,6 +57,7 @@ Configuration is read from environment variables.
 | `OLLAMA_EMBEDDING_URL` | No | derived from `OLLAMA_URL` as `/api/embed` | Ollama embedding API endpoint |
 | `OLLAMA_EMBEDDING_MODEL` | No | `nomic-embed-text` | Local embedding model used by `/embedfile` and `/embeddocs` |
 | `ENABLE_DOCUMENT_EMBEDDINGS` | No | `false` | If true, `/askfile` and `/askdocs` use stored embeddings for hybrid semantic retrieval when available |
+| `ENABLE_ONLINE_SEARCH` | No | `false` | If true, registers `online_search` and lets the agent use public web search for current facts. Keep false when you want offline/private behavior. |
 | `TELEGRAM_DB_CONNECTION` | No | LocalDB connection | SQL Server connection string |
 | `APPLY_MIGRATIONS` | No | `true` | Apply EF migrations on startup |
 | `LOG_MESSAGE_CONTENT` | No | `false` | Log user messages and assistant responses. Keep disabled for privacy. |
@@ -71,6 +72,7 @@ export ALLOW_PUBLIC_ACCESS='false'
 export OLLAMA_MODEL='llama3.2:3b'
 export OLLAMA_EMBEDDING_MODEL='nomic-embed-text'
 export ENABLE_DOCUMENT_EMBEDDINGS='false'
+export ENABLE_ONLINE_SEARCH='false'
 export LOG_MESSAGE_CONTENT='false'
 ```
 
@@ -124,11 +126,12 @@ Available tools:
 | `datetime` | No | Current UTC and local server time |
 | `calculator` | No | Safe arithmetic expressions only |
 | `status` | No | Runtime configuration summary |
-| `online_search` | No | Public web search through DuckDuckGo Lite, Startpage, and Mojeek fallbacks; corrects common obvious query typos and expands vehicle searches with price/spec terms |
+| `online_search` | No | Optional. Registered only when `ENABLE_ONLINE_SEARCH=true`. Public web search through DuckDuckGo Lite, Startpage, and Mojeek fallbacks; corrects common obvious query typos and expands vehicle searches with price/spec terms |
 
 Search behavior notes:
 
-- The model is instructed to use `online_search` for current facts, prices, market values, specs, products, cars, and news.
+- When `ENABLE_ONLINE_SEARCH=true`, the model is instructed to use `online_search` for current facts, prices, market values, specs, products, cars, and news.
+- When `ENABLE_ONLINE_SEARCH=false`, the tool is not registered or advertised; the bot should say live web search is disabled instead of guessing current facts.
 - The bot now hides raw `tool_call` JSON from the final answer after the tool runs.
 - For clear misspellings such as `Mitsubateie Lanser 1992`, the search tool tries corrected/expanded variants such as `Mitsubishi Lancer 1992 price specs review`.
 - Final search answers should summarize only what the returned search results support and include useful source links.

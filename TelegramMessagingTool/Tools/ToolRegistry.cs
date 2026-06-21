@@ -49,9 +49,16 @@ public sealed class ToolRegistry
         builder.AppendLine("To call a tool, reply only with strict JSON in this exact shape:");
         builder.AppendLine("{\"type\":\"tool_call\",\"tool\":\"tool_name\",\"input\":\"input text\"}");
         builder.AppendLine("Never mix tool-call JSON with normal text. The app will hide the JSON and run the tool for you.");
-        builder.AppendLine("Use online_search for current facts, prices, market values, news, products, cars, specs, or anything likely to need web data.");
-        builder.AppendLine("For online_search, make the input a clean search query. Correct obvious spelling mistakes before searching when the intended term is clear, for example 'Mitsubateie Lanser 1992' -> 'Mitsubishi Lancer 1992 price specs'.");
-        builder.AppendLine("If the user asks for prices, include words like price, used price, market value, or sale in the search query.");
+        if (TryGet("online_search", out _))
+        {
+            builder.AppendLine("Use online_search for current facts, prices, market values, news, products, cars, specs, or anything likely to need web data.");
+            builder.AppendLine("For online_search, make the input a clean search query. Correct obvious spelling mistakes before searching when the intended term is clear, for example 'Mitsubateie Lanser 1992' -> 'Mitsubishi Lancer 1992 price specs'.");
+            builder.AppendLine("If the user asks for prices, include words like price, used price, market value, or sale in the search query.");
+        }
+        else
+        {
+            builder.AppendLine("Online search is disabled by configuration. Do not claim access to current web data; answer from local context only or say that live web search is disabled.");
+        }
         builder.AppendLine("Available tools:");
 
         foreach (IAgentTool tool in Tools)

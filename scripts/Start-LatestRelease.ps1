@@ -19,5 +19,30 @@ if (-not (Test-Path -LiteralPath $ReleaseExe)) {
     throw "Latest release executable not found: $ReleaseExe"
 }
 
+$RuntimeEnvironmentVariables = @(
+    'TELEGRAM_BOT_TOKEN',
+    'ADMIN_CHAT_ID',
+    'ALLOWED_CHAT_IDS',
+    'ALLOW_PUBLIC_ACCESS',
+    'OLLAMA_URL',
+    'OLLAMA_MODEL',
+    'OLLAMA_EMBEDDING_URL',
+    'OLLAMA_EMBEDDING_MODEL',
+    'ENABLE_DOCUMENT_EMBEDDINGS',
+    'ENABLE_ONLINE_SEARCH',
+    'TELEGRAM_DB_CONNECTION',
+    'APPLY_MIGRATIONS',
+    'LOG_MESSAGE_CONTENT'
+)
+
+foreach ($Name in $RuntimeEnvironmentVariables) {
+    if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($Name, 'Process'))) {
+        $UserValue = [Environment]::GetEnvironmentVariable($Name, 'User')
+        if (-not [string]::IsNullOrWhiteSpace($UserValue)) {
+            [Environment]::SetEnvironmentVariable($Name, $UserValue, 'Process')
+        }
+    }
+}
+
 Set-Location $ProjectRoot
 & $ReleaseExe

@@ -56,12 +56,7 @@ var botClient = new TelegramBotClient(settings.BotToken, telegramHttpClient, Can
 var ollamaClient = new OllamaChatClient(qwenClient, settings);
 var ollamaEmbeddingClient = new OllamaEmbeddingClient(embeddingClient, settings);
 ITextEmbeddingService? retrievalEmbeddingService = settings.EnableDocumentEmbeddings ? ollamaEmbeddingClient : null;
-var toolRegistry = new ToolRegistry([
-    new DateTimeTool(),
-    new CalculatorTool(),
-    new BotStatusTool(settings),
-    new OnlineSearchTool(searchClient)
-]);
+var toolRegistry = ToolRegistryFactory.Create(settings, searchClient);
 var documentStorage = new DocumentStorageService(Path.Combine(Environment.CurrentDirectory, "UserFiles"));
 string importDirectory = Path.Combine(Environment.CurrentDirectory, "ImportInbox");
 var pendingActionService = new PendingActionService();
@@ -140,6 +135,7 @@ try
         DatabaseConnection: settings.DatabaseConnectionString,
         AccessMode: BotAccessPolicy.DescribeAccessMode(settings.AllowedChatIds, settings.AdminChatId, settings.AllowPublicAccess),
         MessageContentLoggingEnabled: settings.LogMessageContent,
+        OnlineSearchEnabled: settings.EnableOnlineSearch,
         ApplyMigrations: settings.ApplyMigrations,
         Commands: commandRouter.Commands.Select(x => x.Name).ToList(),
         Tools: toolRegistry.Tools.Select(x => x.Name).ToList())));

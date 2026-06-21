@@ -37,6 +37,8 @@ Database: {(dbReady ? "OK" : "Unavailable")}
 Ollama URL: {_settings.OllamaUrl}
 Ollama model: {_settings.OllamaModel}
 Access mode: {BotAccessPolicy.DescribeAccessMode(_settings.AllowedChatIds, _settings.AdminChatId, _settings.AllowPublicAccess)}
+Document embeddings: {(_settings.EnableDocumentEmbeddings ? "enabled" : "disabled")}
+Online search: {(_settings.EnableOnlineSearch ? "enabled" : "disabled")}
 Message content logging: {(_settings.LogMessageContent ? "enabled" : "disabled")}
 Apply migrations: {_settings.ApplyMigrations}
 """;

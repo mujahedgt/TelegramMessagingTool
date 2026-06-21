@@ -97,7 +97,10 @@ string promptWithMemory = ConversationService.BuildSystemPrompt([
 AssertTrue(promptWithMemory.Contains("Known memories about this user:"), "BuildSystemPrompt includes memory heading");
 AssertTrue(promptWithMemory.Contains("User is learning C#."), "BuildSystemPrompt includes memory content");
 AssertTrue(promptWithMemory.Contains("Available Telegram commands"), "BuildSystemPrompt documents commands");
-AssertTrue(promptWithMemory.Contains("request the `online_search` tool"), "BuildSystemPrompt tells model when to search");
+AssertTrue(promptWithMemory.Contains("live web search is disabled"), "BuildSystemPrompt tells model not to guess when search is unavailable");
+AssertFalse(promptWithMemory.Contains("request the `online_search` tool"), "BuildSystemPrompt does not advertise online_search without tool instructions");
+string promptWithSearchInstructions = ConversationService.BuildSystemPrompt([], "Available tools:\n- online_search: Search web");
+AssertTrue(promptWithSearchInstructions.Contains("online_search"), "BuildSystemPrompt includes online_search only from active tool instructions");
 AssertFalse(promptWithMemory.Contains("unless a future tool system actually provides"), "BuildSystemPrompt does not mention unavailable future tool-calling");
 
 ToolCallParseResult noToolCall = ToolCallParser.Parse("Normal assistant response");
@@ -145,24 +148,34 @@ string multiStepAnswer = await multiStepRunner.RunAsync([new OllamaMessageDto("u
 AssertTrue(multiStepAnswer.Contains("475"), "AgentRunner returns final answer after multiple tool observations");
 AssertEqual(3, scriptedChatClient.Calls, "AgentRunner asks model again after each safe tool observation until final answer");
 
+var searchDisabledSettings = new BotSettings(
+    BotToken: "test-token",
+    OllamaUrl: "http://localhost:11434/api/chat",
+    OllamaModel: "llama3.2:3b",
+    OllamaEmbeddingUrl: "http://localhost:11434/api/embed",
+    OllamaEmbeddingModel: "nomic-embed-text",
+    EnableDocumentEmbeddings: false,
+    EnableOnlineSearch: false,
+    AdminChatId: 0,
+    AllowedChatIds: new HashSet<long>(),
+    AllowPublicAccess: false,
+    DatabaseConnectionString: "test-db",
+    ApplyMigrations: true,
+    LogMessageContent: false);
+var searchEnabledSettings = searchDisabledSettings with { EnableOnlineSearch = true };
+
 var registry = new ToolRegistry([
     dateTimeTool,
     calculator,
     new OnlineSearchTool(new HttpClient()),
-    new BotStatusTool(new BotSettings(
-        BotToken: "test-token",
-        OllamaUrl: "http://localhost:11434/api/chat",
-        OllamaModel: "llama3.2:3b",
-        OllamaEmbeddingUrl: "http://localhost:11434/api/embed",
-        OllamaEmbeddingModel: "nomic-embed-text",
-        EnableDocumentEmbeddings: false,
-        AdminChatId: 0,
-        AllowedChatIds: new HashSet<long>(),
-        AllowPublicAccess: false,
-        DatabaseConnectionString: "test-db",
-        ApplyMigrations: true,
-        LogMessageContent: false))
+    new BotStatusTool(searchEnabledSettings)
 ]);
+ToolRegistry privacyGatedRegistry = ToolRegistryFactory.Create(searchDisabledSettings, new HttpClient());
+AssertFalse(privacyGatedRegistry.TryGet("online_search", out _), "ToolRegistryFactory excludes online_search by default");
+AssertFalse(privacyGatedRegistry.RenderToolInstructions().Contains("online_search"), "Disabled online_search is not advertised in model instructions");
+ToolRegistry enabledSearchRegistry = ToolRegistryFactory.Create(searchEnabledSettings, new HttpClient());
+AssertTrue(enabledSearchRegistry.TryGet("online_search", out _), "ToolRegistryFactory includes online_search only when enabled");
+AssertTrue(enabledSearchRegistry.RenderToolInstructions().Contains("online_search"), "Enabled online_search is advertised in model instructions");
 AssertTrue(registry.TryGet("calculator", out IAgentTool? registeredCalculator), "ToolRegistry finds calculator");
 AssertEqual("calculator", registeredCalculator!.Name, "ToolRegistry returns matching tool");
 AssertTrue(registry.RenderToolList().Contains("online_search"), "ToolRegistry lists online search");
@@ -201,6 +214,7 @@ string consolePanel = AgentConsoleRenderer.RenderStartupPanel(new AgentConsoleSn
     DatabaseConnection: "LocalDB",
     AccessMode: "public override",
     MessageContentLoggingEnabled: false,
+    OnlineSearchEnabled: true,
     ApplyMigrations: true,
     Commands: ["/help", "/status", "/tools"],
     Tools: registry.Tools.Select(x => x.Name).ToList()));
@@ -221,10 +235,13 @@ string lockedConsolePanel = AgentConsoleRenderer.RenderStartupPanel(new AgentCon
     DatabaseConnection: "LocalDB",
     AccessMode: "locked",
     MessageContentLoggingEnabled: false,
+    OnlineSearchEnabled: false,
     ApplyMigrations: true,
     Commands: ["/help"],
     Tools: ["calculator"]));
 AssertTrue(lockedConsolePanel.Contains("Telegram access is locked"), "Console renderer warns when bot is locked");
+AssertTrue(lockedConsolePanel.Contains("Online search disabled"), "Console renderer shows online search disabled quick-start note");
+AssertFalse(lockedConsolePanel.Contains("online_search"), "Console renderer does not list online_search when disabled");
 
 string adminOnlyConsolePanel = AgentConsoleRenderer.RenderStartupPanel(new AgentConsoleSnapshot(
     BotUsername: "test_bot",
@@ -233,6 +250,7 @@ string adminOnlyConsolePanel = AgentConsoleRenderer.RenderStartupPanel(new Agent
     DatabaseConnection: "LocalDB",
     AccessMode: "admin-only",
     MessageContentLoggingEnabled: false,
+    OnlineSearchEnabled: false,
     ApplyMigrations: true,
     Commands: ["/help"],
     Tools: ["calculator"]));
@@ -269,19 +287,27 @@ AssertEqual("nomic-embed-text", BotConfiguration.NormalizeEmbeddingModel(""), "B
 AssertTrue(BotConfiguration.IsEnabled("true", defaultValue: false), "BotConfiguration parses enabled flag");
 string? previousAllowPublicAccess = Environment.GetEnvironmentVariable("ALLOW_PUBLIC_ACCESS");
 string? previousAllowedChatIdsForConfig = Environment.GetEnvironmentVariable("ALLOWED_CHAT_IDS");
+string? previousEnableOnlineSearch = Environment.GetEnvironmentVariable("ENABLE_ONLINE_SEARCH");
 try
 {
     Environment.SetEnvironmentVariable("ALLOW_PUBLIC_ACCESS", null);
     Environment.SetEnvironmentVariable("ALLOWED_CHAT_IDS", null);
-    AssertFalse(BotConfiguration.LoadFromEnvironment().AllowPublicAccess, "BotConfiguration defaults public access override to false");
+    Environment.SetEnvironmentVariable("ENABLE_ONLINE_SEARCH", null);
+    BotSettings defaultPrivacySettings = BotConfiguration.LoadFromEnvironment();
+    AssertFalse(defaultPrivacySettings.AllowPublicAccess, "BotConfiguration defaults public access override to false");
+    AssertFalse(defaultPrivacySettings.EnableOnlineSearch, "BotConfiguration defaults online search to disabled");
 
     Environment.SetEnvironmentVariable("ALLOW_PUBLIC_ACCESS", "yes");
     AssertTrue(BotConfiguration.LoadFromEnvironment().AllowPublicAccess, "BotConfiguration parses ALLOW_PUBLIC_ACCESS truthy values");
+
+    Environment.SetEnvironmentVariable("ENABLE_ONLINE_SEARCH", "true");
+    AssertTrue(BotConfiguration.LoadFromEnvironment().EnableOnlineSearch, "BotConfiguration parses ENABLE_ONLINE_SEARCH truthy values");
 }
 finally
 {
     Environment.SetEnvironmentVariable("ALLOW_PUBLIC_ACCESS", previousAllowPublicAccess);
     Environment.SetEnvironmentVariable("ALLOWED_CHAT_IDS", previousAllowedChatIdsForConfig);
+    Environment.SetEnvironmentVariable("ENABLE_ONLINE_SEARCH", previousEnableOnlineSearch);
 }
 AssertEqual("report.md", DocumentStorageService.SanitizeFileName("..\\..//report.md"), "SanitizeFileName removes path segments");
 AssertTrue(documentStorage.IsAllowedFileName("notes.txt"), "DocumentStorageService allows txt files");
@@ -405,6 +431,7 @@ await using (var dbContext = new TelegramDbContext())
         OllamaEmbeddingUrl: "http://localhost:11434/api/embed",
         OllamaEmbeddingModel: "nomic-embed-text",
         EnableDocumentEmbeddings: false,
+        EnableOnlineSearch: false,
         AdminChatId: testUser.ChatId,
         AllowedChatIds: new HashSet<long>(),
         AllowPublicAccess: false,

@@ -7,6 +7,7 @@ public sealed record BotSettings(
     string OllamaEmbeddingUrl,
     string OllamaEmbeddingModel,
     bool EnableDocumentEmbeddings,
+    bool EnableOnlineSearch,
     long AdminChatId,
     IReadOnlySet<long> AllowedChatIds,
     bool AllowPublicAccess,
@@ -27,6 +28,7 @@ public static class BotConfiguration
             ?? Services.OllamaEmbeddingClient.BuildEmbedUrl(ollamaUrl);
         string ollamaEmbeddingModel = NormalizeEmbeddingModel(Environment.GetEnvironmentVariable("OLLAMA_EMBEDDING_MODEL"));
         bool enableDocumentEmbeddings = IsEnabled(Environment.GetEnvironmentVariable("ENABLE_DOCUMENT_EMBEDDINGS"), defaultValue: false);
+        bool enableOnlineSearch = IsEnabled(Environment.GetEnvironmentVariable("ENABLE_ONLINE_SEARCH"), defaultValue: false);
         bool allowPublicAccess = IsEnabled(Environment.GetEnvironmentVariable("ALLOW_PUBLIC_ACCESS"), defaultValue: false);
         string databaseConnectionString = Environment.GetEnvironmentVariable("TELEGRAM_DB_CONNECTION")
             ?? @"Server=(localdb)\MSSQLLocalDB;Database=TelegramMessagingTool;Trusted_Connection=True;TrustServerCertificate=True";
@@ -40,6 +42,7 @@ public static class BotConfiguration
             OllamaEmbeddingUrl: ollamaEmbeddingUrl,
             OllamaEmbeddingModel: ollamaEmbeddingModel,
             EnableDocumentEmbeddings: enableDocumentEmbeddings,
+            EnableOnlineSearch: enableOnlineSearch,
             AdminChatId: adminChatId,
             AllowedChatIds: BotAccessPolicy.ParseAllowedChatIds(Environment.GetEnvironmentVariable("ALLOWED_CHAT_IDS")),
             AllowPublicAccess: allowPublicAccess,
