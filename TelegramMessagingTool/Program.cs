@@ -532,7 +532,7 @@ async Task HandleDocumentAsync(
     TelegramDbContext dbContext,
     CancellationToken cancellationToken)
 {
-    const long telegramBotDownloadLimitBytes = 20L * 1024 * 1024;
+    const long telegramBotDownloadLimitBytes = 25L * 1024 * 1024;
 
     if (message.Document is null)
     {
@@ -567,7 +567,7 @@ async Task HandleDocumentAsync(
         {
             await bot.SendMessage(
                 chatId: message.Chat.Id,
-                text: "Telegram did not provide a downloadable file path for this document. This usually means the file is too large for the standard Bot API or Telegram could not verify its size. Please upload a file under 20 MB, compress it, or split it.",
+                text: "Telegram did not provide a downloadable file path for this document. The bot now allows up to 25 MB, but Telegram may still refuse some files above about 20 MB or files whose downloadable size could not be verified. Please compress it, split it, or place it in ImportInbox and use /importfile <filename>.",
                 replyParameters: new ReplyParameters { MessageId = message.MessageId },
                 cancellationToken: cancellationToken);
             return;
@@ -603,7 +603,7 @@ async Task HandleDocumentAsync(
     {
         await bot.SendMessage(
             chatId: message.Chat.Id,
-            text: "Telegram refused to provide this document through the standard Bot API. The usual cause is a file larger than 20 MB or a file whose downloadable size could not be verified. Please compress it, split it, or upload a smaller/exported document under 20 MB.",
+            text: "Telegram refused to provide this document through the standard Bot API. Some Telegram Bot API deployments still refuse downloads above about 20 MB even when this bot allows up to 25 MB. Please compress it, split it, or place it in ImportInbox and use /importfile <filename>.",
             replyParameters: new ReplyParameters { MessageId = message.MessageId },
             cancellationToken: cancellationToken);
     }
