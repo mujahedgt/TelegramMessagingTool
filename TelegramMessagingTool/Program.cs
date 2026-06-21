@@ -195,7 +195,9 @@ async Task RunConsoleInputLoopAsync(CancellationToken cancellationToken)
         string? line = await Task.Run(Console.ReadLine, cancellationToken);
         if (line is null)
         {
-            cts.Cancel();
+            // In Windows Startup/background launchers stdin can be closed.
+            // Keep Telegram long polling alive instead of shutting down the bot.
+            WriteConsoleEvent("CONSOLE", "local", "stdin is closed; Telegram bot continues without console input", ConsoleEventLevel.Warning);
             return;
         }
 
