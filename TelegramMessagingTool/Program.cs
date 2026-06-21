@@ -529,6 +529,8 @@ async Task HandleDocumentAsync(
     TelegramDbContext dbContext,
     CancellationToken cancellationToken)
 {
+    const long telegramBotDownloadLimitBytes = 20L * 1024 * 1024;
+
     if (message.Document is null)
     {
         return;
@@ -545,11 +547,31 @@ async Task HandleDocumentAsync(
         return;
     }
 
+    if (message.Document.FileSize > telegramBotDownloadLimitBytes)
+    {
+        await bot.SendMessage(
+            chatId: message.Chat.Id,
+            text: $"Document is too large for the standard Telegram Bot API download limit. Maximum: {LocalDeviceInfoService.FormatBytes(telegramBotDownloadLimitBytes)}. Please compress it, split it, or upload a smaller/exported text/PDF/DOCX/XLSX file.",
+            replyParameters: new ReplyParameters { MessageId = message.MessageId },
+            cancellationToken: cancellationToken);
+        return;
+    }
+
     try
     {
         var telegramFile = await bot.GetFile(message.Document.FileId, cancellationToken);
+        if (string.IsNullOrWhiteSpace(telegramFile.FilePath))
+        {
+            await bot.SendMessage(
+                chatId: message.Chat.Id,
+                text: "Telegram did not provide a downloadable file path for this document. This usually means the file is too large for the standard Bot API or Telegram could not verify its size. Please upload a file under 20 MB, compress it, or split it.",
+                replyParameters: new ReplyParameters { MessageId = message.MessageId },
+                cancellationToken: cancellationToken);
+            return;
+        }
+
         await using var stream = new MemoryStream();
-        await bot.DownloadFile(telegramFile.FilePath!, stream, cancellationToken);
+        await bot.DownloadFile(telegramFile.FilePath, stream, cancellationToken);
         stream.Position = 0;
 
         UploadedFile savedFile = await documentStorage.SaveUploadedFileAsync(
@@ -569,6 +591,16 @@ async Task HandleDocumentAsync(
         await bot.SendMessage(
             chatId: message.Chat.Id,
             text: $"Document saved as #{savedFile.Id}: {savedFile.OriginalFileName}\nUse /readfile {savedFile.Id} to read it or /files to list saved files.",
+            replyParameters: new ReplyParameters { MessageId = message.MessageId },
+            cancellationToken: cancellationToken);
+    }
+    catch (ApiRequestException ex) when (ex.Message.Contains("too large", StringComparison.OrdinalIgnoreCase)
+        || ex.Message.Contains("file is too big", StringComparison.OrdinalIgnoreCase)
+        || ex.Message.Contains("file_id", StringComparison.OrdinalIgnoreCase))
+    {
+        await bot.SendMessage(
+            chatId: message.Chat.Id,
+            text: "Telegram refused to provide this document through the standard Bot API. The usual cause is a file larger than 20 MB or a file whose downloadable size could not be verified. Please compress it, split it, or upload a smaller/exported document under 20 MB.",
             replyParameters: new ReplyParameters { MessageId = message.MessageId },
             cancellationToken: cancellationToken);
     }
