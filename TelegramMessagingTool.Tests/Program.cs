@@ -370,6 +370,7 @@ await using (var dbContext = new TelegramDbContext())
         new EmbedFileCommand(documentIndexingService, documentEmbeddingService),
         new EmbedDocsCommand(documentIndexingService, documentEmbeddingService),
         new ToolsCommand(registry),
+        new KillProcessCommand(pendingActionService),
         new PendingCommand(pendingActionService),
         new ApproveCommand(pendingActionService),
         new DenyCommand(pendingActionService),
@@ -403,6 +404,17 @@ await using (var dbContext = new TelegramDbContext())
     CommandResult processesResult = await commandRouter.TryHandleAsync(TextMessage("/processes"), testUser, dbContext, CancellationToken.None);
     AssertTrue(processesResult.Handled, "/processes is handled");
     AssertTrue(processesResult.ReplyText?.Contains("Running processes") == true, "/processes reports process info");
+
+    CommandResult invalidKillProcessResult = await commandRouter.TryHandleAsync(TextMessage("/killprocess nope"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(invalidKillProcessResult.Handled, "/killprocess invalid input is handled");
+    AssertTrue(invalidKillProcessResult.ReplyText?.Contains("Usage: /killprocess <pid>") == true, "/killprocess validates PID input");
+
+    CommandResult killProcessResult = await commandRouter.TryHandleAsync(TextMessage("/killprocess 12345"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(killProcessResult.Handled, "/killprocess is handled");
+    AssertTrue(killProcessResult.ReplyText?.Contains("approval", StringComparison.OrdinalIgnoreCase) == true, "/killprocess asks for approval instead of executing");
+    PendingAction killProcessPendingAction = await dbContext.PendingActions.SingleAsync(x => x.ToolName == "kill_process", CancellationToken.None);
+    AssertEqual("high", killProcessPendingAction.RiskLevel, "/killprocess creates high risk pending action");
+    AssertTrue(killProcessPendingAction.PayloadJson.Contains("12345"), "/killprocess stores target PID in payload");
 
     PendingAction pendingAction = await pendingActionService.CreateAsync(
         dbContext,

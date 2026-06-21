@@ -95,6 +95,7 @@ var commandRouter = new CommandRouter([
     new EmbedFileCommand(documentIndexingService, documentEmbeddingService),
     new EmbedDocsCommand(documentIndexingService, documentEmbeddingService),
     new ToolsCommand(toolRegistry),
+    new KillProcessCommand(pendingActionService),
     new PendingCommand(pendingActionService),
     new ApproveCommand(pendingActionService),
     new DenyCommand(pendingActionService),

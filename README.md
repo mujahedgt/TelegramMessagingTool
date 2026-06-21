@@ -148,8 +148,11 @@ These commands inspect the local machine without changing anything:
 | `/systeminfo` | Show operating system, architecture, machine name, CPU count, .NET runtime, uptime, and process memory |
 | `/diskstatus` | Show ready local drives, total space, free space, and used percentage |
 | `/processes [count]` | Show running process count and top processes by memory usage; count is clamped to a safe range |
+| `/killprocess <pid>` | Create a high-risk pending approval request to terminate a process later; does not execute immediately |
 
-These are intentionally **read-only**. They do not stop processes, delete files, edit files, or run arbitrary shell commands.
+These commands are intentionally **read-only**. They do not stop processes, delete files, edit files, or run arbitrary shell commands.
+
+`/killprocess <pid>` is the first risky local-control request command. It only creates a pending approval request with risk level `high`; this version still does **not** terminate the process. Actual approved-action execution is intentionally deferred to a later patch.
 
 ## Approval flow
 

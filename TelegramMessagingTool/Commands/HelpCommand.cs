@@ -27,6 +27,7 @@ TelegramMessagingTool Agent Commands
 /systeminfo - Show read-only local OS and runtime info
 /diskstatus - Show read-only local disk space status
 /processes [count] - Show read-only local running processes by memory
+/killprocess <pid> - Create approval request to terminate a process later
 /status - Show bot status
 /reset - Clear your conversation history
 /memory - Show saved memories
