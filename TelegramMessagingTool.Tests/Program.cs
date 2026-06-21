@@ -213,6 +213,8 @@ AssertTrue(processText.Length < 4096, "LocalDeviceInfoService process list is Te
 
 string testFileRoot = Path.Combine(Path.GetTempPath(), "TelegramMessagingTool_FileTests_" + Guid.NewGuid().ToString("N"));
 var documentStorage = new DocumentStorageService(testFileRoot, maxFileBytes: 1024 * 1024);
+string importDirectory = Path.Combine(testFileRoot, "ImportInbox");
+Directory.CreateDirectory(importDirectory);
 var testEmbeddingService = new DeterministicEmbeddingService();
 var documentEmbeddingService = new DocumentEmbeddingService(testEmbeddingService, "test-embedding-model");
 AssertEqual("nomic-embed-text", BotConfiguration.NormalizeEmbeddingModel(""), "BotConfiguration defaults embedding model");
@@ -374,6 +376,8 @@ await using (var dbContext = new TelegramDbContext())
         new FilesCommand(documentStorage),
         new ReadFileCommand(documentStorage),
         new CreateFileCommand(documentStorage),
+        new ImportFilesCommand(importDirectory, documentStorage, adminTestSettings),
+        new ImportFileCommand(importDirectory, documentStorage, adminTestSettings),
         new DeleteFileCommand(pendingActionService, adminTestSettings),
         new IndexFileCommand(documentIndexingService),
         new IndexDocsCommand(documentIndexingService),
@@ -618,6 +622,27 @@ await using (var dbContext = new TelegramDbContext())
     AssertFalse(File.Exists(filePathBeforeDelete), "/approve delete_file removes file from disk");
     AssertFalse(await dbContext.UploadedFiles.AnyAsync(x => x.Id == uploadedFileId, CancellationToken.None), "/approve delete_file removes file metadata");
     AssertFalse(await dbContext.DocumentChunks.AnyAsync(x => x.UploadedFileId == uploadedFileId, CancellationToken.None), "/approve delete_file removes indexed chunks");
+
+    await File.WriteAllTextAsync(Path.Combine(importDirectory, "large-notes.md"), "Imported document content", CancellationToken.None);
+    CommandResult importFilesResult = await commandRouter.TryHandleAsync(TextMessage("/importfiles"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(importFilesResult.Handled, "/importfiles is handled");
+    AssertTrue(importFilesResult.ReplyText?.Contains("large-notes.md") == true, "/importfiles lists ImportInbox file");
+
+    CommandResult nonAdminImportFileResult = await commandRouter.TryHandleAsync(TextMessage("/importfile large-notes.md"), nonAdminUser, dbContext, CancellationToken.None);
+    AssertTrue(nonAdminImportFileResult.Handled, "/importfile non-admin attempt is handled");
+    AssertTrue(nonAdminImportFileResult.ReplyText?.Contains("admin", StringComparison.OrdinalIgnoreCase) == true, "/importfile requires admin");
+
+    CommandResult traversalImportFileResult = await commandRouter.TryHandleAsync(TextMessage("/importfile ../large-notes.md"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(traversalImportFileResult.Handled, "/importfile traversal attempt is handled");
+    AssertTrue(traversalImportFileResult.ReplyText?.Contains("plain filename", StringComparison.OrdinalIgnoreCase) == true, "/importfile rejects paths");
+
+    CommandResult importFileResult = await commandRouter.TryHandleAsync(TextMessage("/importfile large-notes.md"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(importFileResult.Handled, "/importfile is handled");
+    AssertTrue(importFileResult.ReplyText?.Contains("Imported file", StringComparison.OrdinalIgnoreCase) == true, "/importfile reports imported file");
+    UploadedFile importedFile = await dbContext.UploadedFiles.SingleAsync(x => x.OriginalFileName == "large-notes.md", CancellationToken.None);
+    AssertEqual("local_import", importedFile.Source, "/importfile stores local import source");
+    AssertTrue(File.Exists(importedFile.AbsolutePath), "/importfile copies file into sandbox");
+    AssertTrue(importedFile.AbsolutePath.StartsWith(documentStorage.RootDirectory, StringComparison.OrdinalIgnoreCase), "/importfile stores file under document sandbox");
 
     dbContext.Messages.Add(new ChatMessage
     {

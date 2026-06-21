@@ -62,7 +62,8 @@ var toolRegistry = new ToolRegistry([
     new BotStatusTool(settings),
     new OnlineSearchTool(searchClient)
 ]);
-var documentStorage = new DocumentStorageService(Path.Combine(AppContext.BaseDirectory, "UserFiles"));
+var documentStorage = new DocumentStorageService(Path.Combine(Environment.CurrentDirectory, "UserFiles"));
+string importDirectory = Path.Combine(Environment.CurrentDirectory, "ImportInbox");
 var pendingActionService = new PendingActionService();
 var pendingActionExecutor = new PendingActionExecutor(new SystemProcessTerminator(), documentStorage);
 var agentTaskService = new AgentTaskService();
@@ -86,6 +87,8 @@ var commandRouter = new CommandRouter([
     new FilesCommand(documentStorage),
     new ReadFileCommand(documentStorage),
     new CreateFileCommand(documentStorage),
+    new ImportFilesCommand(importDirectory, documentStorage, settings),
+    new ImportFileCommand(importDirectory, documentStorage, settings),
     new DeleteFileCommand(pendingActionService, settings),
     new IndexFileCommand(documentIndexingService),
     new IndexDocsCommand(documentIndexingService),

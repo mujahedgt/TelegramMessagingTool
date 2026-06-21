@@ -36,6 +36,8 @@ TelegramMessagingTool Agent Commands
 /files - List saved files and uploaded documents
 /readfile <id> - Read a saved text/PDF/DOCX/XLSX document
 /createfile <filename> <content> - Create a sandboxed .txt/.md/.json/.csv/.pdf/.docx/.xlsx file
+/importfiles - Admin-only: list local ImportInbox files
+/importfile <filename> - Admin-only: import one local ImportInbox file
 /deletefile <id> - Create admin approval request to delete a sandboxed saved file
 /indexfile <id> - Index one saved document for Q&A
 /indexdocs - Index all your saved documents for Q&A

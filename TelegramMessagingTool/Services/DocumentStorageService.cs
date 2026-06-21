@@ -34,7 +34,7 @@ public sealed class DocumentStorageService
     private readonly long _maxFileBytes;
     private readonly IReadOnlySet<string> _allowedExtensions;
 
-    public DocumentStorageService(string rootDirectory, long maxFileBytes = 5_000_000, IReadOnlySet<string>? allowedExtensions = null)
+    public DocumentStorageService(string rootDirectory, long maxFileBytes = 100L * 1024 * 1024, IReadOnlySet<string>? allowedExtensions = null)
     {
         _rootDirectory = Path.GetFullPath(rootDirectory);
         _maxFileBytes = maxFileBytes;
@@ -45,6 +45,8 @@ public sealed class DocumentStorageService
     public string RootDirectory => _rootDirectory;
 
     public string AllowedExtensionsText => string.Join(", ", _allowedExtensions.OrderBy(x => x));
+
+    public long MaxFileBytes => _maxFileBytes;
 
     public bool IsAllowedFileName(string fileName)
     {

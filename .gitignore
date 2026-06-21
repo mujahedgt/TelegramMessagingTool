@@ -11,3 +11,5 @@ release/
 UserFiles/
 *.html
 NUL
+ImportInbox/*
+!ImportInbox/.gitkeep

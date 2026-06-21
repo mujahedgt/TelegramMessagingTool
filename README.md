@@ -18,7 +18,7 @@ TelegramMessagingTool is a C#/.NET console application that connects a Telegram 
 - Local console chat/command input using the same command router, memory, tools, and agent runner as Telegram
 - Live console event lines for startup, commands, messages, denied users, shutdown, and errors
 - Sandboxed document/file support for `.txt`, `.md`, `.json`, `.csv`, `.pdf`, `.docx`, and `.xlsx`
-- File commands: `/files`, `/readfile <id>`, `/createfile <filename> <content>`, and admin-approved `/deletefile <id>`
+- File commands: `/files`, `/readfile <id>`, `/createfile <filename> <content>`, admin-only local import via `/importfiles` and `/importfile <filename>`, and admin-approved `/deletefile <id>`
 - Document Q&A indexing, question, summary, and embedding commands: `/indexfile`, `/indexdocs`, `/docchunks`, `/askfile`, `/askdocs`, `/summarizefile`, `/summarizedocs`, `/embedfile`, and `/embeddocs`
 - Read-only local device commands: `/systeminfo`, `/diskstatus`, and `/processes [count]`
 - Safe approval foundation for future risky tools
@@ -205,6 +205,8 @@ Commands:
 | `/files` | List your saved/uploaded files |
 | `/readfile <id>` | Extract/read text from a saved file by ID |
 | `/createfile <filename> <content>` | Create a sandboxed txt/md/json/csv/pdf/docx/xlsx file |
+| `/importfiles` | Admin-only: list supported files placed in the local `ImportInbox/` folder |
+| `/importfile <filename>` | Admin-only: copy one supported file from `ImportInbox/` into your document sandbox, bypassing Telegram upload/download limits |
 | `/deletefile <id>` | Admin-only: create a high-risk approval request to delete a sandboxed saved file; deletion happens only after `/approve <id>` |
 | `/indexfile <id>` | Extract and chunk one file for document Q&A |
 | `/indexdocs` | Index all your saved files for document Q&A |
@@ -244,6 +246,7 @@ Safety model:
 - executable/binary file types are rejected
 - only supported sandboxed files are read directly
 - executable/binary file types outside the allowlist are rejected
+- `/importfile <filename>` only accepts a plain filename from local `ImportInbox/` and copies it into the user sandbox; it never reads arbitrary paths
 - `/deletefile <id>` is approval-backed and deletes only the stored sandbox file plus its database metadata/chunks after admin approval
 
 ## Console UI
