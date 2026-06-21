@@ -18,6 +18,12 @@ public class DocumentChunk
 
     public int CharacterCount { get; set; }
 
+    public string? EmbeddingJson { get; set; }
+
+    public string? EmbeddingModel { get; set; }
+
+    public DateTime? EmbeddingUpdatedAt { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public UploadedFile UploadedFile { get; set; } = null!;

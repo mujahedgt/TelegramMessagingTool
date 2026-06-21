@@ -4,6 +4,9 @@ public sealed record BotSettings(
     string BotToken,
     string OllamaUrl,
     string OllamaModel,
+    string OllamaEmbeddingUrl,
+    string OllamaEmbeddingModel,
+    bool EnableDocumentEmbeddings,
     long AdminChatId,
     IReadOnlySet<long> AllowedChatIds,
     string DatabaseConnectionString,
@@ -12,11 +15,17 @@ public sealed record BotSettings(
 
 public static class BotConfiguration
 {
+    public const string DefaultEmbeddingModel = "nomic-embed-text";
+
     public static BotSettings LoadFromEnvironment()
     {
         string botToken = Environment.GetEnvironmentVariable("TELEGRAM_BOT_TOKEN") ?? string.Empty;
         string ollamaUrl = Environment.GetEnvironmentVariable("OLLAMA_URL") ?? "http://localhost:11434/api/chat";
         string ollamaModel = Environment.GetEnvironmentVariable("OLLAMA_MODEL") ?? "llama3.2:3b";
+        string ollamaEmbeddingUrl = Environment.GetEnvironmentVariable("OLLAMA_EMBEDDING_URL")
+            ?? Services.OllamaEmbeddingClient.BuildEmbedUrl(ollamaUrl);
+        string ollamaEmbeddingModel = NormalizeEmbeddingModel(Environment.GetEnvironmentVariable("OLLAMA_EMBEDDING_MODEL"));
+        bool enableDocumentEmbeddings = IsEnabled(Environment.GetEnvironmentVariable("ENABLE_DOCUMENT_EMBEDDINGS"), defaultValue: false);
         string databaseConnectionString = Environment.GetEnvironmentVariable("TELEGRAM_DB_CONNECTION")
             ?? @"Server=(localdb)\MSSQLLocalDB;Database=TelegramMessagingTool;Trusted_Connection=True;TrustServerCertificate=True";
 
@@ -26,6 +35,9 @@ public static class BotConfiguration
             BotToken: botToken,
             OllamaUrl: ollamaUrl,
             OllamaModel: ollamaModel,
+            OllamaEmbeddingUrl: ollamaEmbeddingUrl,
+            OllamaEmbeddingModel: ollamaEmbeddingModel,
+            EnableDocumentEmbeddings: enableDocumentEmbeddings,
             AdminChatId: adminChatId,
             AllowedChatIds: BotAccessPolicy.ParseAllowedChatIds(Environment.GetEnvironmentVariable("ALLOWED_CHAT_IDS")),
             DatabaseConnectionString: databaseConnectionString,
@@ -33,7 +45,14 @@ public static class BotConfiguration
             LogMessageContent: IsEnabled(Environment.GetEnvironmentVariable("LOG_MESSAGE_CONTENT"), defaultValue: false));
     }
 
-    private static bool IsEnabled(string? value, bool defaultValue)
+    public static string NormalizeEmbeddingModel(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? DefaultEmbeddingModel
+            : value.Trim();
+    }
+
+    public static bool IsEnabled(string? value, bool defaultValue)
     {
         if (string.IsNullOrWhiteSpace(value))
         {

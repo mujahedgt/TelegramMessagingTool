@@ -39,6 +39,8 @@ TelegramMessagingTool Agent Commands
 /askdocs <question> - Ask across all indexed documents
 /summarizefile <id> - Summarize one indexed document
 /summarizedocs - Summarize all indexed documents
+/embedfile <id> - Generate local embeddings for one indexed document
+/embeddocs - Generate local embeddings for all indexed documents
 /tools - List available safe agent tools
 /pending - List actions waiting for your approval
 /approve <id> - Approve a pending risky action

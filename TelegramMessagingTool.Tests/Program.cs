@@ -132,6 +132,9 @@ var registry = new ToolRegistry([
         BotToken: "test-token",
         OllamaUrl: "http://localhost:11434/api/chat",
         OllamaModel: "llama3.2:3b",
+        OllamaEmbeddingUrl: "http://localhost:11434/api/embed",
+        OllamaEmbeddingModel: "nomic-embed-text",
+        EnableDocumentEmbeddings: false,
         AdminChatId: 0,
         AllowedChatIds: new HashSet<long>(),
         DatabaseConnectionString: "test-db",
@@ -200,6 +203,10 @@ AssertTrue(eventLine.Contains("handled with tools"), "Console event includes det
 
 string testFileRoot = Path.Combine(Path.GetTempPath(), "TelegramMessagingTool_FileTests_" + Guid.NewGuid().ToString("N"));
 var documentStorage = new DocumentStorageService(testFileRoot, maxFileBytes: 1024 * 1024);
+var testEmbeddingService = new DeterministicEmbeddingService();
+var documentEmbeddingService = new DocumentEmbeddingService(testEmbeddingService, "test-embedding-model");
+AssertEqual("nomic-embed-text", BotConfiguration.NormalizeEmbeddingModel(""), "BotConfiguration defaults embedding model");
+AssertTrue(BotConfiguration.IsEnabled("true", defaultValue: false), "BotConfiguration parses enabled flag");
 AssertEqual("report.md", DocumentStorageService.SanitizeFileName("..\\..//report.md"), "SanitizeFileName removes path segments");
 AssertTrue(documentStorage.IsAllowedFileName("notes.txt"), "DocumentStorageService allows txt files");
 AssertTrue(documentStorage.IsAllowedFileName("report.md"), "DocumentStorageService allows markdown files");
@@ -247,6 +254,23 @@ IReadOnlyList<DocumentChunk> phraseRankedChunks = DocumentRetrievalService.RankC
 ], "payment deadline", limit: 2);
 AssertEqual(1, phraseRankedChunks[0].Id, "DocumentRetrievalService boosts exact phrase matches before loose term matches");
 
+string serializedEmbedding = EmbeddingMath.Serialize([1.0, 0.0]);
+AssertTrue(serializedEmbedding.Contains("1"), "EmbeddingMath serializes vectors");
+IReadOnlyList<float> parsedEmbedding = EmbeddingMath.Parse(serializedEmbedding);
+AssertEqual(2, parsedEmbedding.Count, "EmbeddingMath parses serialized vectors");
+AssertTrue(EmbeddingMath.CosineSimilarity([1.0f, 0.0f], [1.0f, 0.0f]) > 0.99, "EmbeddingMath scores identical vectors highly");
+AssertTrue(EmbeddingMath.CosineSimilarity([1.0f, 0.0f], [0.0f, 1.0f]) < 0.01, "EmbeddingMath scores unrelated vectors low");
+
+IReadOnlyList<DocumentChunk> semanticRankedChunks = DocumentRetrievalService.RankChunksByHybridScore([
+    new DocumentChunk { Id = 1, OriginalFileName = "a.txt", ChunkNumber = 1, Text = "contract terms", EmbeddingJson = EmbeddingMath.Serialize([1.0, 0.0]) },
+    new DocumentChunk { Id = 2, OriginalFileName = "b.txt", ChunkNumber = 1, Text = "vacation plan", EmbeddingJson = EmbeddingMath.Serialize([0.0, 1.0]) }
+], "holiday itinerary", [0.0f, 1.0f], limit: 1);
+AssertEqual(2, semanticRankedChunks[0].Id, "DocumentRetrievalService can rank by stored embeddings when available");
+
+AssertTrue(OllamaEmbeddingClient.BuildEmbedUrl("http://localhost:11434/api/chat").EndsWith("/api/embed"), "OllamaEmbeddingClient derives /api/embed from /api/chat");
+AssertTrue(OllamaEmbeddingClient.TryParseEmbeddingResponse("{\"embeddings\":[[0.1,0.2,0.3]]}", out IReadOnlyList<float> parsedOllamaEmbedding), "OllamaEmbeddingClient parses /api/embed response");
+AssertEqual(3, parsedOllamaEmbedding.Count, "OllamaEmbeddingClient returns parsed vector values");
+
 string qaPrompt = DocumentQuestionAnsweringService.BuildPrompt(
     "what is the payment deadline?",
     [new DocumentChunk { UploadedFileId = 9, OriginalFileName = "contract.pdf", ChunkNumber = 2, Text = "The payment deadline is Sunday." }]);
@@ -291,7 +315,7 @@ await using (var dbContext = new TelegramDbContext())
     var pendingActionService = new PendingActionService();
     var agentTaskService = new AgentTaskService();
     var documentIndexingService = new DocumentIndexingService(documentStorage);
-    var documentRetrievalService = new DocumentRetrievalService();
+    var documentRetrievalService = new DocumentRetrievalService(testEmbeddingService);
     var documentQuestionAnsweringService = new DocumentQuestionAnsweringService(new ScriptedChatClient([
         "The payment deadline is Sunday. Source: File #1 notes.md, chunk 1.",
         "The saved note says this is a saved note. Source: File #1 notes.md, chunk 1.",
@@ -308,6 +332,9 @@ await using (var dbContext = new TelegramDbContext())
             BotToken: "test-token",
             OllamaUrl: "http://localhost:11434/api/chat",
             OllamaModel: "qwen3:0.6b",
+            OllamaEmbeddingUrl: "http://localhost:11434/api/embed",
+            OllamaEmbeddingModel: "nomic-embed-text",
+            EnableDocumentEmbeddings: false,
             AdminChatId: 0,
             AllowedChatIds: new HashSet<long>(),
             DatabaseConnectionString: Environment.GetEnvironmentVariable("TELEGRAM_DB_CONNECTION")!,
@@ -327,6 +354,8 @@ await using (var dbContext = new TelegramDbContext())
         new AskDocsCommand(documentRetrievalService, documentQuestionAnsweringService),
         new SummarizeFileCommand(documentIndexingService, documentRetrievalService, documentSummaryService),
         new SummarizeDocsCommand(documentRetrievalService, documentSummaryService),
+        new EmbedFileCommand(documentIndexingService, documentEmbeddingService),
+        new EmbedDocsCommand(documentIndexingService, documentEmbeddingService),
         new ToolsCommand(registry),
         new PendingCommand(pendingActionService),
         new ApproveCommand(pendingActionService),
@@ -426,6 +455,15 @@ await using (var dbContext = new TelegramDbContext())
     AssertTrue(indexFileResult.ReplyText?.Contains("Chunks created") == true, "/indexfile reports chunk count");
     AssertTrue(await dbContext.DocumentChunks.AnyAsync(x => x.UploadedFileId == uploadedFileId), "/indexfile stores document chunks");
 
+    CommandResult embedFileResult = await commandRouter.TryHandleAsync(TextMessage($"/embedfile {uploadedFileId}"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(embedFileResult.Handled, "/embedfile is handled");
+    AssertTrue(embedFileResult.ReplyText?.Contains("Embedded chunks", StringComparison.OrdinalIgnoreCase) == true, "/embedfile reports embedded chunk count");
+    AssertTrue(await dbContext.DocumentChunks.AnyAsync(x => x.UploadedFileId == uploadedFileId && x.EmbeddingJson != null), "/embedfile stores document embeddings");
+
+    CommandResult embedDocsResult = await commandRouter.TryHandleAsync(TextMessage("/embeddocs"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(embedDocsResult.Handled, "/embeddocs is handled");
+    AssertTrue(embedDocsResult.ReplyText?.Contains("Embedded chunks", StringComparison.OrdinalIgnoreCase) == true, "/embeddocs reports embedded chunk count");
+
     CommandResult docChunksResult = await commandRouter.TryHandleAsync(TextMessage($"/docchunks {uploadedFileId}"), testUser, dbContext, CancellationToken.None);
     AssertTrue(docChunksResult.Handled, "/docchunks is handled");
     AssertTrue(docChunksResult.ReplyText?.Contains("Chunks:") == true, "/docchunks reports index status");
@@ -485,6 +523,20 @@ await using (var cleanupContext = new TelegramDbContext())
 Environment.SetEnvironmentVariable("TELEGRAM_DB_CONNECTION", previousConnection);
 
 Console.WriteLine("All TelegramMessagingTool helper tests passed.");
+
+sealed class DeterministicEmbeddingService : ITextEmbeddingService
+{
+    public Task<IReadOnlyList<float>> EmbedAsync(string text, CancellationToken cancellationToken)
+    {
+        string normalized = text.ToLowerInvariant();
+        if (normalized.Contains("saved") || normalized.Contains("note"))
+        {
+            return Task.FromResult<IReadOnlyList<float>>([0.0f, 1.0f]);
+        }
+
+        return Task.FromResult<IReadOnlyList<float>>([1.0f, 0.0f]);
+    }
+}
 
 sealed class ScriptedChatClient : IChatClient
 {

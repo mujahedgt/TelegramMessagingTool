@@ -29,6 +29,11 @@ using HttpClient qwenClient = new()
     Timeout = TimeSpan.FromMinutes(30)
 };
 
+using HttpClient embeddingClient = new()
+{
+    Timeout = TimeSpan.FromMinutes(10)
+};
+
 using HttpClient searchClient = new()
 {
     Timeout = TimeSpan.FromSeconds(20)
@@ -49,6 +54,8 @@ using HttpClient telegramHttpClient = new(telegramHttpHandler)
 
 var botClient = new TelegramBotClient(settings.BotToken, telegramHttpClient, CancellationToken.None);
 var ollamaClient = new OllamaChatClient(qwenClient, settings);
+var ollamaEmbeddingClient = new OllamaEmbeddingClient(embeddingClient, settings);
+ITextEmbeddingService? retrievalEmbeddingService = settings.EnableDocumentEmbeddings ? ollamaEmbeddingClient : null;
 var toolRegistry = new ToolRegistry([
     new DateTimeTool(),
     new CalculatorTool(),
@@ -59,7 +66,8 @@ var documentStorage = new DocumentStorageService(Path.Combine(AppContext.BaseDir
 var pendingActionService = new PendingActionService();
 var agentTaskService = new AgentTaskService();
 var documentIndexingService = new DocumentIndexingService(documentStorage);
-var documentRetrievalService = new DocumentRetrievalService();
+var documentEmbeddingService = new DocumentEmbeddingService(ollamaEmbeddingClient, settings.OllamaEmbeddingModel);
+var documentRetrievalService = new DocumentRetrievalService(retrievalEmbeddingService);
 var documentQuestionAnsweringService = new DocumentQuestionAnsweringService(ollamaClient);
 var documentSummaryService = new DocumentSummaryService(ollamaClient);
 var agentRunner = new AgentRunner(ollamaClient, toolRegistry);
@@ -81,6 +89,8 @@ var commandRouter = new CommandRouter([
     new AskDocsCommand(documentRetrievalService, documentQuestionAnsweringService),
     new SummarizeFileCommand(documentIndexingService, documentRetrievalService, documentSummaryService),
     new SummarizeDocsCommand(documentRetrievalService, documentSummaryService),
+    new EmbedFileCommand(documentIndexingService, documentEmbeddingService),
+    new EmbedDocsCommand(documentIndexingService, documentEmbeddingService),
     new ToolsCommand(toolRegistry),
     new PendingCommand(pendingActionService),
     new ApproveCommand(pendingActionService),

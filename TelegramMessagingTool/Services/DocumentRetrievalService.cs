@@ -7,12 +7,19 @@ namespace TelegramMessagingTool.Services;
 
 public sealed class DocumentRetrievalService
 {
+    private readonly ITextEmbeddingService? _embeddingService;
+
     private static readonly HashSet<string> StopWords = new(StringComparer.OrdinalIgnoreCase)
     {
         "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "how", "i", "in",
         "is", "it", "me", "my", "of", "on", "or", "that", "the", "this", "to", "what", "when",
         "where", "which", "who", "why", "with", "you", "do", "does", "did", "have", "has"
     };
+
+    public DocumentRetrievalService(ITextEmbeddingService? embeddingService = null)
+    {
+        _embeddingService = embeddingService;
+    }
 
     public async Task<IReadOnlyList<DocumentChunk>> SearchAsync(
         TelegramDbContext dbContext,
@@ -34,6 +41,23 @@ public sealed class DocumentRetrievalService
             .OrderByDescending(x => x.CreatedAt)
             .Take(1000)
             .ToListAsync(cancellationToken);
+
+        if (_embeddingService is not null && chunks.Any(x => !string.IsNullOrWhiteSpace(x.EmbeddingJson)))
+        {
+            try
+            {
+                IReadOnlyList<float> questionEmbedding = await _embeddingService.EmbedAsync(question, cancellationToken);
+                IReadOnlyList<DocumentChunk> hybridChunks = RankChunksByHybridScore(chunks, question, questionEmbedding, limit);
+                if (hybridChunks.Count > 0)
+                {
+                    return hybridChunks;
+                }
+            }
+            catch (Exception)
+            {
+                // Keep Q&A reliable: embedding errors fall back to local lexical search.
+            }
+        }
 
         return RankChunks(chunks, question, limit);
     }
@@ -90,6 +114,41 @@ public sealed class DocumentRetrievalService
                 Score = Score(chunk.Text, terms)
             })
             .Where(x => x.Score > 0)
+            .OrderByDescending(x => x.Score)
+            .ThenBy(x => x.Chunk.UploadedFileId)
+            .ThenBy(x => x.Chunk.ChunkNumber)
+            .Take(limit)
+            .Select(x => x.Chunk)
+            .ToList();
+    }
+
+    public static IReadOnlyList<DocumentChunk> RankChunksByHybridScore(
+        IEnumerable<DocumentChunk> chunks,
+        string question,
+        IReadOnlyList<float> questionEmbedding,
+        int limit)
+    {
+        if (limit <= 0 || questionEmbedding.Count == 0)
+        {
+            return [];
+        }
+
+        List<string> terms = Tokenize(question).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        return chunks
+            .Select(chunk =>
+            {
+                IReadOnlyList<float> chunkEmbedding = EmbeddingMath.Parse(chunk.EmbeddingJson);
+                double semanticScore = EmbeddingMath.CosineSimilarity(questionEmbedding, chunkEmbedding);
+                int lexicalScore = terms.Count == 0 ? 0 : Score(chunk.Text, terms);
+                return new
+                {
+                    Chunk = chunk,
+                    SemanticScore = semanticScore,
+                    LexicalScore = lexicalScore,
+                    Score = (semanticScore * 100.0) + lexicalScore
+                };
+            })
+            .Where(x => x.SemanticScore > 0 || x.LexicalScore > 0)
             .OrderByDescending(x => x.Score)
             .ThenBy(x => x.Chunk.UploadedFileId)
             .ThenBy(x => x.Chunk.ChunkNumber)

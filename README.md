@@ -19,7 +19,7 @@ TelegramMessagingTool is a C#/.NET console application that connects a Telegram 
 - Live console event lines for startup, commands, messages, denied users, shutdown, and errors
 - Sandboxed document/file support for `.txt`, `.md`, `.json`, `.csv`, `.pdf`, `.docx`, and `.xlsx`
 - File commands: `/files`, `/readfile <id>`, and `/createfile <filename> <content>`
-- Document Q&A indexing, question, and summary commands: `/indexfile`, `/indexdocs`, `/docchunks`, `/askfile`, `/askdocs`, `/summarizefile`, and `/summarizedocs`
+- Document Q&A indexing, question, summary, and embedding commands: `/indexfile`, `/indexdocs`, `/docchunks`, `/askfile`, `/askdocs`, `/summarizefile`, `/summarizedocs`, `/embedfile`, and `/embeddocs`
 - Safe approval foundation for future risky tools
 - Approval commands: `/pending`, `/approve <id>`, and `/deny <id>`
 - Task planner commands: `/plan <goal>`, `/tasks`, `/task <id>`, `/done <task-id> [step-number]`, and `/cancel <task-id>`
@@ -38,6 +38,7 @@ Major agent-upgrade work on this project was implemented with help from **Hermes
 
 ```bash
 ollama pull llama3.2:3b
+ollama pull nomic-embed-text
 ```
 
 ## Configuration
@@ -51,6 +52,9 @@ Configuration is read from environment variables.
 | `ALLOWED_CHAT_IDS` | No | empty | Comma-separated Telegram chat IDs allowed to use the bot. Empty means allow all. |
 | `OLLAMA_URL` | No | `http://localhost:11434/api/chat` | Ollama chat API endpoint |
 | `OLLAMA_MODEL` | No | `llama3.2:3b` | Ollama model name |
+| `OLLAMA_EMBEDDING_URL` | No | derived from `OLLAMA_URL` as `/api/embed` | Ollama embedding API endpoint |
+| `OLLAMA_EMBEDDING_MODEL` | No | `nomic-embed-text` | Local embedding model used by `/embedfile` and `/embeddocs` |
+| `ENABLE_DOCUMENT_EMBEDDINGS` | No | `false` | If true, `/askfile` and `/askdocs` use stored embeddings for hybrid semantic retrieval when available |
 | `TELEGRAM_DB_CONNECTION` | No | LocalDB connection | SQL Server connection string |
 | `APPLY_MIGRATIONS` | No | `true` | Apply EF migrations on startup |
 | `LOG_MESSAGE_CONTENT` | No | `false` | Log user messages and assistant responses. Keep disabled for privacy. |
@@ -62,6 +66,8 @@ export TELEGRAM_BOT_TOKEN='123456:your-token'
 export ADMIN_CHAT_ID='123456789'
 export ALLOWED_CHAT_IDS='123456789,987654321'
 export OLLAMA_MODEL='llama3.2:3b'
+export OLLAMA_EMBEDDING_MODEL='nomic-embed-text'
+export ENABLE_DOCUMENT_EMBEDDINGS='false'
 export LOG_MESSAGE_CONTENT='false'
 ```
 
@@ -187,6 +193,8 @@ Commands:
 | `/askdocs <question>` | Ask a question across all indexed files |
 | `/summarizefile <id>` | Summarize one saved/indexed file |
 | `/summarizedocs` | Summarize all indexed files |
+| `/embedfile <id>` | Generate local embeddings for one saved/indexed file |
+| `/embeddocs` | Generate local embeddings for all indexed files |
 
 Q&A behavior:
 
@@ -196,6 +204,8 @@ Q&A behavior:
 - `/summarizefile` auto-indexes the target file once if it has no chunks yet.
 - `/summarizedocs` summarizes already indexed chunks; run `/indexdocs` first if needed.
 - Retrieval uses improved local lexical scoring with exact-phrase and multi-term boosts. Embeddings such as `bge-m3` can be added later for stronger semantic search.
+- `/embedfile` and `/embeddocs` generate local Ollama embeddings for indexed chunks using `OLLAMA_EMBEDDING_MODEL`.
+- If `ENABLE_DOCUMENT_EMBEDDINGS=true`, `/askfile` and `/askdocs` use hybrid semantic + lexical ranking when stored embeddings exist, with lexical fallback if embeddings are unavailable.
 
 You can also upload a supported Telegram document directly. The bot stores it and replies with a file ID that can be used with `/readfile`, `/indexfile`, and `/askfile`.
 

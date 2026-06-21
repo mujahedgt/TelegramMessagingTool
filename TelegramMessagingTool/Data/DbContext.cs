@@ -147,6 +147,14 @@ public class TelegramDbContext : DbContext
             entity.Property(x => x.Text)
                 .HasColumnType("nvarchar(max)");
 
+            entity.Property(x => x.CharacterCount);
+
+            entity.Property(x => x.EmbeddingJson)
+                .HasColumnType("nvarchar(max)");
+
+            entity.Property(x => x.EmbeddingModel)
+                .HasMaxLength(100);
+
             entity.Property(x => x.CreatedAt)
                 .HasDefaultValueSql("GETUTCDATE()");
 
