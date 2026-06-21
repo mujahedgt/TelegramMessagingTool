@@ -61,6 +61,7 @@ var agentTaskService = new AgentTaskService();
 var documentIndexingService = new DocumentIndexingService(documentStorage);
 var documentRetrievalService = new DocumentRetrievalService();
 var documentQuestionAnsweringService = new DocumentQuestionAnsweringService(ollamaClient);
+var documentSummaryService = new DocumentSummaryService(ollamaClient);
 var agentRunner = new AgentRunner(ollamaClient, toolRegistry);
 var conversationService = new ConversationService();
 var commandRouter = new CommandRouter([
@@ -78,6 +79,8 @@ var commandRouter = new CommandRouter([
     new DocChunksCommand(),
     new AskFileCommand(documentIndexingService, documentRetrievalService, documentQuestionAnsweringService),
     new AskDocsCommand(documentRetrievalService, documentQuestionAnsweringService),
+    new SummarizeFileCommand(documentIndexingService, documentRetrievalService, documentSummaryService),
+    new SummarizeDocsCommand(documentRetrievalService, documentSummaryService),
     new ToolsCommand(toolRegistry),
     new PendingCommand(pendingActionService),
     new ApproveCommand(pendingActionService),

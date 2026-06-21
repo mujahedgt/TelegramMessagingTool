@@ -37,6 +37,8 @@ TelegramMessagingTool Agent Commands
 /docchunks <id> - Show index status for one document
 /askfile <id> <question> - Ask a question about one document
 /askdocs <question> - Ask across all indexed documents
+/summarizefile <id> - Summarize one indexed document
+/summarizedocs - Summarize all indexed documents
 /tools - List available safe agent tools
 /pending - List actions waiting for your approval
 /approve <id> - Approve a pending risky action

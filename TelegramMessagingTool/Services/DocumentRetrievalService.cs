@@ -38,6 +38,35 @@ public sealed class DocumentRetrievalService
         return RankChunks(chunks, question, limit);
     }
 
+    public async Task<IReadOnlyList<DocumentChunk>> GetSummaryChunksAsync(
+        TelegramDbContext dbContext,
+        ConnectedUser user,
+        int? fileId,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        if (limit <= 0)
+        {
+            return [];
+        }
+
+        IQueryable<DocumentChunk> query = dbContext.DocumentChunks
+            .Where(x => x.ConnectedUserId == user.Id);
+
+        if (fileId.HasValue)
+        {
+            query = query.Where(x => x.UploadedFileId == fileId.Value);
+        }
+
+        List<DocumentChunk> chunks = await query
+            .OrderBy(x => x.UploadedFileId)
+            .ThenBy(x => x.ChunkNumber)
+            .Take(limit)
+            .ToListAsync(cancellationToken);
+
+        return chunks;
+    }
+
     public static IReadOnlyList<DocumentChunk> RankChunks(
         IEnumerable<DocumentChunk> chunks,
         string question,
@@ -48,7 +77,7 @@ public sealed class DocumentRetrievalService
             return [];
         }
 
-        List<string> terms = Tokenize(question).ToList();
+        List<string> terms = Tokenize(question).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         if (terms.Count == 0)
         {
             return chunks.Take(limit).ToList();
@@ -58,7 +87,7 @@ public sealed class DocumentRetrievalService
             .Select(chunk => new
             {
                 Chunk = chunk,
-                Score = Score(chunk.Text, terms, question)
+                Score = Score(chunk.Text, terms)
             })
             .Where(x => x.Score > 0)
             .OrderByDescending(x => x.Score)
@@ -81,19 +110,40 @@ public sealed class DocumentRetrievalService
         }
     }
 
-    private static int Score(string chunkText, IReadOnlyList<string> terms, string question)
+    private static int Score(string chunkText, IReadOnlyList<string> terms)
     {
         string haystack = chunkText.ToLowerInvariant();
         int score = 0;
+        int matchedTerms = 0;
+
         foreach (string term in terms)
         {
-            score += Regex.Matches(haystack, Regex.Escape(term), RegexOptions.IgnoreCase).Count * 3;
+            int matches = Regex.Matches(haystack, $"\\b{Regex.Escape(term)}\\b", RegexOptions.IgnoreCase).Count;
+            if (matches > 0)
+            {
+                matchedTerms++;
+                score += matches * 4;
+            }
+        }
+
+        if (matchedTerms > 1)
+        {
+            score += matchedTerms * matchedTerms;
+        }
+
+        for (int i = 0; i < terms.Count - 1; i++)
+        {
+            string phrase = $"{terms[i]} {terms[i + 1]}";
+            if (haystack.Contains(phrase, StringComparison.OrdinalIgnoreCase))
+            {
+                score += 15;
+            }
         }
 
         string normalizedQuestion = string.Join(' ', terms);
         if (normalizedQuestion.Length > 6 && haystack.Contains(normalizedQuestion, StringComparison.OrdinalIgnoreCase))
         {
-            score += 10;
+            score += 25;
         }
 
         return score;

@@ -19,7 +19,7 @@ TelegramMessagingTool is a C#/.NET console application that connects a Telegram 
 - Live console event lines for startup, commands, messages, denied users, shutdown, and errors
 - Sandboxed document/file support for `.txt`, `.md`, `.json`, `.csv`, `.pdf`, `.docx`, and `.xlsx`
 - File commands: `/files`, `/readfile <id>`, and `/createfile <filename> <content>`
-- Document Q&A indexing and question commands: `/indexfile`, `/indexdocs`, `/docchunks`, `/askfile`, and `/askdocs`
+- Document Q&A indexing, question, and summary commands: `/indexfile`, `/indexdocs`, `/docchunks`, `/askfile`, `/askdocs`, `/summarizefile`, and `/summarizedocs`
 - Safe approval foundation for future risky tools
 - Approval commands: `/pending`, `/approve <id>`, and `/deny <id>`
 - Task planner commands: `/plan <goal>`, `/tasks`, `/task <id>`, `/done <task-id> [step-number]`, and `/cancel <task-id>`
@@ -185,13 +185,17 @@ Commands:
 | `/docchunks <id>` | Show indexed chunk status for one file |
 | `/askfile <id> <question>` | Ask a question about one saved/indexed file |
 | `/askdocs <question>` | Ask a question across all indexed files |
+| `/summarizefile <id>` | Summarize one saved/indexed file |
+| `/summarizedocs` | Summarize all indexed files |
 
 Q&A behavior:
 
 - `/askfile` auto-indexes the target file once if it has no chunks yet.
 - `/askdocs` searches across already indexed chunks; run `/indexdocs` first if needed.
 - Answers are produced from retrieved document excerpts and should cite file ID, filename, and chunk number.
-- The first retrieval version uses local lexical scoring. Embeddings such as `bge-m3` can be added later for stronger semantic search.
+- `/summarizefile` auto-indexes the target file once if it has no chunks yet.
+- `/summarizedocs` summarizes already indexed chunks; run `/indexdocs` first if needed.
+- Retrieval uses improved local lexical scoring with exact-phrase and multi-term boosts. Embeddings such as `bge-m3` can be added later for stronger semantic search.
 
 You can also upload a supported Telegram document directly. The bot stores it and replies with a file ID that can be used with `/readfile`, `/indexfile`, and `/askfile`.
 

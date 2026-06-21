@@ -241,11 +241,23 @@ IReadOnlyList<DocumentChunk> rankedChunks = DocumentRetrievalService.RankChunks(
 AssertEqual(1, rankedChunks.Count, "DocumentRetrievalService returns requested limit");
 AssertTrue(rankedChunks[0].Text.Contains("payment deadline"), "DocumentRetrievalService ranks relevant chunks first");
 
+IReadOnlyList<DocumentChunk> phraseRankedChunks = DocumentRetrievalService.RankChunks([
+    new DocumentChunk { Id = 1, OriginalFileName = "a.txt", ChunkNumber = 1, Text = "payment deadline appears in one exact phrase" },
+    new DocumentChunk { Id = 2, OriginalFileName = "b.txt", ChunkNumber = 1, Text = "payment terms are listed elsewhere and the deadline appears later" }
+], "payment deadline", limit: 2);
+AssertEqual(1, phraseRankedChunks[0].Id, "DocumentRetrievalService boosts exact phrase matches before loose term matches");
+
 string qaPrompt = DocumentQuestionAnsweringService.BuildPrompt(
     "what is the payment deadline?",
     [new DocumentChunk { UploadedFileId = 9, OriginalFileName = "contract.pdf", ChunkNumber = 2, Text = "The payment deadline is Sunday." }]);
 AssertTrue(qaPrompt.Contains("Use ONLY the document excerpts"), "DocumentQuestionAnsweringService restricts answers to excerpts");
 AssertTrue(qaPrompt.Contains("File #9 contract.pdf, chunk 2"), "DocumentQuestionAnsweringService includes chunk citation labels");
+
+string summaryPrompt = DocumentSummaryService.BuildPrompt([
+    new DocumentChunk { UploadedFileId = 9, OriginalFileName = "contract.pdf", ChunkNumber = 1, Text = "Contract payment details." }
+]);
+AssertTrue(summaryPrompt.Contains("Summarize the user's indexed document excerpts"), "DocumentSummaryService creates a summary prompt");
+AssertTrue(summaryPrompt.Contains("File #9 contract.pdf, chunk 1"), "DocumentSummaryService includes chunk citation labels");
 
 static Message TextMessage(string text) => new()
 {
@@ -282,7 +294,13 @@ await using (var dbContext = new TelegramDbContext())
     var documentRetrievalService = new DocumentRetrievalService();
     var documentQuestionAnsweringService = new DocumentQuestionAnsweringService(new ScriptedChatClient([
         "The payment deadline is Sunday. Source: File #1 notes.md, chunk 1.",
-        "The saved note says this is a saved note. Source: File #1 notes.md, chunk 1."
+        "The saved note says this is a saved note. Source: File #1 notes.md, chunk 1.",
+        "Summary: this document contains a saved note. Source: File #1 notes.md, chunk 1.",
+        "Summary: indexed documents include a saved note. Source: File #1 notes.md, chunk 1."
+    ]));
+    var documentSummaryService = new DocumentSummaryService(new ScriptedChatClient([
+        "Summary: this document contains a saved note. Source: File #1 notes.md, chunk 1.",
+        "Summary: indexed documents include a saved note. Source: File #1 notes.md, chunk 1."
     ]));
     var commandRouter = new CommandRouter([
         new HelpCommand(),
@@ -307,6 +325,8 @@ await using (var dbContext = new TelegramDbContext())
         new DocChunksCommand(),
         new AskFileCommand(documentIndexingService, documentRetrievalService, documentQuestionAnsweringService),
         new AskDocsCommand(documentRetrievalService, documentQuestionAnsweringService),
+        new SummarizeFileCommand(documentIndexingService, documentRetrievalService, documentSummaryService),
+        new SummarizeDocsCommand(documentRetrievalService, documentSummaryService),
         new ToolsCommand(registry),
         new PendingCommand(pendingActionService),
         new ApproveCommand(pendingActionService),
@@ -417,6 +437,14 @@ await using (var dbContext = new TelegramDbContext())
     CommandResult askDocsResult = await commandRouter.TryHandleAsync(TextMessage("/askdocs what saved note do I have?"), testUser, dbContext, CancellationToken.None);
     AssertTrue(askDocsResult.Handled, "/askdocs is handled");
     AssertTrue(askDocsResult.ReplyText?.Contains("saved note", StringComparison.OrdinalIgnoreCase) == true, "/askdocs returns model answer across documents");
+
+    CommandResult summarizeFileResult = await commandRouter.TryHandleAsync(TextMessage($"/summarizefile {uploadedFileId}"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(summarizeFileResult.Handled, "/summarizefile is handled");
+    AssertTrue(summarizeFileResult.ReplyText?.Contains("Summary", StringComparison.OrdinalIgnoreCase) == true, "/summarizefile returns a document summary");
+
+    CommandResult summarizeDocsResult = await commandRouter.TryHandleAsync(TextMessage("/summarizedocs"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(summarizeDocsResult.Handled, "/summarizedocs is handled");
+    AssertTrue(summarizeDocsResult.ReplyText?.Contains("indexed documents", StringComparison.OrdinalIgnoreCase) == true, "/summarizedocs returns an all-documents summary");
 
     dbContext.Messages.Add(new ChatMessage
     {
