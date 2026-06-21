@@ -74,6 +74,9 @@ var agentRunner = new AgentRunner(ollamaClient, toolRegistry);
 var conversationService = new ConversationService();
 var commandRouter = new CommandRouter([
     new HelpCommand(),
+    new SystemInfoCommand(),
+    new DiskStatusCommand(),
+    new ProcessesCommand(),
     new StatusCommand(settings),
     new ResetCommand(),
     new RememberCommand(),

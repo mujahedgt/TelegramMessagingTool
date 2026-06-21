@@ -201,6 +201,16 @@ AssertTrue(eventLine.Contains("MESSAGE"), "Console event includes label");
 AssertTrue(eventLine.Contains("tester"), "Console event includes actor");
 AssertTrue(eventLine.Contains("handled with tools"), "Console event includes detail");
 
+AssertEqual("1.5 GB", LocalDeviceInfoService.FormatBytes(1_610_612_736), "LocalDeviceInfoService formats byte counts safely");
+string systemInfoText = LocalDeviceInfoService.RenderSystemInfo();
+AssertTrue(systemInfoText.Contains("Operating system"), "LocalDeviceInfoService renders OS information");
+AssertTrue(systemInfoText.Contains("Machine name"), "LocalDeviceInfoService renders machine name");
+string diskStatusText = LocalDeviceInfoService.RenderDiskStatus();
+AssertTrue(diskStatusText.Contains("Disk status"), "LocalDeviceInfoService renders disk status");
+string processText = LocalDeviceInfoService.RenderTopProcesses(5);
+AssertTrue(processText.Contains("Running processes"), "LocalDeviceInfoService renders process list");
+AssertTrue(processText.Length < 4096, "LocalDeviceInfoService process list is Telegram-safe");
+
 string testFileRoot = Path.Combine(Path.GetTempPath(), "TelegramMessagingTool_FileTests_" + Guid.NewGuid().ToString("N"));
 var documentStorage = new DocumentStorageService(testFileRoot, maxFileBytes: 1024 * 1024);
 var testEmbeddingService = new DeterministicEmbeddingService();
@@ -328,6 +338,9 @@ await using (var dbContext = new TelegramDbContext())
     ]));
     var commandRouter = new CommandRouter([
         new HelpCommand(),
+        new SystemInfoCommand(),
+        new DiskStatusCommand(),
+        new ProcessesCommand(),
         new StatusCommand(new BotSettings(
             BotToken: "test-token",
             OllamaUrl: "http://localhost:11434/api/chat",
@@ -378,6 +391,18 @@ await using (var dbContext = new TelegramDbContext())
     CommandResult toolsResult = await commandRouter.TryHandleAsync(TextMessage("/tools"), testUser, dbContext, CancellationToken.None);
     AssertTrue(toolsResult.Handled, "/tools is handled");
     AssertTrue(toolsResult.ReplyText?.Contains("online_search") == true, "/tools lists online search");
+
+    CommandResult systemInfoResult = await commandRouter.TryHandleAsync(TextMessage("/systeminfo"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(systemInfoResult.Handled, "/systeminfo is handled");
+    AssertTrue(systemInfoResult.ReplyText?.Contains("Operating system") == true, "/systeminfo reports OS info");
+
+    CommandResult diskStatusResult = await commandRouter.TryHandleAsync(TextMessage("/diskstatus"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(diskStatusResult.Handled, "/diskstatus is handled");
+    AssertTrue(diskStatusResult.ReplyText?.Contains("Disk status") == true, "/diskstatus reports disk info");
+
+    CommandResult processesResult = await commandRouter.TryHandleAsync(TextMessage("/processes"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(processesResult.Handled, "/processes is handled");
+    AssertTrue(processesResult.ReplyText?.Contains("Running processes") == true, "/processes reports process info");
 
     PendingAction pendingAction = await pendingActionService.CreateAsync(
         dbContext,

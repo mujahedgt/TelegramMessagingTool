@@ -20,6 +20,7 @@ TelegramMessagingTool is a C#/.NET console application that connects a Telegram 
 - Sandboxed document/file support for `.txt`, `.md`, `.json`, `.csv`, `.pdf`, `.docx`, and `.xlsx`
 - File commands: `/files`, `/readfile <id>`, and `/createfile <filename> <content>`
 - Document Q&A indexing, question, summary, and embedding commands: `/indexfile`, `/indexdocs`, `/docchunks`, `/askfile`, `/askdocs`, `/summarizefile`, `/summarizedocs`, `/embedfile`, and `/embeddocs`
+- Read-only local device commands: `/systeminfo`, `/diskstatus`, and `/processes [count]`
 - Safe approval foundation for future risky tools
 - Approval commands: `/pending`, `/approve <id>`, and `/deny <id>`
 - Task planner commands: `/plan <goal>`, `/tasks`, `/task <id>`, `/done <task-id> [step-number]`, and `/cancel <task-id>`
@@ -137,6 +138,18 @@ Multi-step tool loop notes:
 - If the model keeps requesting tools after the limit, the bot stops and asks the user to narrow or continue with a smaller task.
 
 Risky tools such as shell, file write/delete, database mutation, or outbound messaging are intentionally not included yet. Use the approval flow before adding dangerous tools.
+
+## Read-only local device commands
+
+These commands inspect the local machine without changing anything:
+
+| Command | Purpose |
+|---|---|
+| `/systeminfo` | Show operating system, architecture, machine name, CPU count, .NET runtime, uptime, and process memory |
+| `/diskstatus` | Show ready local drives, total space, free space, and used percentage |
+| `/processes [count]` | Show running process count and top processes by memory usage; count is clamped to a safe range |
+
+These are intentionally **read-only**. They do not stop processes, delete files, edit files, or run arbitrary shell commands.
 
 ## Approval flow
 

@@ -24,6 +24,9 @@ public sealed class HelpCommand : IBotCommand
 TelegramMessagingTool Agent Commands
 
 /help - Show this help
+/systeminfo - Show read-only local OS and runtime info
+/diskstatus - Show read-only local disk space status
+/processes [count] - Show read-only local running processes by memory
 /status - Show bot status
 /reset - Clear your conversation history
 /memory - Show saved memories
