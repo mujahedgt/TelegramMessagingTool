@@ -221,6 +221,31 @@ public sealed class DocumentStorageService
         return Truncate(text, maxCharacters);
     }
 
+    public FileDeletionResult DeleteStoredFile(UploadedFile uploadedFile)
+    {
+        try
+        {
+            string absolutePath = Path.GetFullPath(uploadedFile.AbsolutePath);
+            EnsureInsideRoot(absolutePath);
+
+            if (!File.Exists(absolutePath))
+            {
+                return FileDeletionResult.Ok("File was already missing on disk; database record was removed.");
+            }
+
+            File.Delete(absolutePath);
+            return FileDeletionResult.Ok("File was removed from the document sandbox and database metadata was removed.");
+        }
+        catch (InvalidOperationException ex)
+        {
+            return FileDeletionResult.Failed($"Execution refused: {ex.Message}");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            return FileDeletionResult.Failed($"Execution failed: could not delete file from disk. {ex.Message}");
+        }
+    }
+
     private static void CreateDocxFile(string absolutePath, string content)
     {
         using WordprocessingDocument document = WordprocessingDocument.Create(absolutePath, WordprocessingDocumentType.Document);
@@ -471,4 +496,12 @@ public sealed class DocumentStorageService
     {
         return text.Length <= maxCharacters ? text : text[..maxCharacters] + "\n...[truncated]";
     }
+}
+
+
+public sealed record FileDeletionResult(bool Success, string Message)
+{
+    public static FileDeletionResult Ok(string message) => new(true, message);
+
+    public static FileDeletionResult Failed(string message) => new(false, message);
 }

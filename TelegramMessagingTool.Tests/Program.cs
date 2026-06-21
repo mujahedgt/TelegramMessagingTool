@@ -347,7 +347,7 @@ await using (var dbContext = new TelegramDbContext())
 
     var pendingActionService = new PendingActionService();
     var fakeProcessTerminator = new FakeProcessTerminator();
-    var pendingActionExecutor = new PendingActionExecutor(fakeProcessTerminator);
+    var pendingActionExecutor = new PendingActionExecutor(fakeProcessTerminator, documentStorage);
     var agentTaskService = new AgentTaskService();
     var documentIndexingService = new DocumentIndexingService(documentStorage);
     var documentRetrievalService = new DocumentRetrievalService(testEmbeddingService);
@@ -374,6 +374,7 @@ await using (var dbContext = new TelegramDbContext())
         new FilesCommand(documentStorage),
         new ReadFileCommand(documentStorage),
         new CreateFileCommand(documentStorage),
+        new DeleteFileCommand(pendingActionService, adminTestSettings),
         new IndexFileCommand(documentIndexingService),
         new IndexDocsCommand(documentIndexingService),
         new DocChunksCommand(),
@@ -590,6 +591,33 @@ await using (var dbContext = new TelegramDbContext())
     CommandResult summarizeDocsResult = await commandRouter.TryHandleAsync(TextMessage("/summarizedocs"), testUser, dbContext, CancellationToken.None);
     AssertTrue(summarizeDocsResult.Handled, "/summarizedocs is handled");
     AssertTrue(summarizeDocsResult.ReplyText?.Contains("indexed documents", StringComparison.OrdinalIgnoreCase) == true, "/summarizedocs returns an all-documents summary");
+
+    UploadedFile fileBeforeDelete = await dbContext.UploadedFiles.FirstAsync(x => x.Id == uploadedFileId, CancellationToken.None);
+    string filePathBeforeDelete = fileBeforeDelete.AbsolutePath;
+    AssertTrue(File.Exists(filePathBeforeDelete), "/deletefile test file exists before deletion approval");
+
+    CommandResult invalidDeleteFileResult = await commandRouter.TryHandleAsync(TextMessage("/deletefile nope"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(invalidDeleteFileResult.Handled, "/deletefile invalid input is handled");
+    AssertTrue(invalidDeleteFileResult.ReplyText?.Contains("Usage: /deletefile <file id>") == true, "/deletefile validates file id input");
+
+    CommandResult nonAdminDeleteFileResult = await commandRouter.TryHandleAsync(TextMessage($"/deletefile {uploadedFileId}"), nonAdminUser, dbContext, CancellationToken.None);
+    AssertTrue(nonAdminDeleteFileResult.Handled, "/deletefile non-admin attempt is handled");
+    AssertTrue(nonAdminDeleteFileResult.ReplyText?.Contains("admin", StringComparison.OrdinalIgnoreCase) == true, "/deletefile requires admin");
+
+    CommandResult deleteFileResult = await commandRouter.TryHandleAsync(TextMessage($"/deletefile {uploadedFileId}"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(deleteFileResult.Handled, "/deletefile is handled");
+    AssertTrue(deleteFileResult.ReplyText?.Contains("approval request", StringComparison.OrdinalIgnoreCase) == true, "/deletefile creates approval request");
+    PendingAction deleteFilePendingAction = await dbContext.PendingActions.SingleAsync(x => x.ToolName == "delete_file", CancellationToken.None);
+    AssertEqual("high", deleteFilePendingAction.RiskLevel, "/deletefile creates high risk pending action");
+    AssertTrue(deleteFilePendingAction.PayloadJson.Contains(uploadedFileId.ToString()), "/deletefile stores target file id in payload");
+    AssertTrue(File.Exists(filePathBeforeDelete), "/deletefile does not delete before approval");
+
+    CommandResult approveDeleteFileResult = await commandRouter.TryHandleAsync(TextMessage($"/approve {deleteFilePendingAction.Id}"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(approveDeleteFileResult.Handled, "/approve delete_file is handled");
+    AssertTrue(approveDeleteFileResult.ReplyText?.Contains("Execution result", StringComparison.OrdinalIgnoreCase) == true, "/approve delete_file reports execution result");
+    AssertFalse(File.Exists(filePathBeforeDelete), "/approve delete_file removes file from disk");
+    AssertFalse(await dbContext.UploadedFiles.AnyAsync(x => x.Id == uploadedFileId, CancellationToken.None), "/approve delete_file removes file metadata");
+    AssertFalse(await dbContext.DocumentChunks.AnyAsync(x => x.UploadedFileId == uploadedFileId, CancellationToken.None), "/approve delete_file removes indexed chunks");
 
     dbContext.Messages.Add(new ChatMessage
     {

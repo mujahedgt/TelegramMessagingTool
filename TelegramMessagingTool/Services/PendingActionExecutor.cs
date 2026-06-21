@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using System.Diagnostics;
 using System.Text.Json;
 using TelegramMessagingTool.Data;
@@ -8,10 +9,12 @@ namespace TelegramMessagingTool.Services;
 public sealed class PendingActionExecutor
 {
     private readonly IProcessTerminator _processTerminator;
+    private readonly DocumentStorageService _documentStorage;
 
-    public PendingActionExecutor(IProcessTerminator processTerminator)
+    public PendingActionExecutor(IProcessTerminator processTerminator, DocumentStorageService documentStorage)
     {
         _processTerminator = processTerminator;
+        _documentStorage = documentStorage;
     }
 
     public async Task<PendingActionExecutionResult> ExecuteApprovedAsync(
@@ -27,6 +30,7 @@ public sealed class PendingActionExecutor
         PendingActionExecutionResult result = action.ToolName switch
         {
             "kill_process" => ExecuteKillProcess(action),
+            "delete_file" => await ExecuteDeleteFileAsync(dbContext, action, cancellationToken),
             _ => PendingActionExecutionResult.Skipped($"No automatic execution is registered for action type '{action.ToolName}'.")
         };
 
@@ -46,6 +50,61 @@ public sealed class PendingActionExecutor
         return terminationResult.Success
             ? PendingActionExecutionResult.Completed(terminationResult.Message)
             : PendingActionExecutionResult.Failed(terminationResult.Message);
+    }
+
+    private async Task<PendingActionExecutionResult> ExecuteDeleteFileAsync(
+        TelegramDbContext dbContext,
+        PendingAction action,
+        CancellationToken cancellationToken)
+    {
+        if (!TryReadFileId(action.PayloadJson, out int fileId, out string error))
+        {
+            return PendingActionExecutionResult.Failed(error);
+        }
+
+        UploadedFile? file = await dbContext.UploadedFiles
+            .FirstOrDefaultAsync(x => x.Id == fileId && x.ConnectedUserId == action.ConnectedUserId, cancellationToken);
+
+        if (file is null)
+        {
+            return PendingActionExecutionResult.Failed($"Execution failed: file #{fileId} was not found for this user.");
+        }
+
+        string fileName = file.OriginalFileName;
+        FileDeletionResult deletionResult = _documentStorage.DeleteStoredFile(file);
+        if (!deletionResult.Success)
+        {
+            return PendingActionExecutionResult.Failed(deletionResult.Message);
+        }
+
+        dbContext.UploadedFiles.Remove(file);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return PendingActionExecutionResult.Completed($"Deleted file #{fileId}: {fileName}. {deletionResult.Message}");
+    }
+
+    private static bool TryReadFileId(string payloadJson, out int fileId, out string error)
+    {
+        fileId = 0;
+        error = string.Empty;
+
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(payloadJson);
+            if (!document.RootElement.TryGetProperty("file_id", out JsonElement fileIdElement)
+                || !fileIdElement.TryGetInt32(out fileId)
+                || fileId <= 0)
+            {
+                error = "Execution failed: delete_file payload does not contain a valid positive file_id.";
+                return false;
+            }
+
+            return true;
+        }
+        catch (JsonException ex)
+        {
+            error = $"Execution failed: invalid delete_file payload JSON. {ex.Message}";
+            return false;
+        }
     }
 
     private static bool TryReadPid(string payloadJson, out int processId, out string error)
