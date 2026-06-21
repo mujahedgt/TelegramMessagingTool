@@ -27,7 +27,7 @@ public sealed class ActionCommand : IBotCommand
         CancellationToken cancellationToken)
     {
         string messageText = message.Text ?? string.Empty;
-        if (!messageText.StartsWith("/action", StringComparison.OrdinalIgnoreCase))
+        if (!CommandParser.Matches(messageText, Name))
         {
             return new CommandResult(false, null);
         }
@@ -53,7 +53,7 @@ public sealed class ActionCommand : IBotCommand
 
     private static bool TryParseActionId(string messageText, out int actionId)
     {
-        string rawId = messageText["/action".Length..].Trim();
+        string rawId = CommandParser.GetArguments(messageText, "/action");
         return int.TryParse(rawId, out actionId) && actionId > 0;
     }
 

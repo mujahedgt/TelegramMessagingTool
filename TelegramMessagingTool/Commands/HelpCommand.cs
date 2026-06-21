@@ -15,7 +15,7 @@ public sealed class HelpCommand : IBotCommand
         TelegramDbContext dbContext,
         CancellationToken cancellationToken)
     {
-        if (!message.Text?.StartsWith("/help", StringComparison.OrdinalIgnoreCase) ?? true)
+        if (!CommandParser.Matches(message.Text, Name))
         {
             return Task.FromResult(new CommandResult(false, null));
         }
@@ -60,6 +60,7 @@ TelegramMessagingTool Agent Commands
 /cancel <task-id> - Cancel a task plan
 
 Normal messages are answered by the local Ollama model.
+In groups, Telegram commands addressed as /command@botusername are also accepted.
 """;
 
         return Task.FromResult(new CommandResult(true, reply));

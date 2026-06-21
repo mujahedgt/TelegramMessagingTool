@@ -26,7 +26,7 @@ public sealed class PendingCommand : IBotCommand
         CancellationToken cancellationToken)
     {
         string messageText = message.Text ?? string.Empty;
-        if (!messageText.StartsWith("/pending", StringComparison.OrdinalIgnoreCase))
+        if (!CommandParser.Matches(messageText, Name))
         {
             return new CommandResult(false, null);
         }

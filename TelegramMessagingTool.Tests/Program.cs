@@ -68,6 +68,18 @@ AssertEqual("admin-only", BotAccessPolicy.DescribeAccessMode(emptyAllowlist, adm
 AssertEqual("public override", BotAccessPolicy.DescribeAccessMode(emptyAllowlist, adminChatId: 0, allowPublicAccess: true), "DescribeAccessMode reports public override mode");
 AssertEqual("locked", BotAccessPolicy.DescribeAccessMode(emptyAllowlist, adminChatId: 0, allowPublicAccess: false), "DescribeAccessMode reports locked mode");
 
+AssertTrue(CommandParser.TryParse("/status", out ParsedCommand parsedStatus), "CommandParser parses bare command");
+AssertEqual("/status", parsedStatus.Command, "CommandParser normalizes bare command token");
+AssertEqual(string.Empty, parsedStatus.Arguments, "CommandParser returns empty arguments for bare command");
+AssertTrue(CommandParser.TryParse("/status@red_eye_ghost_bot detailed", out ParsedCommand parsedMentionCommand), "CommandParser parses command addressed to bot username");
+AssertEqual("/status", parsedMentionCommand.Command, "CommandParser strips bot username suffix");
+AssertEqual("red_eye_ghost_bot", parsedMentionCommand.BotUsername, "CommandParser captures bot username suffix");
+AssertEqual("detailed", parsedMentionCommand.Arguments, "CommandParser extracts arguments after mention command");
+AssertFalse(CommandParser.Matches("/statusx", "/status"), "CommandParser does not match command prefixes");
+AssertFalse(CommandParser.Matches("/status-extra", "/status"), "CommandParser does not match command names with extra suffixes");
+AssertTrue(CommandParser.Matches("/status@red_eye_ghost_bot", "/status"), "CommandParser matches bot-addressed commands");
+AssertEqual("hello world", CommandParser.GetArguments("/remember@red_eye_ghost_bot hello world", "/remember"), "CommandParser extracts arguments from bot-addressed command");
+
 string validOllamaJson = """
 {
   "message": {
@@ -461,6 +473,14 @@ await using (var dbContext = new TelegramDbContext())
     CommandResult statusResult = await commandRouter.TryHandleAsync(TextMessage("/status"), testUser, dbContext, CancellationToken.None);
     AssertTrue(statusResult.Handled, "/status is handled");
     AssertTrue(statusResult.ReplyText?.Contains("Database: OK") == true, "/status reports database OK");
+    AssertTrue(statusResult.ReplyText?.Contains("Access mode: admin-only") == true, "/status reports access mode");
+
+    CommandResult statusMentionResult = await commandRouter.TryHandleAsync(TextMessage("/status@red_eye_ghost_bot"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(statusMentionResult.Handled, "/status@bot is handled");
+    AssertTrue(statusMentionResult.ReplyText?.Contains("Database: OK") == true, "/status@bot reports database OK");
+
+    CommandResult statusPrefixResult = await commandRouter.TryHandleAsync(TextMessage("/statusx"), testUser, dbContext, CancellationToken.None);
+    AssertFalse(statusPrefixResult.Handled, "/statusx is not treated as /status");
 
     CommandResult toolsResult = await commandRouter.TryHandleAsync(TextMessage("/tools"), testUser, dbContext, CancellationToken.None);
     AssertTrue(toolsResult.Handled, "/tools is handled");
@@ -715,6 +735,13 @@ await using (var dbContext = new TelegramDbContext())
     AssertTrue(rememberResult.Handled, "/remember is handled");
     AssertEqual(1, await dbContext.Memories.CountAsync(x => x.ConnectedUserId == testUser.Id), "/remember saves memory");
 
+    CommandResult mentionRememberResult = await commandRouter.TryHandleAsync(TextMessage("/remember@red_eye_ghost_bot User likes exact commands"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(mentionRememberResult.Handled, "/remember@bot is handled");
+    AssertEqual(2, await dbContext.Memories.CountAsync(x => x.ConnectedUserId == testUser.Id), "/remember@bot saves memory using parsed arguments");
+
+    CommandResult rememberPrefixResult = await commandRouter.TryHandleAsync(TextMessage("/remembered wrong command"), testUser, dbContext, CancellationToken.None);
+    AssertFalse(rememberPrefixResult.Handled, "/remembered is not treated as /remember");
+
     CommandResult memoryResult = await commandRouter.TryHandleAsync(TextMessage("/memory"), testUser, dbContext, CancellationToken.None);
     AssertTrue(memoryResult.Handled, "/memory is handled");
     AssertTrue(memoryResult.ReplyText?.Contains("User prefers concise answers") == true, "/memory lists saved memory");
@@ -722,11 +749,11 @@ await using (var dbContext = new TelegramDbContext())
     int memoryId = await dbContext.Memories
         .Where(x => x.ConnectedUserId == testUser.Id)
         .Select(x => x.Id)
-        .SingleAsync();
+        .FirstAsync();
 
     CommandResult forgetResult = await commandRouter.TryHandleAsync(TextMessage($"/forget {memoryId}"), testUser, dbContext, CancellationToken.None);
     AssertTrue(forgetResult.Handled, "/forget is handled");
-    AssertEqual(0, await dbContext.Memories.CountAsync(x => x.ConnectedUserId == testUser.Id), "/forget deletes memory");
+    AssertEqual(1, await dbContext.Memories.CountAsync(x => x.ConnectedUserId == testUser.Id), "/forget deletes one memory");
 }
 
 await using (var cleanupContext = new TelegramDbContext())

@@ -18,7 +18,7 @@ public sealed class SystemInfoCommand : IBotCommand
         CancellationToken cancellationToken)
     {
         string messageText = message.Text ?? string.Empty;
-        if (!messageText.StartsWith("/systeminfo", StringComparison.OrdinalIgnoreCase))
+        if (!CommandParser.Matches(messageText, Name))
         {
             return Task.FromResult(new CommandResult(false, null));
         }

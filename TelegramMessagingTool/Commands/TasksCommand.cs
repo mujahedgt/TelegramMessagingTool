@@ -20,12 +20,12 @@ public sealed class TasksCommand : IBotCommand
     public async Task<CommandResult> TryHandleAsync(Message message, ConnectedUser user, TelegramDbContext dbContext, CancellationToken cancellationToken)
     {
         string messageText = message.Text ?? string.Empty;
-        if (!messageText.StartsWith("/tasks", StringComparison.OrdinalIgnoreCase))
+        if (!CommandParser.Matches(messageText, Name))
         {
             return new CommandResult(false, null);
         }
 
-        bool includeDone = messageText.Contains("all", StringComparison.OrdinalIgnoreCase);
+        bool includeDone = CommandParser.GetArguments(messageText, Name).Contains("all", StringComparison.OrdinalIgnoreCase);
         IReadOnlyList<AgentTask> tasks = await _agentTaskService.ListAsync(dbContext, user, includeDone, cancellationToken);
         if (tasks.Count == 0)
         {

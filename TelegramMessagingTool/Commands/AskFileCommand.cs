@@ -33,12 +33,12 @@ public sealed class AskFileCommand : IBotCommand
         CancellationToken cancellationToken)
     {
         string messageText = message.Text ?? string.Empty;
-        if (!messageText.StartsWith("/askfile", StringComparison.OrdinalIgnoreCase))
+        if (!CommandParser.Matches(messageText, Name))
         {
             return new CommandResult(false, null);
         }
 
-        string args = messageText["/askfile".Length..].Trim();
+        string args = CommandParser.GetArguments(messageText, Name);
         string[] parts = args.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (parts.Length < 2 || !int.TryParse(parts[0], out int fileId))
         {

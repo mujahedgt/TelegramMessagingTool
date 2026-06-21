@@ -24,7 +24,7 @@ public sealed class ToolsCommand : IBotCommand
         TelegramDbContext dbContext,
         CancellationToken cancellationToken)
     {
-        if (!message.Text?.StartsWith("/tools", StringComparison.OrdinalIgnoreCase) ?? true)
+        if (!CommandParser.Matches(message.Text, Name))
         {
             return Task.FromResult(new CommandResult(false, null));
         }

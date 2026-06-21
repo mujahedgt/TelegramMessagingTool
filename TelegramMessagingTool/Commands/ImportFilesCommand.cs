@@ -30,8 +30,7 @@ public sealed class ImportFilesCommand : IBotCommand
         CancellationToken cancellationToken)
     {
         string messageText = message.Text ?? string.Empty;
-        if (!messageText.Equals("/importfiles", StringComparison.OrdinalIgnoreCase)
-            && !messageText.StartsWith("/importfiles ", StringComparison.OrdinalIgnoreCase))
+        if (!CommandParser.Matches(messageText, Name))
         {
             return Task.FromResult(new CommandResult(false, null));
         }

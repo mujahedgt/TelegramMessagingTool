@@ -28,7 +28,7 @@ public sealed class EmbedDocsCommand : IBotCommand
         CancellationToken cancellationToken)
     {
         string messageText = message.Text ?? string.Empty;
-        if (!messageText.StartsWith("/embeddocs", StringComparison.OrdinalIgnoreCase))
+        if (!CommandParser.Matches(messageText, Name))
         {
             return new CommandResult(false, null);
         }

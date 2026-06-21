@@ -141,6 +141,10 @@ Multi-step tool loop notes:
 
 Risky tools such as shell, file write/delete, database mutation, or outbound messaging are intentionally not included yet. Use the approval flow before adding dangerous tools.
 
+## Command parsing
+
+Commands are matched exactly. For example, `/statusx` is not treated as `/status`. Telegram group syntax such as `/status@your_bot_username` is accepted and parsed as `/status` with the same arguments.
+
 ## Read-only local device commands
 
 These commands inspect the local machine without changing anything:

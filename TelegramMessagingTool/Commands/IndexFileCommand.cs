@@ -25,12 +25,12 @@ public sealed class IndexFileCommand : IBotCommand
         CancellationToken cancellationToken)
     {
         string messageText = message.Text ?? string.Empty;
-        if (!messageText.StartsWith("/indexfile", StringComparison.OrdinalIgnoreCase))
+        if (!CommandParser.Matches(messageText, Name))
         {
             return new CommandResult(false, null);
         }
 
-        string idText = messageText["/indexfile".Length..].Trim();
+        string idText = CommandParser.GetArguments(messageText, Name);
         if (!int.TryParse(idText, out int fileId))
         {
             return new CommandResult(true, "Usage: /indexfile <file id>");

@@ -30,12 +30,12 @@ public sealed class AskDocsCommand : IBotCommand
         CancellationToken cancellationToken)
     {
         string messageText = message.Text ?? string.Empty;
-        if (!messageText.StartsWith("/askdocs", StringComparison.OrdinalIgnoreCase))
+        if (!CommandParser.Matches(messageText, Name))
         {
             return new CommandResult(false, null);
         }
 
-        string question = messageText["/askdocs".Length..].Trim();
+        string question = CommandParser.GetArguments(messageText, Name);
         if (string.IsNullOrWhiteSpace(question))
         {
             return new CommandResult(true, "Usage: /askdocs <question>");

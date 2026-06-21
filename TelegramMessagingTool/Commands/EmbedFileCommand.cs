@@ -28,12 +28,12 @@ public sealed class EmbedFileCommand : IBotCommand
         CancellationToken cancellationToken)
     {
         string messageText = message.Text ?? string.Empty;
-        if (!messageText.StartsWith("/embedfile", StringComparison.OrdinalIgnoreCase))
+        if (!CommandParser.Matches(messageText, Name))
         {
             return new CommandResult(false, null);
         }
 
-        string args = messageText["/embedfile".Length..].Trim();
+        string args = CommandParser.GetArguments(messageText, Name);
         if (!int.TryParse(args, out int fileId))
         {
             return new CommandResult(true, "Usage: /embedfile <file id>");

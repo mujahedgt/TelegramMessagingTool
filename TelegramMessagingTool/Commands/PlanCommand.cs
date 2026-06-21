@@ -20,12 +20,12 @@ public sealed class PlanCommand : IBotCommand
     public async Task<CommandResult> TryHandleAsync(Message message, ConnectedUser user, TelegramDbContext dbContext, CancellationToken cancellationToken)
     {
         string messageText = message.Text ?? string.Empty;
-        if (!messageText.StartsWith("/plan", StringComparison.OrdinalIgnoreCase))
+        if (!CommandParser.Matches(messageText, Name))
         {
             return new CommandResult(false, null);
         }
 
-        string goal = messageText["/plan".Length..].Trim();
+        string goal = CommandParser.GetArguments(messageText, Name);
         if (string.IsNullOrWhiteSpace(goal))
         {
             return new CommandResult(true, "Usage: /plan <goal to break into steps>");

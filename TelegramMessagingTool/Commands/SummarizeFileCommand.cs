@@ -33,12 +33,12 @@ public sealed class SummarizeFileCommand : IBotCommand
         CancellationToken cancellationToken)
     {
         string messageText = message.Text ?? string.Empty;
-        if (!messageText.StartsWith("/summarizefile", StringComparison.OrdinalIgnoreCase))
+        if (!CommandParser.Matches(messageText, Name))
         {
             return new CommandResult(false, null);
         }
 
-        string args = messageText["/summarizefile".Length..].Trim();
+        string args = CommandParser.GetArguments(messageText, Name);
         if (!int.TryParse(args, out int fileId))
         {
             return new CommandResult(true, "Usage: /summarizefile <file id>");

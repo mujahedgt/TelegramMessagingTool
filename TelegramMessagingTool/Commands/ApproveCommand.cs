@@ -28,7 +28,7 @@ public sealed class ApproveCommand : IBotCommand
         CancellationToken cancellationToken)
     {
         string messageText = message.Text ?? string.Empty;
-        if (!messageText.StartsWith("/approve", StringComparison.OrdinalIgnoreCase))
+        if (!CommandParser.Matches(messageText, Name))
         {
             return new CommandResult(false, null);
         }
@@ -62,7 +62,7 @@ Approved action #{decision.Action.Id}: {decision.Action.ToolName}
 
     private static bool TryParseActionId(string messageText, string commandName, out int actionId)
     {
-        string rawId = messageText[commandName.Length..].Trim();
+        string rawId = CommandParser.GetArguments(messageText, commandName);
         return int.TryParse(rawId, out actionId) && actionId > 0;
     }
 }

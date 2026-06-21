@@ -16,12 +16,12 @@ public sealed class RememberCommand : IBotCommand
         CancellationToken cancellationToken)
     {
         string messageText = message.Text ?? string.Empty;
-        if (!messageText.StartsWith("/remember", StringComparison.OrdinalIgnoreCase))
+        if (!CommandParser.Matches(messageText, Name))
         {
             return new CommandResult(false, null);
         }
 
-        string content = messageText["/remember".Length..].Trim();
+        string content = CommandParser.GetArguments(messageText, Name);
         if (string.IsNullOrWhiteSpace(content))
         {
             return new CommandResult(true, "Usage: /remember <fact to save>");

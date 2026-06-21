@@ -23,7 +23,7 @@ public sealed class StatusCommand : IBotCommand
         TelegramDbContext dbContext,
         CancellationToken cancellationToken)
     {
-        if (!message.Text?.StartsWith("/status", StringComparison.OrdinalIgnoreCase) ?? true)
+        if (!CommandParser.Matches(message.Text, Name))
         {
             return new CommandResult(false, null);
         }
@@ -36,7 +36,7 @@ Status
 Database: {(dbReady ? "OK" : "Unavailable")}
 Ollama URL: {_settings.OllamaUrl}
 Ollama model: {_settings.OllamaModel}
-Allowlist: {(_settings.AllowedChatIds.Count == 0 ? "disabled" : $"enabled ({_settings.AllowedChatIds.Count} chat IDs)")}
+Access mode: {BotAccessPolicy.DescribeAccessMode(_settings.AllowedChatIds, _settings.AdminChatId, _settings.AllowPublicAccess)}
 Message content logging: {(_settings.LogMessageContent ? "enabled" : "disabled")}
 Apply migrations: {_settings.ApplyMigrations}
 """;

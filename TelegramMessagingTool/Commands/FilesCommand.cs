@@ -25,7 +25,7 @@ public sealed class FilesCommand : IBotCommand
         TelegramDbContext dbContext,
         CancellationToken cancellationToken)
     {
-        if (!message.Text?.StartsWith("/files", StringComparison.OrdinalIgnoreCase) ?? true)
+        if (!CommandParser.Matches(message.Text, Name))
         {
             return new CommandResult(false, null);
         }

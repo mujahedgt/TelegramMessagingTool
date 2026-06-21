@@ -26,12 +26,12 @@ public sealed class ReadFileCommand : IBotCommand
         CancellationToken cancellationToken)
     {
         string messageText = message.Text ?? string.Empty;
-        if (!messageText.StartsWith("/readfile", StringComparison.OrdinalIgnoreCase))
+        if (!CommandParser.Matches(messageText, Name))
         {
             return new CommandResult(false, null);
         }
 
-        string idText = messageText["/readfile".Length..].Trim();
+        string idText = CommandParser.GetArguments(messageText, Name);
         if (!int.TryParse(idText, out int fileId))
         {
             return new CommandResult(true, "Usage: /readfile <file id>");

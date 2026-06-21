@@ -26,7 +26,7 @@ public sealed class DenyCommand : IBotCommand
         CancellationToken cancellationToken)
     {
         string messageText = message.Text ?? string.Empty;
-        if (!messageText.StartsWith("/deny", StringComparison.OrdinalIgnoreCase))
+        if (!CommandParser.Matches(messageText, Name))
         {
             return new CommandResult(false, null);
         }
@@ -47,7 +47,7 @@ public sealed class DenyCommand : IBotCommand
 
     private static bool TryParseActionId(string messageText, string commandName, out int actionId)
     {
-        string rawId = messageText[commandName.Length..].Trim();
+        string rawId = CommandParser.GetArguments(messageText, commandName);
         return int.TryParse(rawId, out actionId) && actionId > 0;
     }
 }

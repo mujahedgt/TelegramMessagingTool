@@ -20,7 +20,7 @@ public sealed class TaskCommand : IBotCommand
     public async Task<CommandResult> TryHandleAsync(Message message, ConnectedUser user, TelegramDbContext dbContext, CancellationToken cancellationToken)
     {
         string messageText = message.Text ?? string.Empty;
-        if (!messageText.StartsWith("/task", StringComparison.OrdinalIgnoreCase))
+        if (!CommandParser.Matches(messageText, Name))
         {
             return new CommandResult(false, null);
         }
@@ -38,7 +38,7 @@ public sealed class TaskCommand : IBotCommand
 
     private static bool TryParseTaskId(string messageText, string commandName, out int taskId)
     {
-        string rawId = messageText[commandName.Length..].Trim();
+        string rawId = CommandParser.GetArguments(messageText, commandName);
         return int.TryParse(rawId, out taskId) && taskId > 0;
     }
 }

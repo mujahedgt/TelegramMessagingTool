@@ -16,7 +16,7 @@ public sealed class ResetCommand : IBotCommand
         TelegramDbContext dbContext,
         CancellationToken cancellationToken)
     {
-        if (!message.Text?.StartsWith("/reset", StringComparison.OrdinalIgnoreCase) ?? true)
+        if (!CommandParser.Matches(message.Text, Name))
         {
             return new CommandResult(false, null);
         }

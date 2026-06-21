@@ -18,13 +18,13 @@ public sealed class ProcessesCommand : IBotCommand
         CancellationToken cancellationToken)
     {
         string messageText = message.Text ?? string.Empty;
-        if (!messageText.StartsWith("/processes", StringComparison.OrdinalIgnoreCase))
+        if (!CommandParser.Matches(messageText, Name))
         {
             return Task.FromResult(new CommandResult(false, null));
         }
 
         int limit = 10;
-        string args = messageText["/processes".Length..].Trim();
+        string args = CommandParser.GetArguments(messageText, Name);
         if (!string.IsNullOrWhiteSpace(args) && int.TryParse(args, out int parsedLimit))
         {
             limit = parsedLimit;

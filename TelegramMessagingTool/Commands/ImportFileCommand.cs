@@ -30,8 +30,7 @@ public sealed class ImportFileCommand : IBotCommand
         CancellationToken cancellationToken)
     {
         string messageText = message.Text ?? string.Empty;
-        if (!messageText.Equals("/importfile", StringComparison.OrdinalIgnoreCase)
-            && !messageText.StartsWith("/importfile ", StringComparison.OrdinalIgnoreCase))
+        if (!CommandParser.Matches(messageText, Name))
         {
             return new CommandResult(false, null);
         }
@@ -41,7 +40,7 @@ public sealed class ImportFileCommand : IBotCommand
             return new CommandResult(true, BotAccessPolicy.AdminOnlyMessage(_settings.AdminChatId));
         }
 
-        string requestedFileName = messageText["/importfile".Length..].Trim();
+        string requestedFileName = CommandParser.GetArguments(messageText, Name);
         if (string.IsNullOrWhiteSpace(requestedFileName))
         {
             return new CommandResult(true, "Usage: /importfile <filename-from-ImportInbox>");

@@ -25,12 +25,12 @@ public sealed class CreateFileCommand : IBotCommand
         CancellationToken cancellationToken)
     {
         string messageText = message.Text ?? string.Empty;
-        if (!messageText.StartsWith("/createfile", StringComparison.OrdinalIgnoreCase))
+        if (!CommandParser.Matches(messageText, Name))
         {
             return new CommandResult(false, null);
         }
 
-        string args = messageText["/createfile".Length..].Trim();
+        string args = CommandParser.GetArguments(messageText, Name);
         int separatorIndex = args.IndexOf(' ');
         if (separatorIndex <= 0 || separatorIndex == args.Length - 1)
         {

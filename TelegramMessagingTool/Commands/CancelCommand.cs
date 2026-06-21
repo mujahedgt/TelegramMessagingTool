@@ -20,12 +20,12 @@ public sealed class CancelCommand : IBotCommand
     public async Task<CommandResult> TryHandleAsync(Message message, ConnectedUser user, TelegramDbContext dbContext, CancellationToken cancellationToken)
     {
         string messageText = message.Text ?? string.Empty;
-        if (!messageText.StartsWith("/cancel", StringComparison.OrdinalIgnoreCase))
+        if (!CommandParser.Matches(messageText, Name))
         {
             return new CommandResult(false, null);
         }
 
-        string rawId = messageText["/cancel".Length..].Trim();
+        string rawId = CommandParser.GetArguments(messageText, Name);
         if (!int.TryParse(rawId, out int taskId) || taskId <= 0)
         {
             return new CommandResult(true, "Usage: /cancel <task-id>");

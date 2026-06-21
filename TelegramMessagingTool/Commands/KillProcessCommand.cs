@@ -28,7 +28,7 @@ public sealed class KillProcessCommand : IBotCommand
         CancellationToken cancellationToken)
     {
         string messageText = message.Text ?? string.Empty;
-        if (!messageText.StartsWith("/killprocess", StringComparison.OrdinalIgnoreCase))
+        if (!CommandParser.Matches(messageText, Name))
         {
             return new CommandResult(false, null);
         }
@@ -38,7 +38,7 @@ public sealed class KillProcessCommand : IBotCommand
             return new CommandResult(true, BotAccessPolicy.AdminOnlyMessage(_settings.AdminChatId));
         }
 
-        string args = messageText["/killprocess".Length..].Trim();
+        string args = CommandParser.GetArguments(messageText, Name);
         if (!int.TryParse(args, out int processId) || processId <= 0)
         {
             return new CommandResult(true, "Usage: /killprocess <pid>\nThis creates a pending approval request only. It does not terminate anything immediately.");

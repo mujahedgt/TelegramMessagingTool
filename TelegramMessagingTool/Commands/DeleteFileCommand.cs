@@ -29,7 +29,7 @@ public sealed class DeleteFileCommand : IBotCommand
         CancellationToken cancellationToken)
     {
         string messageText = message.Text ?? string.Empty;
-        if (!messageText.StartsWith("/deletefile", StringComparison.OrdinalIgnoreCase))
+        if (!CommandParser.Matches(messageText, Name))
         {
             return new CommandResult(false, null);
         }
@@ -39,7 +39,7 @@ public sealed class DeleteFileCommand : IBotCommand
             return new CommandResult(true, BotAccessPolicy.AdminOnlyMessage(_settings.AdminChatId));
         }
 
-        string idText = messageText["/deletefile".Length..].Trim();
+        string idText = CommandParser.GetArguments(messageText, Name);
         if (!int.TryParse(idText, out int fileId) || fileId <= 0)
         {
             return new CommandResult(true, "Usage: /deletefile <file id>");
