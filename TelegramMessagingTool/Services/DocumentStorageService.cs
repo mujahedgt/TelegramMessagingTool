@@ -199,7 +199,14 @@ public sealed class DocumentStorageService
     public async Task<string> ExtractTextAsync(UploadedFile uploadedFile, CancellationToken cancellationToken, int maxCharacters = 12000)
     {
         string absolutePath = Path.GetFullPath(uploadedFile.AbsolutePath);
-        EnsureInsideRoot(absolutePath);
+        try
+        {
+            EnsureInsideRoot(absolutePath);
+        }
+        catch (InvalidOperationException)
+        {
+            return "File is outside the current document sandbox. Re-upload or import it again to use this file.";
+        }
 
         if (!File.Exists(absolutePath))
         {

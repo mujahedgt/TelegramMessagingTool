@@ -28,6 +28,11 @@ public sealed class DocumentIndexingService
         }
 
         string text = await _documentStorage.ExtractTextAsync(file, cancellationToken, maxCharacters: 200_000);
+        if (IsUnavailableForIndexing(text))
+        {
+            return 0;
+        }
+
         IReadOnlyList<string> chunks = DocumentChunker.Split(text);
 
         List<DocumentChunk> oldChunks = await dbContext.DocumentChunks
@@ -84,5 +89,12 @@ public sealed class DocumentIndexingService
         }
 
         return (filesIndexed, chunksCreated, skipped);
+    }
+
+    private static bool IsUnavailableForIndexing(string text)
+    {
+        return text.StartsWith("File is missing on disk.", StringComparison.OrdinalIgnoreCase)
+            || text.StartsWith("File is outside the current document sandbox.", StringComparison.OrdinalIgnoreCase)
+            || text.StartsWith("Unsupported file type for text extraction.", StringComparison.OrdinalIgnoreCase);
     }
 }

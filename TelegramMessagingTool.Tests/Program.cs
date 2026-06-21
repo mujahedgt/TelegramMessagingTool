@@ -717,6 +717,30 @@ await using (var dbContext = new TelegramDbContext())
     AssertTrue(File.Exists(importedFile.AbsolutePath), "/importfile copies file into sandbox");
     AssertTrue(importedFile.AbsolutePath.StartsWith(documentStorage.RootDirectory, StringComparison.OrdinalIgnoreCase), "/importfile stores file under document sandbox");
 
+    UploadedFile legacyOutsideSandboxFile = new()
+    {
+        ConnectedUserId = testUser.Id,
+        ChatId = testUser.ChatId,
+        OriginalFileName = "legacy.md",
+        StoredFileName = "legacy.md",
+        AbsolutePath = Path.Combine(Path.GetTempPath(), "TelegramMessagingTool_LegacyOutside_" + Guid.NewGuid().ToString("N"), "legacy.md"),
+        RelativePath = "LegacyOutsideSandbox/legacy.md",
+        ContentType = "text/markdown",
+        SizeBytes = 12,
+        Source = "legacy_test",
+        CreatedAt = DateTime.UtcNow
+    };
+    dbContext.UploadedFiles.Add(legacyOutsideSandboxFile);
+    await dbContext.SaveChangesAsync(CancellationToken.None);
+
+    CommandResult legacyReadResult = await commandRouter.TryHandleAsync(TextMessage($"/readfile {legacyOutsideSandboxFile.Id}"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(legacyReadResult.Handled, "/readfile legacy outside-sandbox file is handled");
+    AssertTrue(legacyReadResult.ReplyText?.Contains("outside the current document sandbox", StringComparison.OrdinalIgnoreCase) == true, "/readfile reports outside-sandbox legacy file safely");
+
+    CommandResult indexDocsWithLegacyResult = await commandRouter.TryHandleAsync(TextMessage("/indexdocs"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(indexDocsWithLegacyResult.Handled, "/indexdocs with legacy outside-sandbox file is handled");
+    AssertTrue(indexDocsWithLegacyResult.ReplyText?.Contains("Skipped", StringComparison.OrdinalIgnoreCase) == true, "/indexdocs skips outside-sandbox legacy file safely");
+
     dbContext.Messages.Add(new ChatMessage
     {
         ConnectedUserId = testUser.Id,
