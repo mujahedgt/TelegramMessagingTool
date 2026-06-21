@@ -9,11 +9,13 @@ public sealed class ApproveCommand : IBotCommand
 {
     private readonly PendingActionService _pendingActionService;
     private readonly PendingActionExecutor _pendingActionExecutor;
+    private readonly BotSettings _settings;
 
-    public ApproveCommand(PendingActionService pendingActionService, PendingActionExecutor pendingActionExecutor)
+    public ApproveCommand(PendingActionService pendingActionService, PendingActionExecutor pendingActionExecutor, BotSettings settings)
     {
         _pendingActionService = pendingActionService;
         _pendingActionExecutor = pendingActionExecutor;
+        _settings = settings;
     }
 
     public string Name => "/approve";
@@ -29,6 +31,11 @@ public sealed class ApproveCommand : IBotCommand
         if (!messageText.StartsWith("/approve", StringComparison.OrdinalIgnoreCase))
         {
             return new CommandResult(false, null);
+        }
+
+        if (!BotAccessPolicy.IsAdmin(user.ChatId, _settings.AdminChatId))
+        {
+            return new CommandResult(true, BotAccessPolicy.AdminOnlyMessage(_settings.AdminChatId));
         }
 
         if (!TryParseActionId(messageText, "/approve", out int actionId))

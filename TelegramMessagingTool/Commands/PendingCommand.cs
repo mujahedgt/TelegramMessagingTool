@@ -8,10 +8,12 @@ namespace TelegramMessagingTool.Commands;
 public sealed class PendingCommand : IBotCommand
 {
     private readonly PendingActionService _pendingActionService;
+    private readonly BotSettings _settings;
 
-    public PendingCommand(PendingActionService pendingActionService)
+    public PendingCommand(PendingActionService pendingActionService, BotSettings settings)
     {
         _pendingActionService = pendingActionService;
+        _settings = settings;
     }
 
     public string Name => "/pending";
@@ -27,6 +29,11 @@ public sealed class PendingCommand : IBotCommand
         if (!messageText.StartsWith("/pending", StringComparison.OrdinalIgnoreCase))
         {
             return new CommandResult(false, null);
+        }
+
+        if (!BotAccessPolicy.IsAdmin(user.ChatId, _settings.AdminChatId))
+        {
+            return new CommandResult(true, BotAccessPolicy.AdminOnlyMessage(_settings.AdminChatId));
         }
 
         IReadOnlyList<PendingAction> actions = await _pendingActionService.ListPendingAsync(dbContext, user, cancellationToken);

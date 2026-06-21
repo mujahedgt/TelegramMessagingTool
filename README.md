@@ -148,11 +148,13 @@ These commands inspect the local machine without changing anything:
 | `/systeminfo` | Show operating system, architecture, machine name, CPU count, .NET runtime, uptime, and process memory |
 | `/diskstatus` | Show ready local drives, total space, free space, and used percentage |
 | `/processes [count]` | Show running process count and top processes by memory usage; count is clamped to a safe range |
-| `/killprocess <pid>` | Create a high-risk pending approval request to terminate a process; execution happens only after `/approve <id>` |
+| `/killprocess <pid>` | Admin-only: create a high-risk pending approval request to terminate a process; execution happens only after `/approve <id>` |
 
 The inspection commands are intentionally **read-only**. They do not stop processes, delete files, edit files, or run arbitrary shell commands.
 
 `/killprocess <pid>` is the first risky local-control command. It creates a pending action with risk level `high`; the process is terminated only if you explicitly approve that exact pending action with `/approve <id>`. The executor refuses invalid PIDs, refuses to terminate the bot's own process, blocks known protected Windows process names, and records the execution result in the pending action decision note.
+
+Risky approval commands are admin-only. Set `ADMIN_CHAT_ID` to your Telegram chat ID before using `/killprocess`, `/pending`, `/action`, `/approve`, or `/deny`. If `ADMIN_CHAT_ID` is not configured, these commands fail closed.
 
 ## Approval flow
 
@@ -162,10 +164,10 @@ Commands:
 
 | Command | Purpose |
 |---|---|
-| `/pending` | List pending actions waiting for your approval |
-| `/action <id>` | Show audit details for a pending, approved, denied, expired, or executed action |
-| `/approve <id>` | Approve a pending action |
-| `/deny <id>` | Deny a pending action |
+| `/pending` | Admin-only: list pending actions waiting for your approval |
+| `/action <id>` | Admin-only: show audit details for a pending, approved, denied, expired, or executed action |
+| `/approve <id>` | Admin-only: approve a pending action |
+| `/deny <id>` | Admin-only: deny a pending action |
 
 Pending actions expire automatically if they are not approved before their expiry time. Use `/action <id>` before approving risky operations to review the action type, risk level, status, payload summary, timestamps, and decision/execution note.
 

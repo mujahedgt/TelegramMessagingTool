@@ -86,6 +86,18 @@ public static class BotAccessPolicy
     {
         return allowedChatIds.Count == 0 || allowedChatIds.Contains(chatId);
     }
+
+    public static bool IsAdmin(long chatId, long adminChatId)
+    {
+        return adminChatId > 0 && chatId == adminChatId;
+    }
+
+    public static string AdminOnlyMessage(long adminChatId)
+    {
+        return adminChatId <= 0
+            ? "This command is admin-only, but ADMIN_CHAT_ID is not configured. Set ADMIN_CHAT_ID before using risky local-control commands."
+            : "This command is admin-only. Only the configured ADMIN_CHAT_ID can use risky local-control commands.";
+    }
 }
 
 public static class TelegramMessageFormatter

@@ -8,10 +8,12 @@ namespace TelegramMessagingTool.Commands;
 public sealed class ActionCommand : IBotCommand
 {
     private readonly PendingActionService _pendingActionService;
+    private readonly BotSettings _settings;
 
-    public ActionCommand(PendingActionService pendingActionService)
+    public ActionCommand(PendingActionService pendingActionService, BotSettings settings)
     {
         _pendingActionService = pendingActionService;
+        _settings = settings;
     }
 
     public string Name => "/action";
@@ -28,6 +30,11 @@ public sealed class ActionCommand : IBotCommand
         if (!messageText.StartsWith("/action", StringComparison.OrdinalIgnoreCase))
         {
             return new CommandResult(false, null);
+        }
+
+        if (!BotAccessPolicy.IsAdmin(user.ChatId, _settings.AdminChatId))
+        {
+            return new CommandResult(true, BotAccessPolicy.AdminOnlyMessage(_settings.AdminChatId));
         }
 
         if (!TryParseActionId(messageText, out int actionId))

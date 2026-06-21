@@ -319,8 +319,31 @@ await using (var dbContext = new TelegramDbContext())
         LastSeenAt = DateTime.UtcNow
     };
 
-    dbContext.Users.Add(testUser);
+    var nonAdminUser = new ConnectedUser
+    {
+        ChatId = 987654321,
+        Name = "nonadmin",
+        FirstName = "Non",
+        LastName = "Admin",
+        CreatedAt = DateTime.UtcNow,
+        LastSeenAt = DateTime.UtcNow
+    };
+
+    dbContext.Users.AddRange(testUser, nonAdminUser);
     await dbContext.SaveChangesAsync();
+
+    var adminTestSettings = new BotSettings(
+        BotToken: "test-token",
+        OllamaUrl: "http://localhost:11434/api/chat",
+        OllamaModel: "qwen3:0.6b",
+        OllamaEmbeddingUrl: "http://localhost:11434/api/embed",
+        OllamaEmbeddingModel: "nomic-embed-text",
+        EnableDocumentEmbeddings: false,
+        AdminChatId: testUser.ChatId,
+        AllowedChatIds: new HashSet<long>(),
+        DatabaseConnectionString: Environment.GetEnvironmentVariable("TELEGRAM_DB_CONNECTION")!,
+        ApplyMigrations: true,
+        LogMessageContent: false);
 
     var pendingActionService = new PendingActionService();
     var fakeProcessTerminator = new FakeProcessTerminator();
@@ -343,18 +366,7 @@ await using (var dbContext = new TelegramDbContext())
         new SystemInfoCommand(),
         new DiskStatusCommand(),
         new ProcessesCommand(),
-        new StatusCommand(new BotSettings(
-            BotToken: "test-token",
-            OllamaUrl: "http://localhost:11434/api/chat",
-            OllamaModel: "qwen3:0.6b",
-            OllamaEmbeddingUrl: "http://localhost:11434/api/embed",
-            OllamaEmbeddingModel: "nomic-embed-text",
-            EnableDocumentEmbeddings: false,
-            AdminChatId: 0,
-            AllowedChatIds: new HashSet<long>(),
-            DatabaseConnectionString: Environment.GetEnvironmentVariable("TELEGRAM_DB_CONNECTION")!,
-            ApplyMigrations: true,
-            LogMessageContent: false)),
+        new StatusCommand(adminTestSettings),
         new ResetCommand(),
         new RememberCommand(),
         new MemoryCommand(),
@@ -372,11 +384,11 @@ await using (var dbContext = new TelegramDbContext())
         new EmbedFileCommand(documentIndexingService, documentEmbeddingService),
         new EmbedDocsCommand(documentIndexingService, documentEmbeddingService),
         new ToolsCommand(registry),
-        new KillProcessCommand(pendingActionService),
-        new ActionCommand(pendingActionService),
-        new PendingCommand(pendingActionService),
-        new ApproveCommand(pendingActionService, pendingActionExecutor),
-        new DenyCommand(pendingActionService),
+        new KillProcessCommand(pendingActionService, adminTestSettings),
+        new ActionCommand(pendingActionService, adminTestSettings),
+        new PendingCommand(pendingActionService, adminTestSettings),
+        new ApproveCommand(pendingActionService, pendingActionExecutor, adminTestSettings),
+        new DenyCommand(pendingActionService, adminTestSettings),
         new PlanCommand(agentTaskService),
         new TasksCommand(agentTaskService),
         new TaskCommand(agentTaskService),
@@ -412,6 +424,11 @@ await using (var dbContext = new TelegramDbContext())
     AssertTrue(invalidKillProcessResult.Handled, "/killprocess invalid input is handled");
     AssertTrue(invalidKillProcessResult.ReplyText?.Contains("Usage: /killprocess <pid>") == true, "/killprocess validates PID input");
 
+    CommandResult nonAdminKillProcessResult = await commandRouter.TryHandleAsync(TextMessage("/killprocess 12345"), nonAdminUser, dbContext, CancellationToken.None);
+    AssertTrue(nonAdminKillProcessResult.Handled, "/killprocess non-admin attempt is handled");
+    AssertTrue(nonAdminKillProcessResult.ReplyText?.Contains("admin", StringComparison.OrdinalIgnoreCase) == true, "/killprocess requires admin");
+    AssertEqual(0, await dbContext.PendingActions.CountAsync(x => x.ConnectedUserId == nonAdminUser.Id), "/killprocess non-admin does not create pending action");
+
     CommandResult killProcessResult = await commandRouter.TryHandleAsync(TextMessage("/killprocess 12345"), testUser, dbContext, CancellationToken.None);
     AssertTrue(killProcessResult.Handled, "/killprocess is handled");
     AssertTrue(killProcessResult.ReplyText?.Contains("approval", StringComparison.OrdinalIgnoreCase) == true, "/killprocess asks for approval instead of executing");
@@ -439,6 +456,10 @@ await using (var dbContext = new TelegramDbContext())
     AssertTrue(actionDetailsResult.ReplyText?.Contains("Payload") == true, "/action shows payload summary");
     AssertTrue(actionDetailsResult.ReplyText?.Contains("12345") == true, "/action includes target PID payload");
 
+    CommandResult nonAdminActionResult = await commandRouter.TryHandleAsync(TextMessage($"/action {killProcessPendingAction.Id}"), nonAdminUser, dbContext, CancellationToken.None);
+    AssertTrue(nonAdminActionResult.Handled, "/action non-admin attempt is handled");
+    AssertTrue(nonAdminActionResult.ReplyText?.Contains("admin", StringComparison.OrdinalIgnoreCase) == true, "/action requires admin");
+
     PendingAction pendingAction = await pendingActionService.CreateAsync(
         dbContext,
         testUser,
@@ -452,6 +473,15 @@ await using (var dbContext = new TelegramDbContext())
     CommandResult pendingResult = await commandRouter.TryHandleAsync(TextMessage("/pending"), testUser, dbContext, CancellationToken.None);
     AssertTrue(pendingResult.Handled, "/pending is handled");
     AssertTrue(pendingResult.ReplyText?.Contains($"#{pendingAction.Id}") == true, "/pending lists pending action");
+
+    CommandResult nonAdminPendingResult = await commandRouter.TryHandleAsync(TextMessage("/pending"), nonAdminUser, dbContext, CancellationToken.None);
+    AssertTrue(nonAdminPendingResult.Handled, "/pending non-admin attempt is handled");
+    AssertTrue(nonAdminPendingResult.ReplyText?.Contains("admin", StringComparison.OrdinalIgnoreCase) == true, "/pending requires admin");
+
+    CommandResult nonAdminApproveResult = await commandRouter.TryHandleAsync(TextMessage($"/approve {pendingAction.Id}"), nonAdminUser, dbContext, CancellationToken.None);
+    AssertTrue(nonAdminApproveResult.Handled, "/approve non-admin attempt is handled");
+    AssertTrue(nonAdminApproveResult.ReplyText?.Contains("admin", StringComparison.OrdinalIgnoreCase) == true, "/approve requires admin");
+    AssertEqual(PendingActionStatuses.Pending, (await dbContext.PendingActions.FindAsync([pendingAction.Id], CancellationToken.None))!.Status, "/approve non-admin does not approve action");
 
     CommandResult approveResult = await commandRouter.TryHandleAsync(TextMessage($"/approve {pendingAction.Id}"), testUser, dbContext, CancellationToken.None);
     AssertTrue(approveResult.Handled, "/approve is handled");
@@ -472,6 +502,21 @@ await using (var dbContext = new TelegramDbContext())
     CommandResult denyResult = await commandRouter.TryHandleAsync(TextMessage($"/deny {secondPendingAction.Id}"), testUser, dbContext, CancellationToken.None);
     AssertTrue(denyResult.Handled, "/deny is handled");
     AssertEqual(PendingActionStatuses.Denied, (await dbContext.PendingActions.FindAsync([secondPendingAction.Id], CancellationToken.None))!.Status, "/deny marks action denied");
+
+    PendingAction thirdPendingAction = await pendingActionService.CreateAsync(
+        dbContext,
+        testUser,
+        "database_mutation",
+        "Mutate a database record after approval.",
+        "{}",
+        "high",
+        TimeSpan.FromMinutes(30),
+        CancellationToken.None);
+
+    CommandResult nonAdminDenyResult = await commandRouter.TryHandleAsync(TextMessage($"/deny {thirdPendingAction.Id}"), nonAdminUser, dbContext, CancellationToken.None);
+    AssertTrue(nonAdminDenyResult.Handled, "/deny non-admin attempt is handled");
+    AssertTrue(nonAdminDenyResult.ReplyText?.Contains("admin", StringComparison.OrdinalIgnoreCase) == true, "/deny requires admin");
+    AssertEqual(PendingActionStatuses.Pending, (await dbContext.PendingActions.FindAsync([thirdPendingAction.Id], CancellationToken.None))!.Status, "/deny non-admin does not deny action");
 
     CommandResult planResult = await commandRouter.TryHandleAsync(TextMessage("/plan build a small inventory API"), testUser, dbContext, CancellationToken.None);
     AssertTrue(planResult.Handled, "/plan is handled");

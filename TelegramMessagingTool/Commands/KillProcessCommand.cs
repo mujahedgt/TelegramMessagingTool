@@ -9,10 +9,12 @@ namespace TelegramMessagingTool.Commands;
 public sealed class KillProcessCommand : IBotCommand
 {
     private readonly PendingActionService _pendingActionService;
+    private readonly BotSettings _settings;
 
-    public KillProcessCommand(PendingActionService pendingActionService)
+    public KillProcessCommand(PendingActionService pendingActionService, BotSettings settings)
     {
         _pendingActionService = pendingActionService;
+        _settings = settings;
     }
 
     public string Name => "/killprocess";
@@ -29,6 +31,11 @@ public sealed class KillProcessCommand : IBotCommand
         if (!messageText.StartsWith("/killprocess", StringComparison.OrdinalIgnoreCase))
         {
             return new CommandResult(false, null);
+        }
+
+        if (!BotAccessPolicy.IsAdmin(user.ChatId, _settings.AdminChatId))
+        {
+            return new CommandResult(true, BotAccessPolicy.AdminOnlyMessage(_settings.AdminChatId));
         }
 
         string args = messageText["/killprocess".Length..].Trim();

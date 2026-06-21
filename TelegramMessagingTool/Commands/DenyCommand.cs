@@ -8,10 +8,12 @@ namespace TelegramMessagingTool.Commands;
 public sealed class DenyCommand : IBotCommand
 {
     private readonly PendingActionService _pendingActionService;
+    private readonly BotSettings _settings;
 
-    public DenyCommand(PendingActionService pendingActionService)
+    public DenyCommand(PendingActionService pendingActionService, BotSettings settings)
     {
         _pendingActionService = pendingActionService;
+        _settings = settings;
     }
 
     public string Name => "/deny";
@@ -27,6 +29,11 @@ public sealed class DenyCommand : IBotCommand
         if (!messageText.StartsWith("/deny", StringComparison.OrdinalIgnoreCase))
         {
             return new CommandResult(false, null);
+        }
+
+        if (!BotAccessPolicy.IsAdmin(user.ChatId, _settings.AdminChatId))
+        {
+            return new CommandResult(true, BotAccessPolicy.AdminOnlyMessage(_settings.AdminChatId));
         }
 
         if (!TryParseActionId(messageText, "/deny", out int actionId))
