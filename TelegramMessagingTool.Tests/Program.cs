@@ -323,6 +323,8 @@ await using (var dbContext = new TelegramDbContext())
     await dbContext.SaveChangesAsync();
 
     var pendingActionService = new PendingActionService();
+    var fakeProcessTerminator = new FakeProcessTerminator();
+    var pendingActionExecutor = new PendingActionExecutor(fakeProcessTerminator);
     var agentTaskService = new AgentTaskService();
     var documentIndexingService = new DocumentIndexingService(documentStorage);
     var documentRetrievalService = new DocumentRetrievalService(testEmbeddingService);
@@ -372,7 +374,7 @@ await using (var dbContext = new TelegramDbContext())
         new ToolsCommand(registry),
         new KillProcessCommand(pendingActionService),
         new PendingCommand(pendingActionService),
-        new ApproveCommand(pendingActionService),
+        new ApproveCommand(pendingActionService, pendingActionExecutor),
         new DenyCommand(pendingActionService),
         new PlanCommand(agentTaskService),
         new TasksCommand(agentTaskService),
@@ -416,6 +418,13 @@ await using (var dbContext = new TelegramDbContext())
     AssertEqual("high", killProcessPendingAction.RiskLevel, "/killprocess creates high risk pending action");
     AssertTrue(killProcessPendingAction.PayloadJson.Contains("12345"), "/killprocess stores target PID in payload");
 
+    CommandResult approveKillProcessResult = await commandRouter.TryHandleAsync(TextMessage($"/approve {killProcessPendingAction.Id}"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(approveKillProcessResult.Handled, "/approve kill_process is handled");
+    AssertTrue(approveKillProcessResult.ReplyText?.Contains("Execution result", StringComparison.OrdinalIgnoreCase) == true, "/approve kill_process reports execution result");
+    AssertEqual(12345, fakeProcessTerminator.LastRequestedPid, "/approve kill_process executes approved PID through safe terminator");
+    AssertEqual(1, fakeProcessTerminator.KillCallCount, "/approve kill_process executes once");
+    AssertTrue((await dbContext.PendingActions.FindAsync([killProcessPendingAction.Id], CancellationToken.None))!.DecisionNote.Contains("terminated", StringComparison.OrdinalIgnoreCase), "/approve kill_process records execution result");
+
     PendingAction pendingAction = await pendingActionService.CreateAsync(
         dbContext,
         testUser,
@@ -433,6 +442,8 @@ await using (var dbContext = new TelegramDbContext())
     CommandResult approveResult = await commandRouter.TryHandleAsync(TextMessage($"/approve {pendingAction.Id}"), testUser, dbContext, CancellationToken.None);
     AssertTrue(approveResult.Handled, "/approve is handled");
     AssertEqual(PendingActionStatuses.Approved, (await dbContext.PendingActions.FindAsync([pendingAction.Id], CancellationToken.None))!.Status, "/approve marks action approved");
+    AssertTrue(approveResult.ReplyText?.Contains("No automatic execution", StringComparison.OrdinalIgnoreCase) == true, "/approve does not execute unknown action types");
+    AssertEqual(1, fakeProcessTerminator.KillCallCount, "/approve does not call process terminator for non-kill actions");
 
     PendingAction secondPendingAction = await pendingActionService.CreateAsync(
         dbContext,
@@ -572,6 +583,20 @@ sealed class DeterministicEmbeddingService : ITextEmbeddingService
         }
 
         return Task.FromResult<IReadOnlyList<float>>([1.0f, 0.0f]);
+    }
+}
+
+sealed class FakeProcessTerminator : IProcessTerminator
+{
+    public int? LastRequestedPid { get; private set; }
+
+    public int KillCallCount { get; private set; }
+
+    public ProcessTerminationResult Terminate(int processId)
+    {
+        LastRequestedPid = processId;
+        KillCallCount++;
+        return ProcessTerminationResult.Ok($"Process PID {processId} was terminated successfully.");
     }
 }
 

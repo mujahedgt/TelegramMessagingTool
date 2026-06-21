@@ -64,6 +64,7 @@ var toolRegistry = new ToolRegistry([
 ]);
 var documentStorage = new DocumentStorageService(Path.Combine(AppContext.BaseDirectory, "UserFiles"));
 var pendingActionService = new PendingActionService();
+var pendingActionExecutor = new PendingActionExecutor(new SystemProcessTerminator());
 var agentTaskService = new AgentTaskService();
 var documentIndexingService = new DocumentIndexingService(documentStorage);
 var documentEmbeddingService = new DocumentEmbeddingService(ollamaEmbeddingClient, settings.OllamaEmbeddingModel);
@@ -97,7 +98,7 @@ var commandRouter = new CommandRouter([
     new ToolsCommand(toolRegistry),
     new KillProcessCommand(pendingActionService),
     new PendingCommand(pendingActionService),
-    new ApproveCommand(pendingActionService),
+    new ApproveCommand(pendingActionService, pendingActionExecutor),
     new DenyCommand(pendingActionService),
     new PlanCommand(agentTaskService),
     new TasksCommand(agentTaskService),

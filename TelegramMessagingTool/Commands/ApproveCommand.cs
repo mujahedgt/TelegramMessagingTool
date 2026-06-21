@@ -8,10 +8,12 @@ namespace TelegramMessagingTool.Commands;
 public sealed class ApproveCommand : IBotCommand
 {
     private readonly PendingActionService _pendingActionService;
+    private readonly PendingActionExecutor _pendingActionExecutor;
 
-    public ApproveCommand(PendingActionService pendingActionService)
+    public ApproveCommand(PendingActionService pendingActionService, PendingActionExecutor pendingActionExecutor)
     {
         _pendingActionService = pendingActionService;
+        _pendingActionExecutor = pendingActionExecutor;
     }
 
     public string Name => "/approve";
@@ -40,7 +42,15 @@ public sealed class ApproveCommand : IBotCommand
             return new CommandResult(true, decision.Message);
         }
 
-        return new CommandResult(true, $"Approved action #{decision.Action.Id}: {decision.Action.ToolName}\nNote: execution wiring for approved risky tools will be added in the next agent-tool phase.");
+        PendingActionExecutionResult executionResult = await _pendingActionExecutor.ExecuteApprovedAsync(dbContext, decision.Action, cancellationToken);
+        string executionHeading = executionResult.Executed ? "Execution result" : "No automatic execution";
+
+        return new CommandResult(true, $"""
+Approved action #{decision.Action.Id}: {decision.Action.ToolName}
+
+{executionHeading}:
+{executionResult.Message}
+""");
     }
 
     private static bool TryParseActionId(string messageText, string commandName, out int actionId)
