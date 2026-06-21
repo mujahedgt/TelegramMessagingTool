@@ -163,10 +163,11 @@ Commands:
 | Command | Purpose |
 |---|---|
 | `/pending` | List pending actions waiting for your approval |
+| `/action <id>` | Show audit details for a pending, approved, denied, expired, or executed action |
 | `/approve <id>` | Approve a pending action |
 | `/deny <id>` | Deny a pending action |
 
-Pending actions expire automatically if they are not approved before their expiry time.
+Pending actions expire automatically if they are not approved before their expiry time. Use `/action <id>` before approving risky operations to review the action type, risk level, status, payload summary, timestamps, and decision/execution note.
 
 ## Task planner
 

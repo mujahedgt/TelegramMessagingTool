@@ -373,6 +373,7 @@ await using (var dbContext = new TelegramDbContext())
         new EmbedDocsCommand(documentIndexingService, documentEmbeddingService),
         new ToolsCommand(registry),
         new KillProcessCommand(pendingActionService),
+        new ActionCommand(pendingActionService),
         new PendingCommand(pendingActionService),
         new ApproveCommand(pendingActionService, pendingActionExecutor),
         new DenyCommand(pendingActionService),
@@ -424,6 +425,19 @@ await using (var dbContext = new TelegramDbContext())
     AssertEqual(12345, fakeProcessTerminator.LastRequestedPid, "/approve kill_process executes approved PID through safe terminator");
     AssertEqual(1, fakeProcessTerminator.KillCallCount, "/approve kill_process executes once");
     AssertTrue((await dbContext.PendingActions.FindAsync([killProcessPendingAction.Id], CancellationToken.None))!.DecisionNote.Contains("terminated", StringComparison.OrdinalIgnoreCase), "/approve kill_process records execution result");
+
+    CommandResult invalidActionResult = await commandRouter.TryHandleAsync(TextMessage("/action nope"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(invalidActionResult.Handled, "/action invalid input is handled");
+    AssertTrue(invalidActionResult.ReplyText?.Contains("Usage: /action <pending-action-id>") == true, "/action validates action id input");
+
+    CommandResult actionDetailsResult = await commandRouter.TryHandleAsync(TextMessage($"/action {killProcessPendingAction.Id}"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(actionDetailsResult.Handled, "/action is handled");
+    AssertTrue(actionDetailsResult.ReplyText?.Contains($"Action #{killProcessPendingAction.Id}") == true, "/action shows action id");
+    AssertTrue(actionDetailsResult.ReplyText?.Contains("kill_process") == true, "/action shows action type");
+    AssertTrue(actionDetailsResult.ReplyText?.Contains("Status: approved") == true, "/action shows action status");
+    AssertTrue(actionDetailsResult.ReplyText?.Contains("Decision note") == true, "/action shows decision note");
+    AssertTrue(actionDetailsResult.ReplyText?.Contains("Payload") == true, "/action shows payload summary");
+    AssertTrue(actionDetailsResult.ReplyText?.Contains("12345") == true, "/action includes target PID payload");
 
     PendingAction pendingAction = await pendingActionService.CreateAsync(
         dbContext,
