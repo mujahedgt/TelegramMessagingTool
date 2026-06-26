@@ -65,6 +65,7 @@ var pendingActionService = new PendingActionService();
 var pendingActionExecutor = new PendingActionExecutor(new SystemProcessTerminator(), documentStorage);
 var pendingActionCallbackService = new PendingActionCallbackService(pendingActionService, pendingActionExecutor, settings);
 var agentTaskService = new AgentTaskService();
+var taskCallbackService = new TaskCallbackService(agentTaskService);
 var documentIndexingService = new DocumentIndexingService(documentStorage);
 var documentEmbeddingService = new DocumentEmbeddingService(ollamaEmbeddingClient, settings.OllamaEmbeddingModel);
 var documentRetrievalService = new DocumentRetrievalService(retrievalEmbeddingService);
@@ -638,19 +639,36 @@ async Task HandleCallbackQueryAsync(
 
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        PendingActionCallbackResult result = await pendingActionCallbackService.HandleAsync(
+        PendingActionCallbackResult pendingActionResult = await pendingActionCallbackService.HandleAsync(
             callbackQuery.Data,
             user,
             dbContext,
             cancellationToken);
 
+        bool handled = pendingActionResult.Handled;
+        string answerText = pendingActionResult.AnswerText;
+        string? messageText = pendingActionResult.MessageText;
+
+        if (!handled)
+        {
+            TaskCallbackResult taskResult = await taskCallbackService.HandleAsync(
+                callbackQuery.Data,
+                user,
+                dbContext,
+                cancellationToken);
+
+            handled = taskResult.Handled;
+            answerText = taskResult.AnswerText;
+            messageText = taskResult.MessageText;
+        }
+
         await bot.AnswerCallbackQuery(
             callbackQuery.Id,
-            text: result.AnswerText,
+            text: answerText,
             showAlert: false,
             cancellationToken: cancellationToken);
 
-        if (!result.Handled)
+        if (!handled)
         {
             WriteConsoleEvent("CALLBACK", actor, "unsupported callback data", ConsoleEventLevel.Warning);
             return;
@@ -658,9 +676,9 @@ async Task HandleCallbackQueryAsync(
 
         WriteConsoleEvent("CALLBACK", actor, callbackQuery.Data ?? "empty", ConsoleEventLevel.Success);
 
-        if (!string.IsNullOrWhiteSpace(result.MessageText))
+        if (!string.IsNullOrWhiteSpace(messageText))
         {
-            foreach (string replyChunk in TelegramMessageFormatter.SplitForTelegram(result.MessageText))
+            foreach (string replyChunk in TelegramMessageFormatter.SplitForTelegram(messageText))
             {
                 await bot.SendMessage(
                     chatId: chatId,

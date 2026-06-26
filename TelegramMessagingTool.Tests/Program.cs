@@ -968,6 +968,23 @@ await using (var dbContext = new TelegramDbContext())
     AssertTrue(taskResult.ReplyMarkup!.InlineKeyboard.SelectMany(row => row).Any(button => button.CallbackData == $"task:done:{taskId}"), "/task keyboard includes done callback");
     AssertTrue(taskResult.ReplyMarkup!.InlineKeyboard.SelectMany(row => row).Any(button => button.CallbackData == $"task:cancel:{taskId}"), "/task keyboard includes cancel callback");
 
+    var taskCallbackService = new TaskCallbackService(agentTaskService);
+    TaskCallbackResult invalidTaskCallbackResult = await taskCallbackService.HandleAsync("act:details:1", testUser, dbContext, CancellationToken.None);
+    AssertFalse(invalidTaskCallbackResult.Handled, "TaskCallbackService ignores non-task callback domains");
+    TaskCallbackResult openTaskCallbackResult = await taskCallbackService.HandleAsync($"task:open:{taskId}", testUser, dbContext, CancellationToken.None);
+    AssertTrue(openTaskCallbackResult.Handled, "TaskCallbackService handles open callbacks");
+    AssertTrue(openTaskCallbackResult.AnswerText.Contains("Opened"), "TaskCallbackService answers open callbacks");
+    AssertTrue(openTaskCallbackResult.MessageText?.Contains($"Task #{taskId}") == true, "TaskCallbackService open returns task details");
+    AssertTrue(openTaskCallbackResult.MessageText?.Contains("inventory API", StringComparison.OrdinalIgnoreCase) == true, "TaskCallbackService open includes task goal");
+    TaskCallbackResult doneTaskCallbackResult = await taskCallbackService.HandleAsync($"task:done:{taskId}", testUser, dbContext, CancellationToken.None);
+    AssertTrue(doneTaskCallbackResult.Handled, "TaskCallbackService handles done callbacks safely");
+    AssertTrue(doneTaskCallbackResult.MessageText?.Contains("not enabled yet", StringComparison.OrdinalIgnoreCase) == true, "TaskCallbackService does not execute done callbacks yet");
+    AssertFalse((await dbContext.AgentTaskSteps.FirstAsync(x => x.AgentTaskId == taskId && x.StepNumber == 1, CancellationToken.None)).IsDone, "TaskCallbackService done callback does not mutate task state yet");
+    TaskCallbackResult cancelTaskCallbackResult = await taskCallbackService.HandleAsync($"task:cancel:{taskId}", testUser, dbContext, CancellationToken.None);
+    AssertTrue(cancelTaskCallbackResult.Handled, "TaskCallbackService handles cancel callbacks safely");
+    AssertTrue(cancelTaskCallbackResult.MessageText?.Contains("not enabled yet", StringComparison.OrdinalIgnoreCase) == true, "TaskCallbackService does not execute cancel callbacks yet");
+    AssertEqual(AgentTaskStatuses.Active, (await dbContext.AgentTasks.FindAsync([taskId], CancellationToken.None))!.Status, "TaskCallbackService cancel callback does not mutate task state yet");
+
     CommandResult invalidScheduleResult = await commandRouter.TryHandleAsync(TextMessage($"/schedule {taskId} 1 yesterday 09:00"), testUser, dbContext, CancellationToken.None);
     AssertTrue(invalidScheduleResult.Handled, "/schedule invalid time is handled");
     AssertTrue(invalidScheduleResult.ReplyText?.Contains("Usage: /schedule <task-id> <step-number> <time> [note]") == true, "/schedule invalid time explains usage");
