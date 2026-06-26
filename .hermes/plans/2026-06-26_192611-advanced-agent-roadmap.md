@@ -271,7 +271,8 @@ Safety:
 ### Status
 
 - Task 3A.1 is complete: `CommandResult` supports optional `InlineKeyboardMarkup`, `InlineKeyboardFactory` can create pending-action buttons, `/pending` returns first-action button metadata, and Telegram sends markup on the first reply chunk.
-- Callback query handling is not implemented yet.
+- Task 3A.2 is complete: `PendingActionCallbackParser` parses compact pending-action callback data (`act:approve:<id>`, `act:deny:<id>`, `act:details:<id>`) and rejects malformed/unknown callbacks.
+- Callback query execution is not implemented yet.
 
 ### Goal
 

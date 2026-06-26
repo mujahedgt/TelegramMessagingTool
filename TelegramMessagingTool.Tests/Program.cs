@@ -729,6 +729,22 @@ await using (var dbContext = new TelegramDbContext())
     AssertTrue(samplePendingMarkup.InlineKeyboard.SelectMany(row => row).Any(button => button.Text == "Deny" && button.CallbackData == "act:deny:123"), "InlineKeyboardFactory creates deny button");
     AssertTrue(samplePendingMarkup.InlineKeyboard.SelectMany(row => row).Any(button => button.Text == "Details" && button.CallbackData == "act:details:123"), "InlineKeyboardFactory creates details button");
 
+    AssertTrue(PendingActionCallbackParser.TryParse("act:approve:123", out PendingActionCallback approveCallback), "PendingActionCallbackParser parses approve callback");
+    AssertEqual(PendingActionCallbackVerb.Approve, approveCallback.Verb, "PendingActionCallbackParser reads approve verb");
+    AssertEqual(123, approveCallback.ActionId, "PendingActionCallbackParser reads approve action id");
+    AssertTrue(PendingActionCallbackParser.TryParse("act:deny:456", out PendingActionCallback denyCallback), "PendingActionCallbackParser parses deny callback");
+    AssertEqual(PendingActionCallbackVerb.Deny, denyCallback.Verb, "PendingActionCallbackParser reads deny verb");
+    AssertEqual(456, denyCallback.ActionId, "PendingActionCallbackParser reads deny action id");
+    AssertTrue(PendingActionCallbackParser.TryParse("act:details:789", out PendingActionCallback detailsCallback), "PendingActionCallbackParser parses details callback");
+    AssertEqual(PendingActionCallbackVerb.Details, detailsCallback.Verb, "PendingActionCallbackParser reads details verb");
+    AssertEqual(789, detailsCallback.ActionId, "PendingActionCallbackParser reads details action id");
+    AssertFalse(PendingActionCallbackParser.TryParse("/pending", out _), "PendingActionCallbackParser rejects slash commands");
+    AssertFalse(PendingActionCallbackParser.TryParse("approve:123", out _), "PendingActionCallbackParser rejects missing domain prefix");
+    AssertFalse(PendingActionCallbackParser.TryParse("act:approve:nope", out _), "PendingActionCallbackParser rejects non-numeric action ids");
+    AssertFalse(PendingActionCallbackParser.TryParse("act:unknown:123", out _), "PendingActionCallbackParser rejects unknown verbs");
+    AssertFalse(PendingActionCallbackParser.TryParse("act:approve", out _), "PendingActionCallbackParser rejects missing id");
+    AssertFalse(PendingActionCallbackParser.TryParse("act:approve:123:extra", out _), "PendingActionCallbackParser rejects extra callback parts");
+
     CommandResult statusResult = await commandRouter.TryHandleAsync(TextMessage("/status"), testUser, dbContext, CancellationToken.None);
     AssertTrue(statusResult.Handled, "/status is handled");
     AssertTrue(statusResult.ReplyText?.Contains("Database: OK") == true, "/status reports database OK");
