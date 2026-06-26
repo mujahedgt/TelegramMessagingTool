@@ -38,7 +38,7 @@ public sealed class FilesCommand : IBotCommand
 
         if (files.Count == 0)
         {
-            return new CommandResult(true, "No files saved yet. Upload a .txt/.md/.json/.csv/.pdf/.docx/.xlsx document or use /createfile <name> <content>.");
+            return new CommandResult(true, "No files saved yet. Upload a .txt/.md/.json/.csv/.pdf/.docx/.xlsx document or .png/.jpg/.jpeg/.webp/.gif image as a Telegram document, or use /createfile <name> <content>.");
         }
 
         string reply = "Saved files:\n" + string.Join("\n", files.Select(x => $"#{x.Id}: {x.OriginalFileName} ({x.SizeBytes} bytes, {x.Source})"));

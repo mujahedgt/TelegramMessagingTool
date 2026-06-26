@@ -19,7 +19,12 @@ public sealed class DocumentStorageService
         ".csv",
         ".pdf",
         ".docx",
-        ".xlsx"
+        ".xlsx",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".webp",
+        ".gif"
     };
 
     private static readonly HashSet<string> TextBasedExtensions = new(StringComparer.OrdinalIgnoreCase)
@@ -28,6 +33,15 @@ public sealed class DocumentStorageService
         ".md",
         ".json",
         ".csv"
+    };
+
+    private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".webp",
+        ".gif"
     };
 
     private readonly string _rootDirectory;
@@ -52,6 +66,12 @@ public sealed class DocumentStorageService
     {
         string extension = Path.GetExtension(fileName);
         return !string.IsNullOrWhiteSpace(extension) && _allowedExtensions.Contains(extension);
+    }
+
+    public static bool IsImageFileName(string fileName)
+    {
+        string extension = Path.GetExtension(fileName);
+        return !string.IsNullOrWhiteSpace(extension) && ImageExtensions.Contains(extension);
     }
 
     public static string SanitizeFileName(string fileName)
@@ -219,6 +239,11 @@ public sealed class DocumentStorageService
         }
 
         string extension = Path.GetExtension(uploadedFile.OriginalFileName).ToLowerInvariant();
+        if (ImageExtensions.Contains(extension))
+        {
+            return "Image files are saved for the image-agent harness. Text extraction/OCR is not implemented yet. Use /images to list saved images.";
+        }
+
         string text = extension switch
         {
             ".pdf" => ExtractPdfText(absolutePath),
@@ -474,6 +499,10 @@ public sealed class DocumentStorageService
             ".pdf" => "application/pdf",
             ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ".png" => "image/png",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".webp" => "image/webp",
+            ".gif" => "image/gif",
             _ => "text/plain"
         };
     }

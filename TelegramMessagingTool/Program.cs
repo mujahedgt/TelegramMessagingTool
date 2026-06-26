@@ -80,6 +80,7 @@ var commandRouter = new CommandRouter([
     new MemoryCommand(),
     new ForgetCommand(),
     new FilesCommand(documentStorage),
+    new ImagesCommand(),
     new ReadFileCommand(documentStorage),
     new CreateFileCommand(documentStorage),
     new ImportFilesCommand(importDirectory, documentStorage, settings),
@@ -597,7 +598,7 @@ async Task HandleDocumentAsync(
 
         await bot.SendMessage(
             chatId: message.Chat.Id,
-            text: $"Document saved as #{savedFile.Id}: {savedFile.OriginalFileName}\nUse /readfile {savedFile.Id} to read it or /files to list saved files.",
+            text: $"File saved as #{savedFile.Id}: {savedFile.OriginalFileName}\nUse /readfile {savedFile.Id} for documents, /images for image files, or /files to list saved files.",
             replyParameters: new ReplyParameters { MessageId = message.MessageId },
             cancellationToken: cancellationToken);
     }

@@ -336,6 +336,10 @@ AssertTrue(documentStorage.IsAllowedFileName("report.md"), "DocumentStorageServi
 AssertTrue(documentStorage.IsAllowedFileName("manual.pdf"), "DocumentStorageService allows PDF files");
 AssertTrue(documentStorage.IsAllowedFileName("brief.docx"), "DocumentStorageService allows DOCX files");
 AssertTrue(documentStorage.IsAllowedFileName("table.xlsx"), "DocumentStorageService allows XLSX files");
+AssertTrue(documentStorage.IsAllowedFileName("photo.png"), "DocumentStorageService allows PNG image files");
+AssertTrue(documentStorage.IsAllowedFileName("photo.jpg"), "DocumentStorageService allows JPG image files");
+AssertTrue(DocumentStorageService.IsImageFileName("photo.webp"), "DocumentStorageService recognizes WEBP image files");
+AssertFalse(DocumentStorageService.IsImageFileName("manual.pdf"), "DocumentStorageService does not classify PDFs as images");
 AssertFalse(documentStorage.IsAllowedFileName("malware.exe"), "DocumentStorageService rejects executable files");
 
 var storageTestUser = new ConnectedUser { Id = 42, ChatId = 123456789, Name = "tester" };
@@ -487,6 +491,7 @@ await using (var dbContext = new TelegramDbContext())
         new MemoryCommand(),
         new ForgetCommand(),
         new FilesCommand(documentStorage),
+        new ImagesCommand(),
         new ReadFileCommand(documentStorage),
         new CreateFileCommand(documentStorage),
         new ImportFilesCommand(importDirectory, documentStorage, adminTestSettings),
@@ -674,6 +679,10 @@ await using (var dbContext = new TelegramDbContext())
     AssertTrue(filesResult.Handled, "/files is handled");
     AssertTrue(filesResult.ReplyText?.Contains("notes.md") == true, "/files lists created file");
 
+    CommandResult emptyImagesResult = await commandRouter.TryHandleAsync(TextMessage("/images"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(emptyImagesResult.Handled, "/images is handled without saved images");
+    AssertTrue(emptyImagesResult.ReplyText?.Contains("No images", StringComparison.OrdinalIgnoreCase) == true, "/images reports no saved images before image upload");
+
     int uploadedFileId = await dbContext.UploadedFiles
         .Where(x => x.ConnectedUserId == testUser.Id)
         .Select(x => x.Id)
@@ -716,6 +725,26 @@ await using (var dbContext = new TelegramDbContext())
     CommandResult summarizeDocsResult = await commandRouter.TryHandleAsync(TextMessage("/summarizedocs"), testUser, dbContext, CancellationToken.None);
     AssertTrue(summarizeDocsResult.Handled, "/summarizedocs is handled");
     AssertTrue(summarizeDocsResult.ReplyText?.Contains("indexed documents", StringComparison.OrdinalIgnoreCase) == true, "/summarizedocs returns an all-documents summary");
+
+    await using var imageStream = new MemoryStream([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A]);
+    UploadedFile uploadedImage = await documentStorage.SaveUploadedFileAsync(
+        testUser,
+        "sample.png",
+        "telegram-image-file-id",
+        "image/png",
+        imageStream,
+        imageStream.Length,
+        CancellationToken.None);
+    dbContext.UploadedFiles.Add(uploadedImage);
+    await dbContext.SaveChangesAsync(CancellationToken.None);
+    CommandResult imagesResult = await commandRouter.TryHandleAsync(TextMessage("/images"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(imagesResult.Handled, "/images is handled");
+    AssertTrue(imagesResult.ReplyText?.Contains("sample.png") == true, "/images lists saved image files");
+    AssertFalse(imagesResult.ReplyText?.Contains("notes.md") == true, "/images does not list non-image documents");
+
+    CommandResult imagesMentionResult = await commandRouter.TryHandleAsync(TextMessage("/images@red_eye_ghost_bot"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(imagesMentionResult.Handled, "/images@bot is handled");
+    AssertFalse((await commandRouter.TryHandleAsync(TextMessage("/imagesx"), testUser, dbContext, CancellationToken.None)).Handled, "/imagesx is not treated as /images");
 
     UploadedFile fileBeforeDelete = await dbContext.UploadedFiles.FirstAsync(x => x.Id == uploadedFileId, CancellationToken.None);
     string filePathBeforeDelete = fileBeforeDelete.AbsolutePath;
