@@ -483,15 +483,17 @@ async Task HandleUpdateAsync(
 
             if (!string.IsNullOrWhiteSpace(commandResult.ReplyText))
             {
-                foreach (string replyChunk in TelegramMessageFormatter.SplitForTelegram(commandResult.ReplyText))
+                List<string> replyChunks = TelegramMessageFormatter.SplitForTelegram(commandResult.ReplyText).ToList();
+                for (int index = 0; index < replyChunks.Count; index++)
                 {
                     await bot.SendMessage(
                         chatId: message.Chat.Id,
-                        text: replyChunk,
+                        text: replyChunks[index],
                         replyParameters: new ReplyParameters
                         {
                             MessageId = message.MessageId
                         },
+                        replyMarkup: index == 0 ? commandResult.ReplyMarkup : null,
                         cancellationToken: cancellationToken);
                 }
             }

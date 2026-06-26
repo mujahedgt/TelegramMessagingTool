@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using System.Net.Sockets;
 using Telegram.Bot.Types;
+using Telegram.Bot.Types.ReplyMarkups;
 using TelegramMessagingTool;
 using TelegramMessagingTool.Agent;
 using TelegramMessagingTool.Commands;
@@ -8,6 +9,7 @@ using TelegramMessagingTool.ConsoleUi;
 using TelegramMessagingTool.Data;
 using TelegramMessagingTool.Models;
 using TelegramMessagingTool.Services;
+using TelegramMessagingTool.Telegram;
 using TelegramMessagingTool.Tools;
 
 static void AssertEqual<T>(T expected, T actual, string name)
@@ -720,6 +722,12 @@ await using (var dbContext = new TelegramDbContext())
     CommandResult helpResult = await commandRouter.TryHandleAsync(TextMessage("/help"), testUser, dbContext, CancellationToken.None);
     AssertTrue(helpResult.Handled, "/help is handled");
     AssertTrue(helpResult.ReplyText?.Contains("/remember") == true, "/help lists memory commands");
+    AssertTrue(helpResult.ReplyMarkup is null, "/help has no inline keyboard markup by default");
+
+    InlineKeyboardMarkup samplePendingMarkup = InlineKeyboardFactory.ForPendingAction(123);
+    AssertTrue(samplePendingMarkup.InlineKeyboard.SelectMany(row => row).Any(button => button.Text == "Approve" && button.CallbackData == "act:approve:123"), "InlineKeyboardFactory creates approve button");
+    AssertTrue(samplePendingMarkup.InlineKeyboard.SelectMany(row => row).Any(button => button.Text == "Deny" && button.CallbackData == "act:deny:123"), "InlineKeyboardFactory creates deny button");
+    AssertTrue(samplePendingMarkup.InlineKeyboard.SelectMany(row => row).Any(button => button.Text == "Details" && button.CallbackData == "act:details:123"), "InlineKeyboardFactory creates details button");
 
     CommandResult statusResult = await commandRouter.TryHandleAsync(TextMessage("/status"), testUser, dbContext, CancellationToken.None);
     AssertTrue(statusResult.Handled, "/status is handled");
@@ -805,6 +813,9 @@ await using (var dbContext = new TelegramDbContext())
     CommandResult pendingResult = await commandRouter.TryHandleAsync(TextMessage("/pending"), testUser, dbContext, CancellationToken.None);
     AssertTrue(pendingResult.Handled, "/pending is handled");
     AssertTrue(pendingResult.ReplyText?.Contains($"#{pendingAction.Id}") == true, "/pending lists pending action");
+    AssertTrue(pendingResult.ReplyMarkup is not null, "/pending includes inline action keyboard metadata");
+    AssertTrue(pendingResult.ReplyMarkup!.InlineKeyboard.SelectMany(row => row).Any(button => button.CallbackData == $"act:approve:{pendingAction.Id}"), "/pending action keyboard includes approve callback");
+    AssertTrue(pendingResult.ReplyMarkup!.InlineKeyboard.SelectMany(row => row).Any(button => button.CallbackData == $"act:deny:{pendingAction.Id}"), "/pending action keyboard includes deny callback");
 
     CommandResult nonAdminPendingResult = await commandRouter.TryHandleAsync(TextMessage("/pending"), nonAdminUser, dbContext, CancellationToken.None);
     AssertTrue(nonAdminPendingResult.Handled, "/pending non-admin attempt is handled");

@@ -2,6 +2,7 @@ using Telegram.Bot.Types;
 using TelegramMessagingTool.Data;
 using TelegramMessagingTool.Models;
 using TelegramMessagingTool.Services;
+using TelegramMessagingTool.Telegram;
 
 namespace TelegramMessagingTool.Commands;
 
@@ -43,7 +44,7 @@ public sealed class PendingCommand : IBotCommand
         }
 
         string reply = "Pending actions:\n\n" + string.Join("\n\n", actions.Select(RenderAction));
-        return new CommandResult(true, reply);
+        return new CommandResult(true, reply, InlineKeyboardFactory.ForPendingAction(actions[0].Id));
     }
 
     private static string RenderAction(PendingAction action)

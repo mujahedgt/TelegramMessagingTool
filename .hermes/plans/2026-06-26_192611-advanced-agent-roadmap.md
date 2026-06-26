@@ -268,6 +268,11 @@ Safety:
 
 ## 3A: Inline Keyboards
 
+### Status
+
+- Task 3A.1 is complete: `CommandResult` supports optional `InlineKeyboardMarkup`, `InlineKeyboardFactory` can create pending-action buttons, `/pending` returns first-action button metadata, and Telegram sends markup on the first reply chunk.
+- Callback query handling is not implemented yet.
+
 ### Goal
 
 Replace action-heavy text replies with Telegram inline buttons.
@@ -583,10 +588,10 @@ dotnet list TelegramMessagingTool/TelegramMessagingTool.csproj package --vulnera
 
 # Suggested Immediate Next Patch
 
-Implement **Phase 3A Task 1** only:
+Implement **Phase 3A Task 2** only:
 
-- Extend `CommandResult` with optional Telegram inline keyboard metadata.
-- Add a small `InlineKeyboardFactory` or result helper, but do not wire callback handling yet.
-- Add tests proving existing commands still work without markup and one command can return markup.
+- Add a compact `CallbackDataParser` for callback strings like `act:approve:<id>`, `act:deny:<id>`, and `act:details:<id>`.
+- Add tests for valid callbacks, invalid prefixes, non-numeric IDs, and unknown verbs.
+- Do not execute callbacks or edit Telegram messages yet.
 
-This prepares inline keyboards safely before approving/denying actions via callback buttons.
+This keeps callback parsing reviewable before wiring approve/deny/details actions.
