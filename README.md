@@ -24,6 +24,7 @@ TelegramMessagingTool is a C#/.NET console application that connects a Telegram 
 - Safe approval foundation for future risky tools
 - Approval commands: `/pending`, `/approve <id>`, and `/deny <id>`
 - Task planner commands: `/plan <goal>`, `/tasks`, `/task <id>`, `/done <task-id> [step-number]`, and `/cancel <task-id>`
+- P2 planning harness command: `/harnesses` shows the planned `image_agent` and `voice_agent` tool/safety roadmap before implementation
 
 ## Development note
 
@@ -143,6 +144,17 @@ Multi-step tool loop notes:
 - If the model keeps requesting tools after the limit, the bot stops and asks the user to narrow or continue with a smaller task.
 
 Risky tools such as shell, file write/delete, database mutation, or outbound messaging are intentionally not included yet. Use the approval flow before adding dangerous tools.
+
+## P2 image and voice harness planning
+
+The `/harnesses` command shows the next planned agent harnesses before their tools are executable:
+
+| Harness | Status | Planned tool examples |
+|---|---|---|
+| `image_agent` | planned | `describe_image`, `extract_image_text`, `generate_image_prompt`, `create_image` |
+| `voice_agent` | planned | `transcribe_audio`, `summarize_audio`, `extract_audio_tasks`, `speak_text` |
+
+These harnesses are currently **planning only**. They do not execute image/OCR/audio/transcription/TTS/generation work yet. The first implementation steps should be read-only and sandboxed: image listing/description and voice/audio listing/transcription, followed by optional providers behind explicit feature flags.
 
 ## Command parsing
 

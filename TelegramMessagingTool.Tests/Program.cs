@@ -180,6 +180,27 @@ AssertTrue(registry.TryGet("calculator", out IAgentTool? registeredCalculator), 
 AssertEqual("calculator", registeredCalculator!.Name, "ToolRegistry returns matching tool");
 AssertTrue(registry.RenderToolList().Contains("online_search"), "ToolRegistry lists online search");
 
+IReadOnlyList<AgentHarnessDefinition> harnesses = AgentHarnessCatalog.GetDefaultHarnesses();
+AssertEqual(2, harnesses.Count, "AgentHarnessCatalog defines image and voice harnesses");
+AssertTrue(harnesses.Any(x => x.Name == "image_agent"), "AgentHarnessCatalog includes image agent harness");
+AssertTrue(harnesses.Any(x => x.Name == "voice_agent"), "AgentHarnessCatalog includes voice agent harness");
+AssertTrue(harnesses.Single(x => x.Name == "image_agent").Tools.Any(x => x.Contains("describe_image", StringComparison.OrdinalIgnoreCase)), "Image harness lists describe_image tool");
+AssertTrue(harnesses.Single(x => x.Name == "voice_agent").Tools.Any(x => x.Contains("transcribe_audio", StringComparison.OrdinalIgnoreCase)), "Voice harness lists transcribe_audio tool");
+string renderedHarnesses = AgentHarnessCatalog.RenderHarnesses(harnesses);
+AssertTrue(renderedHarnesses.Contains("P2 Agent Harness Plan"), "AgentHarnessCatalog renders a P2 title");
+AssertTrue(renderedHarnesses.Contains("image_agent"), "AgentHarnessCatalog render includes image harness");
+AssertTrue(renderedHarnesses.Contains("voice_agent"), "AgentHarnessCatalog render includes voice harness");
+var harnessesCommand = new HarnessesCommand();
+CommandResult harnessesCommandResult = await harnessesCommand.TryHandleAsync(
+    new Message { Text = "/harnesses" },
+    new ConnectedUser { ChatId = 123, FirstName = "Test" },
+    null!,
+    CancellationToken.None);
+AssertTrue(harnessesCommandResult.Handled, "HarnessesCommand handles /harnesses");
+AssertTrue(harnessesCommandResult.ReplyText?.Contains("image_agent") == true, "HarnessesCommand reply includes image harness");
+AssertTrue(harnessesCommandResult.ReplyText?.Contains("voice_agent") == true, "HarnessesCommand reply includes voice harness");
+AssertFalse((await harnessesCommand.TryHandleAsync(new Message { Text = "/harnessesx" }, new ConnectedUser { ChatId = 123 }, null!, CancellationToken.None)).Handled, "HarnessesCommand uses exact command matching");
+
 Uri searchUri = OnlineSearchTool.BuildSearchUri("asp.net core performance tips");
 AssertTrue(searchUri.ToString().Contains("startpage.com"), "OnlineSearchTool primary endpoint uses Startpage compatibility helper");
 AssertTrue(searchUri.Query.Contains("asp.net"), "OnlineSearchTool includes query text");

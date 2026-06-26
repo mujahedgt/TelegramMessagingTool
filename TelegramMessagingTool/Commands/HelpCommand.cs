@@ -49,6 +49,7 @@ TelegramMessagingTool Agent Commands
 /embedfile <id> - Generate local embeddings for one indexed document
 /embeddocs - Generate local embeddings for all indexed documents
 /tools - List available safe agent tools
+/harnesses - Show planned image and voice agent harnesses
 /pending - List actions waiting for your approval
 /action <id> - Show pending/approved action audit details
 /approve <id> - Approve a pending risky action
