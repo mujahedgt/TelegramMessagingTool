@@ -13,7 +13,22 @@ public sealed record BotSettings(
     bool AllowPublicAccess,
     string DatabaseConnectionString,
     bool ApplyMigrations,
-    bool LogMessageContent);
+    bool LogMessageContent)
+{
+    public string OllamaChatModel { get; init; } = OllamaModel;
+
+    public string OllamaPlanningModel { get; init; } = OllamaModel;
+
+    public string OllamaDocumentQuestionAnsweringModel { get; init; } = OllamaModel;
+
+    public string OllamaDocumentSummaryModel { get; init; } = OllamaModel;
+
+    public string OllamaToolFinalModel { get; init; } = OllamaModel;
+
+    public string OllamaImageModel { get; init; } = OllamaModel;
+
+    public string OllamaVoiceModel { get; init; } = OllamaModel;
+}
 
 public static class BotConfiguration
 {
@@ -48,13 +63,29 @@ public static class BotConfiguration
             AllowPublicAccess: allowPublicAccess,
             DatabaseConnectionString: databaseConnectionString,
             ApplyMigrations: IsEnabled(Environment.GetEnvironmentVariable("APPLY_MIGRATIONS"), defaultValue: true),
-            LogMessageContent: IsEnabled(Environment.GetEnvironmentVariable("LOG_MESSAGE_CONTENT"), defaultValue: false));
+            LogMessageContent: IsEnabled(Environment.GetEnvironmentVariable("LOG_MESSAGE_CONTENT"), defaultValue: false))
+        {
+            OllamaChatModel = NormalizeModelRoute(Environment.GetEnvironmentVariable("OLLAMA_MODEL_CHAT"), ollamaModel),
+            OllamaPlanningModel = NormalizeModelRoute(Environment.GetEnvironmentVariable("OLLAMA_MODEL_PLAN"), ollamaModel),
+            OllamaDocumentQuestionAnsweringModel = NormalizeModelRoute(Environment.GetEnvironmentVariable("OLLAMA_MODEL_DOC_QA"), ollamaModel),
+            OllamaDocumentSummaryModel = NormalizeModelRoute(Environment.GetEnvironmentVariable("OLLAMA_MODEL_SUMMARY"), ollamaModel),
+            OllamaToolFinalModel = NormalizeModelRoute(Environment.GetEnvironmentVariable("OLLAMA_MODEL_TOOL_FINAL"), ollamaModel),
+            OllamaImageModel = NormalizeModelRoute(Environment.GetEnvironmentVariable("OLLAMA_MODEL_IMAGE"), ollamaModel),
+            OllamaVoiceModel = NormalizeModelRoute(Environment.GetEnvironmentVariable("OLLAMA_MODEL_VOICE"), ollamaModel)
+        };
     }
 
     public static string NormalizeEmbeddingModel(string? value)
     {
         return string.IsNullOrWhiteSpace(value)
             ? DefaultEmbeddingModel
+            : value.Trim();
+    }
+
+    public static string NormalizeModelRoute(string? value, string fallbackModel)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? fallbackModel.Trim()
             : value.Trim();
     }
 

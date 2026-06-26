@@ -54,7 +54,14 @@ Configuration is read from environment variables.
 | `ALLOWED_CHAT_IDS` | No | empty | Comma-separated Telegram chat IDs allowed to use the bot. Empty no longer means allow all unless `ALLOW_PUBLIC_ACCESS=true`. `ADMIN_CHAT_ID` is always allowed. |
 | `ALLOW_PUBLIC_ACCESS` | No | `false` | If true and `ALLOWED_CHAT_IDS` is empty, any Telegram user who finds the bot can use it. Accepts `true`, `1`, or `yes`. Keep false for real use. |
 | `OLLAMA_URL` | No | `http://localhost:11434/api/chat` | Ollama chat API endpoint |
-| `OLLAMA_MODEL` | No | `llama3.2:3b` | Ollama model name |
+| `OLLAMA_MODEL` | No | `llama3.2:3b` | Base Ollama model name and fallback for every route |
+| `OLLAMA_MODEL_CHAT` | No | `OLLAMA_MODEL` | Model route for normal chat |
+| `OLLAMA_MODEL_PLAN` | No | `OLLAMA_MODEL` | Model route for `/plan` and future planning features |
+| `OLLAMA_MODEL_DOC_QA` | No | `OLLAMA_MODEL` | Model route for `/askfile` and `/askdocs` |
+| `OLLAMA_MODEL_SUMMARY` | No | `OLLAMA_MODEL` | Model route for `/summarizefile` and `/summarizedocs` |
+| `OLLAMA_MODEL_TOOL_FINAL` | No | `OLLAMA_MODEL` | Model route for tool final-answer synthesis |
+| `OLLAMA_MODEL_IMAGE` | No | `OLLAMA_MODEL` | Reserved model route for future image-agent features |
+| `OLLAMA_MODEL_VOICE` | No | `OLLAMA_MODEL` | Reserved model route for future voice-agent features |
 | `OLLAMA_EMBEDDING_URL` | No | derived from `OLLAMA_URL` as `/api/embed` | Ollama embedding API endpoint |
 | `OLLAMA_EMBEDDING_MODEL` | No | `nomic-embed-text` | Local embedding model used by `/embedfile` and `/embeddocs` |
 | `ENABLE_DOCUMENT_EMBEDDINGS` | No | `false` | If true, `/askfile` and `/askdocs` use stored embeddings for hybrid semantic retrieval when available |
@@ -71,6 +78,9 @@ export ADMIN_CHAT_ID='123456789'
 export ALLOWED_CHAT_IDS='123456789,987654321'
 export ALLOW_PUBLIC_ACCESS='false'
 export OLLAMA_MODEL='llama3.2:3b'
+# Optional route-specific overrides; blank/unset routes fall back to OLLAMA_MODEL.
+export OLLAMA_MODEL_PLAN='llama3.2:3b'
+export OLLAMA_MODEL_DOC_QA='llama3.2:3b'
 export OLLAMA_EMBEDDING_MODEL='nomic-embed-text'
 export ENABLE_DOCUMENT_EMBEDDINGS='false'
 export ENABLE_ONLINE_SEARCH='false'

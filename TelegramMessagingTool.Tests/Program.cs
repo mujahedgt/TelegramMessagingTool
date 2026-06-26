@@ -164,6 +164,31 @@ var searchDisabledSettings = new BotSettings(
     LogMessageContent: false);
 var searchEnabledSettings = searchDisabledSettings with { EnableOnlineSearch = true };
 
+var defaultModelRouting = new ModelRoutingService(searchDisabledSettings);
+AssertEqual("llama3.2:3b", defaultModelRouting.GetModel(ModelTaskKind.Chat), "ModelRoutingService defaults chat route to OLLAMA_MODEL");
+AssertEqual("llama3.2:3b", defaultModelRouting.GetModel(ModelTaskKind.Planning), "ModelRoutingService defaults planning route to OLLAMA_MODEL");
+AssertEqual("llama3.2:3b", defaultModelRouting.GetModel(ModelTaskKind.DocumentQuestionAnswering), "ModelRoutingService defaults document QA route to OLLAMA_MODEL");
+AssertTrue(defaultModelRouting.RenderSummary().Contains("chat=llama3.2:3b"), "ModelRoutingService summary includes chat route");
+
+var routedModelSettings = searchDisabledSettings with
+{
+    OllamaPlanningModel = "qwen3:4b",
+    OllamaDocumentQuestionAnsweringModel = "qwen3:8b",
+    OllamaDocumentSummaryModel = "qwen3:8b",
+    OllamaToolFinalModel = "qwen3:0.6b-fast",
+    OllamaImageModel = "llava:latest",
+    OllamaVoiceModel = "qwen3:4b-voice"
+};
+var routedModelService = new ModelRoutingService(routedModelSettings);
+AssertEqual("llama3.2:3b", routedModelService.GetModel(ModelTaskKind.Chat), "ModelRoutingService keeps chat on base model when chat override is blank");
+AssertEqual("qwen3:4b", routedModelService.GetModel(ModelTaskKind.Planning), "ModelRoutingService uses planning override");
+AssertEqual("qwen3:8b", routedModelService.GetModel(ModelTaskKind.DocumentQuestionAnswering), "ModelRoutingService uses document QA override");
+AssertEqual("qwen3:8b", routedModelService.GetModel(ModelTaskKind.DocumentSummary), "ModelRoutingService uses document summary override");
+AssertEqual("qwen3:0.6b-fast", routedModelService.GetModel(ModelTaskKind.ToolFinalAnswer), "ModelRoutingService uses tool final-answer override");
+AssertEqual("llava:latest", routedModelService.GetModel(ModelTaskKind.Image), "ModelRoutingService uses image override");
+AssertEqual("qwen3:4b-voice", routedModelService.GetModel(ModelTaskKind.Voice), "ModelRoutingService uses voice override");
+AssertTrue(routedModelService.RenderSummary().Contains("plan=qwen3:4b"), "ModelRoutingService summary includes planning route");
+
 var registry = new ToolRegistry([
     dateTimeTool,
     calculator,
@@ -309,26 +334,44 @@ AssertTrue(BotConfiguration.IsEnabled("true", defaultValue: false), "BotConfigur
 string? previousAllowPublicAccess = Environment.GetEnvironmentVariable("ALLOW_PUBLIC_ACCESS");
 string? previousAllowedChatIdsForConfig = Environment.GetEnvironmentVariable("ALLOWED_CHAT_IDS");
 string? previousEnableOnlineSearch = Environment.GetEnvironmentVariable("ENABLE_ONLINE_SEARCH");
+string? previousOllamaModel = Environment.GetEnvironmentVariable("OLLAMA_MODEL");
+string? previousOllamaModelPlan = Environment.GetEnvironmentVariable("OLLAMA_MODEL_PLAN");
+string? previousOllamaModelDocQa = Environment.GetEnvironmentVariable("OLLAMA_MODEL_DOC_QA");
 try
 {
     Environment.SetEnvironmentVariable("ALLOW_PUBLIC_ACCESS", null);
     Environment.SetEnvironmentVariable("ALLOWED_CHAT_IDS", null);
     Environment.SetEnvironmentVariable("ENABLE_ONLINE_SEARCH", null);
+    Environment.SetEnvironmentVariable("OLLAMA_MODEL", "base-model:test");
+    Environment.SetEnvironmentVariable("OLLAMA_MODEL_PLAN", null);
+    Environment.SetEnvironmentVariable("OLLAMA_MODEL_DOC_QA", null);
     BotSettings defaultPrivacySettings = BotConfiguration.LoadFromEnvironment();
     AssertFalse(defaultPrivacySettings.AllowPublicAccess, "BotConfiguration defaults public access override to false");
     AssertFalse(defaultPrivacySettings.EnableOnlineSearch, "BotConfiguration defaults online search to disabled");
+    AssertEqual("base-model:test", defaultPrivacySettings.OllamaChatModel, "BotConfiguration defaults chat route to OLLAMA_MODEL");
+    AssertEqual("base-model:test", defaultPrivacySettings.OllamaPlanningModel, "BotConfiguration defaults planning route to OLLAMA_MODEL");
 
     Environment.SetEnvironmentVariable("ALLOW_PUBLIC_ACCESS", "yes");
     AssertTrue(BotConfiguration.LoadFromEnvironment().AllowPublicAccess, "BotConfiguration parses ALLOW_PUBLIC_ACCESS truthy values");
 
     Environment.SetEnvironmentVariable("ENABLE_ONLINE_SEARCH", "true");
     AssertTrue(BotConfiguration.LoadFromEnvironment().EnableOnlineSearch, "BotConfiguration parses ENABLE_ONLINE_SEARCH truthy values");
+
+    Environment.SetEnvironmentVariable("OLLAMA_MODEL_PLAN", "plan-model:test");
+    Environment.SetEnvironmentVariable("OLLAMA_MODEL_DOC_QA", "docqa-model:test");
+    BotSettings routedEnvironmentSettings = BotConfiguration.LoadFromEnvironment();
+    AssertEqual("base-model:test", routedEnvironmentSettings.OllamaChatModel, "BotConfiguration keeps chat model on OLLAMA_MODEL when chat override is blank");
+    AssertEqual("plan-model:test", routedEnvironmentSettings.OllamaPlanningModel, "BotConfiguration loads OLLAMA_MODEL_PLAN");
+    AssertEqual("docqa-model:test", routedEnvironmentSettings.OllamaDocumentQuestionAnsweringModel, "BotConfiguration loads OLLAMA_MODEL_DOC_QA");
 }
 finally
 {
     Environment.SetEnvironmentVariable("ALLOW_PUBLIC_ACCESS", previousAllowPublicAccess);
     Environment.SetEnvironmentVariable("ALLOWED_CHAT_IDS", previousAllowedChatIdsForConfig);
     Environment.SetEnvironmentVariable("ENABLE_ONLINE_SEARCH", previousEnableOnlineSearch);
+    Environment.SetEnvironmentVariable("OLLAMA_MODEL", previousOllamaModel);
+    Environment.SetEnvironmentVariable("OLLAMA_MODEL_PLAN", previousOllamaModelPlan);
+    Environment.SetEnvironmentVariable("OLLAMA_MODEL_DOC_QA", previousOllamaModelDocQa);
 }
 AssertEqual("report.md", DocumentStorageService.SanitizeFileName("..\\..//report.md"), "SanitizeFileName removes path segments");
 AssertTrue(documentStorage.IsAllowedFileName("notes.txt"), "DocumentStorageService allows txt files");
@@ -462,7 +505,11 @@ await using (var dbContext = new TelegramDbContext())
         AllowPublicAccess: false,
         DatabaseConnectionString: Environment.GetEnvironmentVariable("TELEGRAM_DB_CONNECTION")!,
         ApplyMigrations: true,
-        LogMessageContent: false);
+        LogMessageContent: false)
+    {
+        OllamaPlanningModel = "qwen3:4b",
+        OllamaDocumentQuestionAnsweringModel = "qwen3:8b"
+    };
 
     var pendingActionService = new PendingActionService();
     var fakeProcessTerminator = new FakeProcessTerminator();
@@ -527,6 +574,9 @@ await using (var dbContext = new TelegramDbContext())
     AssertTrue(statusResult.Handled, "/status is handled");
     AssertTrue(statusResult.ReplyText?.Contains("Database: OK") == true, "/status reports database OK");
     AssertTrue(statusResult.ReplyText?.Contains("Access mode: admin-only") == true, "/status reports access mode");
+    AssertTrue(statusResult.ReplyText?.Contains("Model routes:") == true, "/status reports model routes heading");
+    AssertTrue(statusResult.ReplyText?.Contains("plan=qwen3:4b") == true, "/status reports planning model route");
+    AssertTrue(statusResult.ReplyText?.Contains("doc_qa=qwen3:8b") == true, "/status reports document QA model route");
 
     CommandResult statusMentionResult = await commandRouter.TryHandleAsync(TextMessage("/status@red_eye_ghost_bot"), testUser, dbContext, CancellationToken.None);
     AssertTrue(statusMentionResult.Handled, "/status@bot is handled");

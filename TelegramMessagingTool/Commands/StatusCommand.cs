@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Telegram.Bot.Types;
 using TelegramMessagingTool.Data;
 using TelegramMessagingTool.Models;
+using TelegramMessagingTool.Services;
 
 namespace TelegramMessagingTool.Commands;
 
@@ -29,6 +30,7 @@ public sealed class StatusCommand : IBotCommand
         }
 
         bool dbReady = await dbContext.Database.CanConnectAsync(cancellationToken);
+        var modelRoutingService = new ModelRoutingService(_settings);
 
         string reply = $"""
 Status
@@ -36,6 +38,7 @@ Status
 Database: {(dbReady ? "OK" : "Unavailable")}
 Ollama URL: {_settings.OllamaUrl}
 Ollama model: {_settings.OllamaModel}
+Model routes: {modelRoutingService.RenderSummary()}
 Access mode: {BotAccessPolicy.DescribeAccessMode(_settings.AllowedChatIds, _settings.AdminChatId, _settings.AllowPublicAccess)}
 Document embeddings: {(_settings.EnableDocumentEmbeddings ? "enabled" : "disabled")}
 Online search: {(_settings.EnableOnlineSearch ? "enabled" : "disabled")}
