@@ -833,6 +833,61 @@ await using (var dbContext = new TelegramDbContext())
     AssertTrue(pendingResult.ReplyMarkup!.InlineKeyboard.SelectMany(row => row).Any(button => button.CallbackData == $"act:approve:{pendingAction.Id}"), "/pending action keyboard includes approve callback");
     AssertTrue(pendingResult.ReplyMarkup!.InlineKeyboard.SelectMany(row => row).Any(button => button.CallbackData == $"act:deny:{pendingAction.Id}"), "/pending action keyboard includes deny callback");
 
+    var pendingCallbackService = new PendingActionCallbackService(pendingActionService, pendingActionExecutor, adminTestSettings);
+    PendingActionCallbackResult invalidCallbackResult = await pendingCallbackService.HandleAsync("task:open:1", testUser, dbContext, CancellationToken.None);
+    AssertFalse(invalidCallbackResult.Handled, "PendingActionCallbackService ignores non-action callback domains");
+
+    PendingActionCallbackResult detailsCallbackResult = await pendingCallbackService.HandleAsync($"act:details:{pendingAction.Id}", testUser, dbContext, CancellationToken.None);
+    AssertTrue(detailsCallbackResult.Handled, "PendingActionCallbackService handles details callbacks");
+    AssertTrue(detailsCallbackResult.AnswerText.Contains("Details"), "PendingActionCallbackService answers callback details requests");
+    AssertTrue(detailsCallbackResult.MessageText?.Contains($"Action #{pendingAction.Id}") == true, "PendingActionCallbackService details includes action id");
+    AssertEqual(PendingActionStatuses.Pending, (await dbContext.PendingActions.FindAsync([pendingAction.Id], CancellationToken.None))!.Status, "PendingActionCallbackService details does not decide action");
+
+    PendingAction callbackDenyAction = await pendingActionService.CreateAsync(
+        dbContext,
+        testUser,
+        "callback_deny_test",
+        "Deny from inline callback.",
+        "{}",
+        "high",
+        TimeSpan.FromMinutes(30),
+        CancellationToken.None);
+    PendingActionCallbackResult denyCallbackResult = await pendingCallbackService.HandleAsync($"act:deny:{callbackDenyAction.Id}", testUser, dbContext, CancellationToken.None);
+    AssertTrue(denyCallbackResult.Handled, "PendingActionCallbackService handles deny callbacks");
+    AssertTrue(denyCallbackResult.MessageText?.Contains("denied", StringComparison.OrdinalIgnoreCase) == true, "PendingActionCallbackService deny returns denial message");
+    AssertEqual(PendingActionStatuses.Denied, (await dbContext.PendingActions.FindAsync([callbackDenyAction.Id], CancellationToken.None))!.Status, "PendingActionCallbackService deny marks action denied");
+
+    PendingAction callbackApproveAction = await pendingActionService.CreateAsync(
+        dbContext,
+        testUser,
+        "kill_process",
+        "Terminate PID 54321 after inline approval.",
+        "{\"pid\":54321}",
+        "high",
+        TimeSpan.FromMinutes(30),
+        CancellationToken.None);
+    int killCallsBeforeCallback = fakeProcessTerminator.KillCallCount;
+    PendingActionCallbackResult approveCallbackResult = await pendingCallbackService.HandleAsync($"act:approve:{callbackApproveAction.Id}", testUser, dbContext, CancellationToken.None);
+    AssertTrue(approveCallbackResult.Handled, "PendingActionCallbackService handles approve callbacks");
+    AssertTrue(approveCallbackResult.MessageText?.Contains("Execution result", StringComparison.OrdinalIgnoreCase) == true, "PendingActionCallbackService approve reports execution result");
+    AssertEqual(54321, fakeProcessTerminator.LastRequestedPid, "PendingActionCallbackService approve executes kill_process through safe terminator");
+    AssertEqual(killCallsBeforeCallback + 1, fakeProcessTerminator.KillCallCount, "PendingActionCallbackService approve executes once");
+    AssertEqual(PendingActionStatuses.Approved, (await dbContext.PendingActions.FindAsync([callbackApproveAction.Id], CancellationToken.None))!.Status, "PendingActionCallbackService approve marks action approved");
+
+    PendingAction callbackNonAdminAction = await pendingActionService.CreateAsync(
+        dbContext,
+        testUser,
+        "callback_admin_test",
+        "Admin-only callback action.",
+        "{}",
+        "high",
+        TimeSpan.FromMinutes(30),
+        CancellationToken.None);
+    PendingActionCallbackResult nonAdminCallbackResult = await pendingCallbackService.HandleAsync($"act:deny:{callbackNonAdminAction.Id}", nonAdminUser, dbContext, CancellationToken.None);
+    AssertTrue(nonAdminCallbackResult.Handled, "PendingActionCallbackService handles non-admin callback attempts");
+    AssertTrue(nonAdminCallbackResult.MessageText?.Contains("admin", StringComparison.OrdinalIgnoreCase) == true, "PendingActionCallbackService requires admin");
+    AssertEqual(PendingActionStatuses.Pending, (await dbContext.PendingActions.FindAsync([callbackNonAdminAction.Id], CancellationToken.None))!.Status, "PendingActionCallbackService non-admin does not decide action");
+
     CommandResult nonAdminPendingResult = await commandRouter.TryHandleAsync(TextMessage("/pending"), nonAdminUser, dbContext, CancellationToken.None);
     AssertTrue(nonAdminPendingResult.Handled, "/pending non-admin attempt is handled");
     AssertTrue(nonAdminPendingResult.ReplyText?.Contains("admin", StringComparison.OrdinalIgnoreCase) == true, "/pending requires admin");
@@ -846,7 +901,7 @@ await using (var dbContext = new TelegramDbContext())
     AssertTrue(approveResult.Handled, "/approve is handled");
     AssertEqual(PendingActionStatuses.Approved, (await dbContext.PendingActions.FindAsync([pendingAction.Id], CancellationToken.None))!.Status, "/approve marks action approved");
     AssertTrue(approveResult.ReplyText?.Contains("No automatic execution", StringComparison.OrdinalIgnoreCase) == true, "/approve does not execute unknown action types");
-    AssertEqual(1, fakeProcessTerminator.KillCallCount, "/approve does not call process terminator for non-kill actions");
+    AssertEqual(killCallsBeforeCallback + 1, fakeProcessTerminator.KillCallCount, "/approve does not call process terminator for non-kill actions");
 
     PendingAction secondPendingAction = await pendingActionService.CreateAsync(
         dbContext,

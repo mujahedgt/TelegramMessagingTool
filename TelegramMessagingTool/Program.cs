@@ -13,6 +13,7 @@ using TelegramMessagingTool.Data;
 using TelegramMessagingTool.models;
 using TelegramMessagingTool.Models;
 using TelegramMessagingTool.Services;
+using TelegramMessagingTool.Telegram;
 using TelegramMessagingTool.Tools;
 
 BotSettings settings = BotConfiguration.LoadFromEnvironment();
@@ -62,6 +63,7 @@ var documentStorage = new DocumentStorageService(Path.Combine(Environment.Curren
 string importDirectory = Path.Combine(Environment.CurrentDirectory, "ImportInbox");
 var pendingActionService = new PendingActionService();
 var pendingActionExecutor = new PendingActionExecutor(new SystemProcessTerminator(), documentStorage);
+var pendingActionCallbackService = new PendingActionCallbackService(pendingActionService, pendingActionExecutor, settings);
 var agentTaskService = new AgentTaskService();
 var documentIndexingService = new DocumentIndexingService(documentStorage);
 var documentEmbeddingService = new DocumentEmbeddingService(ollamaEmbeddingClient, settings.OllamaEmbeddingModel);
@@ -367,6 +369,12 @@ async Task HandleUpdateAsync(
     Update update,
     CancellationToken cancellationToken)
 {
+    if (update.CallbackQuery is { } callbackQuery)
+    {
+        await HandleCallbackQueryAsync(bot, callbackQuery, cancellationToken);
+        return;
+    }
+
     if (update.Message is not { } message)
     {
         return;
@@ -572,6 +580,104 @@ async Task HandleUpdateAsync(
             text: "Sorry, an error happened while processing your message.",
             cancellationToken: cancellationToken
         );
+    }
+}
+
+async Task HandleCallbackQueryAsync(
+    ITelegramBotClient bot,
+    CallbackQuery callbackQuery,
+    CancellationToken cancellationToken)
+{
+    if (callbackQuery.Message is not { } callbackMessage)
+    {
+        await bot.AnswerCallbackQuery(
+            callbackQuery.Id,
+            text: "This button can no longer be handled.",
+            cancellationToken: cancellationToken);
+        return;
+    }
+
+    long chatId = callbackMessage.Chat.Id;
+    string actor = callbackQuery.From.Username ?? callbackQuery.From.Id.ToString();
+
+    try
+    {
+        if (!BotAccessPolicy.IsAllowed(chatId, settings.AllowedChatIds, settings.AdminChatId, settings.AllowPublicAccess))
+        {
+            WriteConsoleEvent("DENIED", actor, "callback chat ID is not allowed", ConsoleEventLevel.Warning);
+            await bot.AnswerCallbackQuery(
+                callbackQuery.Id,
+                text: "Access denied",
+                showAlert: true,
+                cancellationToken: cancellationToken);
+            return;
+        }
+
+        await using TelegramDbContext dbContext = new();
+        ConnectedUser? user = await dbContext.Users.FirstOrDefaultAsync(x => x.ChatId == chatId, cancellationToken);
+        if (user is null)
+        {
+            user = new ConnectedUser
+            {
+                ChatId = chatId,
+                Name = callbackQuery.From.Username ?? string.Empty,
+                FirstName = callbackQuery.From.FirstName,
+                LastName = callbackQuery.From.LastName ?? string.Empty,
+                CreatedAt = DateTime.UtcNow,
+                LastSeenAt = DateTime.UtcNow
+            };
+            dbContext.Users.Add(user);
+        }
+        else
+        {
+            user.Name = callbackQuery.From.Username ?? string.Empty;
+            user.FirstName = callbackQuery.From.FirstName;
+            user.LastName = callbackQuery.From.LastName ?? string.Empty;
+            user.LastSeenAt = DateTime.UtcNow;
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        PendingActionCallbackResult result = await pendingActionCallbackService.HandleAsync(
+            callbackQuery.Data,
+            user,
+            dbContext,
+            cancellationToken);
+
+        await bot.AnswerCallbackQuery(
+            callbackQuery.Id,
+            text: result.AnswerText,
+            showAlert: false,
+            cancellationToken: cancellationToken);
+
+        if (!result.Handled)
+        {
+            WriteConsoleEvent("CALLBACK", actor, "unsupported callback data", ConsoleEventLevel.Warning);
+            return;
+        }
+
+        WriteConsoleEvent("CALLBACK", actor, callbackQuery.Data ?? "empty", ConsoleEventLevel.Success);
+
+        if (!string.IsNullOrWhiteSpace(result.MessageText))
+        {
+            foreach (string replyChunk in TelegramMessageFormatter.SplitForTelegram(result.MessageText))
+            {
+                await bot.SendMessage(
+                    chatId: chatId,
+                    text: replyChunk,
+                    replyParameters: new ReplyParameters { MessageId = callbackMessage.MessageId },
+                    cancellationToken: cancellationToken);
+            }
+        }
+    }
+    catch (Exception ex)
+    {
+        WriteConsoleEvent("ERROR", actor, ex.Message, ConsoleEventLevel.Error);
+        await bot.AnswerCallbackQuery(
+            callbackQuery.Id,
+            text: "Sorry, that button action failed.",
+            showAlert: true,
+            cancellationToken: cancellationToken);
     }
 }
 
