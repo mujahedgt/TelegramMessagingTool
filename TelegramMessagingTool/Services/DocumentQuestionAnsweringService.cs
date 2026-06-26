@@ -23,7 +23,7 @@ public sealed class DocumentQuestionAnsweringService
         }
 
         string prompt = BuildPrompt(question, chunks);
-        return await _chatClient.AskAsync([new OllamaMessageDto("user", prompt)], cancellationToken);
+        return await _chatClient.AskAsync([new OllamaMessageDto("user", prompt)], cancellationToken, ModelTaskKind.DocumentQuestionAnswering);
     }
 
     public static string BuildPrompt(string question, IReadOnlyList<DocumentChunk> chunks)

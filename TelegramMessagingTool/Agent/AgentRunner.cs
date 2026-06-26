@@ -31,7 +31,7 @@ public sealed class AgentRunner
 
         for (int step = 1; step <= _maxToolIterations; step++)
         {
-            string assistantResponse = await _chatClient.AskAsync(conversationContext, cancellationToken);
+            string assistantResponse = await _chatClient.AskAsync(conversationContext, cancellationToken, ModelTaskKind.Chat);
             ToolCallParseResult toolCall = ToolCallParser.Parse(assistantResponse);
 
             if (!toolCall.IsToolCall)
@@ -62,7 +62,7 @@ public sealed class AgentRunner
                 BuildToolObservationPrompt(tool.Name, result, step, _maxToolIterations)));
         }
 
-        string finalResponse = await _chatClient.AskAsync(conversationContext, cancellationToken);
+        string finalResponse = await _chatClient.AskAsync(conversationContext, cancellationToken, ModelTaskKind.Chat);
         if (ToolCallParser.Parse(finalResponse).IsToolCall)
         {
             return "I reached the safe tool-step limit before a final answer. Please narrow the request or ask me to continue with a smaller task.";
@@ -120,7 +120,7 @@ Rules:
 """;
 
         conversationContext.Add(new OllamaMessageDto("user", finalSearchPrompt));
-        string finalResponse = await _chatClient.AskAsync(conversationContext, cancellationToken);
+        string finalResponse = await _chatClient.AskAsync(conversationContext, cancellationToken, ModelTaskKind.ToolFinalAnswer);
 
         if (ToolCallParser.Parse(finalResponse).IsToolCall)
         {

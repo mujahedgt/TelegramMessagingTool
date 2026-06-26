@@ -7,20 +7,23 @@ public sealed class OllamaChatClient : IChatClient
 {
     private readonly HttpClient _httpClient;
     private readonly BotSettings _settings;
+    private readonly ModelRoutingService _modelRoutingService;
 
     public OllamaChatClient(HttpClient httpClient, BotSettings settings)
     {
         _httpClient = httpClient;
         _settings = settings;
+        _modelRoutingService = new ModelRoutingService(settings);
     }
 
     public async Task<string> AskAsync(
         List<OllamaMessageDto> conversationContext,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        ModelTaskKind taskKind = ModelTaskKind.Chat)
     {
         var ollamaRequest = new
         {
-            model = _settings.OllamaModel,
+            model = _modelRoutingService.GetModel(taskKind),
             stream = false,
             options = new
             {

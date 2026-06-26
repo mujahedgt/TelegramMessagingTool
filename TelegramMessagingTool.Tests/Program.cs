@@ -147,6 +147,13 @@ var multiStepRunner = new AgentRunner(scriptedChatClient, new ToolRegistry([calc
 string multiStepAnswer = await multiStepRunner.RunAsync([new OllamaMessageDto("user", "Calculate 25 * 19 and then check the time.")], CancellationToken.None);
 AssertTrue(multiStepAnswer.Contains("475"), "AgentRunner returns final answer after multiple tool observations");
 AssertEqual(3, scriptedChatClient.Calls, "AgentRunner asks model again after each safe tool observation until final answer");
+AssertTrue(scriptedChatClient.ModelTaskKinds.All(x => x == ModelTaskKind.Chat), "AgentRunner uses chat model route for normal/tool-loop chat calls");
+
+var searchFinalChatClient = new ScriptedChatClient(["Search-grounded final answer"]);
+var searchFinalRunner = new AgentRunner(searchFinalChatClient, new ToolRegistry([new FakeSearchTool()]), maxToolIterations: 3);
+string searchFinalAnswer = await searchFinalRunner.RunAsync([new OllamaMessageDto("user", "what is the newest mitsubishi")], CancellationToken.None);
+AssertEqual("Search-grounded final answer", searchFinalAnswer, "AgentRunner returns final search synthesis answer");
+AssertEqual(ModelTaskKind.ToolFinalAnswer, searchFinalChatClient.ModelTaskKinds.Single(), "AgentRunner uses tool-final model route for online-search final synthesis");
 
 var searchDisabledSettings = new BotSettings(
     BotToken: "test-token",
@@ -517,16 +524,18 @@ await using (var dbContext = new TelegramDbContext())
     var agentTaskService = new AgentTaskService();
     var documentIndexingService = new DocumentIndexingService(documentStorage);
     var documentRetrievalService = new DocumentRetrievalService(testEmbeddingService);
-    var documentQuestionAnsweringService = new DocumentQuestionAnsweringService(new ScriptedChatClient([
+    var documentQaChatClient = new ScriptedChatClient([
         "The payment deadline is Sunday. Source: File #1 notes.md, chunk 1.",
         "The saved note says this is a saved note. Source: File #1 notes.md, chunk 1.",
         "Summary: this document contains a saved note. Source: File #1 notes.md, chunk 1.",
         "Summary: indexed documents include a saved note. Source: File #1 notes.md, chunk 1."
-    ]));
-    var documentSummaryService = new DocumentSummaryService(new ScriptedChatClient([
+    ]);
+    var documentQuestionAnsweringService = new DocumentQuestionAnsweringService(documentQaChatClient);
+    var documentSummaryChatClient = new ScriptedChatClient([
         "Summary: this document contains a saved note. Source: File #1 notes.md, chunk 1.",
         "Summary: indexed documents include a saved note. Source: File #1 notes.md, chunk 1."
-    ]));
+    ]);
+    var documentSummaryService = new DocumentSummaryService(documentSummaryChatClient);
     var commandRouter = new CommandRouter([
         new HelpCommand(),
         new SystemInfoCommand(),
@@ -767,6 +776,7 @@ await using (var dbContext = new TelegramDbContext())
     CommandResult askDocsResult = await commandRouter.TryHandleAsync(TextMessage("/askdocs what saved note do I have?"), testUser, dbContext, CancellationToken.None);
     AssertTrue(askDocsResult.Handled, "/askdocs is handled");
     AssertTrue(askDocsResult.ReplyText?.Contains("saved note", StringComparison.OrdinalIgnoreCase) == true, "/askdocs returns model answer across documents");
+    AssertTrue(documentQaChatClient.ModelTaskKinds.All(x => x == ModelTaskKind.DocumentQuestionAnswering), "Document Q&A uses document QA model route");
 
     CommandResult summarizeFileResult = await commandRouter.TryHandleAsync(TextMessage($"/summarizefile {uploadedFileId}"), testUser, dbContext, CancellationToken.None);
     AssertTrue(summarizeFileResult.Handled, "/summarizefile is handled");
@@ -775,6 +785,7 @@ await using (var dbContext = new TelegramDbContext())
     CommandResult summarizeDocsResult = await commandRouter.TryHandleAsync(TextMessage("/summarizedocs"), testUser, dbContext, CancellationToken.None);
     AssertTrue(summarizeDocsResult.Handled, "/summarizedocs is handled");
     AssertTrue(summarizeDocsResult.ReplyText?.Contains("indexed documents", StringComparison.OrdinalIgnoreCase) == true, "/summarizedocs returns an all-documents summary");
+    AssertTrue(documentSummaryChatClient.ModelTaskKinds.All(x => x == ModelTaskKind.DocumentSummary), "Document summaries use document summary model route");
 
     await using var imageStream = new MemoryStream([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A]);
     UploadedFile uploadedImage = await documentStorage.SaveUploadedFileAsync(
@@ -954,9 +965,29 @@ sealed class ScriptedChatClient : IChatClient
 
     public int Calls { get; private set; }
 
-    public Task<string> AskAsync(List<OllamaMessageDto> conversationContext, CancellationToken cancellationToken)
+    public List<ModelTaskKind> ModelTaskKinds { get; } = [];
+
+    public Task<string> AskAsync(
+        List<OllamaMessageDto> conversationContext,
+        CancellationToken cancellationToken,
+        ModelTaskKind taskKind = ModelTaskKind.Chat)
     {
         Calls++;
+        ModelTaskKinds.Add(taskKind);
         return Task.FromResult(_responses.Count > 0 ? _responses.Dequeue() : "No scripted response left.");
+    }
+}
+
+sealed class FakeSearchTool : IAgentTool
+{
+    public string Name => "online_search";
+
+    public string Description => "Fake search tool for tests.";
+
+    public bool RequiresApproval => false;
+
+    public Task<ToolResult> ExecuteAsync(string input, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(ToolResult.Ok($"Result for {input}\nhttps://example.com/source"));
     }
 }

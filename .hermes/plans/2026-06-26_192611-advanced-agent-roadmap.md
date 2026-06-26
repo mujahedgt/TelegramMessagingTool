@@ -43,6 +43,11 @@ Main rule: preserve the current safe behavior while adding optional advanced pat
 
 # Phase 1: Multi-model Routing
 
+## Status
+
+- Task 1.1 and 1.2 are complete: route-specific settings, `ModelTaskKind`, `ModelRoutingService`, README docs, launcher env handoff, and `/status` model-route summary are implemented.
+- Task 1.3 is complete: normal chat uses `Chat`, online-search final synthesis uses `ToolFinalAnswer`, document Q&A uses `DocumentQuestionAnswering`, and document summaries use `DocumentSummary`.
+
 ## Goal
 
 Allow different model profiles for chat, planning, document Q&A, summarization, search finalization, image/voice future work, and embeddings.
@@ -571,11 +576,10 @@ dotnet list TelegramMessagingTool/TelegramMessagingTool.csproj package --vulnera
 
 # Suggested Immediate Next Patch
 
-Implement **Phase 1 Task 1.1 + 1.2** only:
+Implement **Phase 2 Task 2.1** only:
 
-- Add route-specific model settings.
-- Add `ModelRoutingService`.
-- Show model routes in `/status`.
-- Keep all existing calls using the default model until Task 1.3.
+- Add `ScheduleParser` with safe formats: `yyyy-MM-dd HH:mm`, `tomorrow HH:mm`, `in 30m`, and `in 2h`.
+- Add parser tests only; do not add DB fields or background sending in the same patch.
+- Keep scheduling reminder execution for later Phase 2 tasks.
 
-This is the safest foundation because it does not change runtime model behavior yet, but prepares the app for larger `/plan`, `/askdocs`, image, and voice models.
+This is the safest next foundation because it prepares scheduled task reminders without changing database schema or sending background Telegram messages yet.

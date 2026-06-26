@@ -22,7 +22,7 @@ public sealed class DocumentSummaryService
         }
 
         string prompt = BuildPrompt(chunks);
-        return await _chatClient.AskAsync([new OllamaMessageDto("user", prompt)], cancellationToken);
+        return await _chatClient.AskAsync([new OllamaMessageDto("user", prompt)], cancellationToken, ModelTaskKind.DocumentSummary);
     }
 
     public static string BuildPrompt(IReadOnlyList<DocumentChunk> chunks)
