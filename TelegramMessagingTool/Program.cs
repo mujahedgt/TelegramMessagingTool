@@ -105,6 +105,9 @@ var commandRouter = new CommandRouter([
     new PlanCommand(agentTaskService),
     new TasksCommand(agentTaskService),
     new TaskCommand(agentTaskService),
+    new ScheduleCommand(agentTaskService),
+    new ScheduleListCommand(agentTaskService),
+    new UnscheduleCommand(agentTaskService),
     new DoneCommand(agentTaskService),
     new CancelCommand(agentTaskService)
 ]);

@@ -589,6 +589,9 @@ await using (var dbContext = new TelegramDbContext())
         new PlanCommand(agentTaskService),
         new TasksCommand(agentTaskService),
         new TaskCommand(agentTaskService),
+        new ScheduleCommand(agentTaskService),
+        new ScheduleListCommand(agentTaskService),
+        new UnscheduleCommand(agentTaskService),
         new DoneCommand(agentTaskService),
         new CancelCommand(agentTaskService)
     ]);
@@ -785,6 +788,33 @@ await using (var dbContext = new TelegramDbContext())
     CommandResult taskResult = await commandRouter.TryHandleAsync(TextMessage($"/task {taskId}"), testUser, dbContext, CancellationToken.None);
     AssertTrue(taskResult.Handled, "/task is handled");
     AssertTrue(taskResult.ReplyText?.Contains("[ ] 1.") == true, "/task shows task steps");
+
+    CommandResult invalidScheduleResult = await commandRouter.TryHandleAsync(TextMessage($"/schedule {taskId} 1 yesterday 09:00"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(invalidScheduleResult.Handled, "/schedule invalid time is handled");
+    AssertTrue(invalidScheduleResult.ReplyText?.Contains("Usage: /schedule <task-id> <step-number> <time> [note]") == true, "/schedule invalid time explains usage");
+
+    CommandResult scheduleResult = await commandRouter.TryHandleAsync(TextMessage($"/schedule {taskId} 1 in 30m Review the first step"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(scheduleResult.Handled, "/schedule is handled");
+    AssertTrue(scheduleResult.ReplyText?.Contains("scheduled", StringComparison.OrdinalIgnoreCase) == true, "/schedule reports scheduled result");
+    AgentTaskStep scheduledCommandStep = await dbContext.AgentTaskSteps.FirstAsync(x => x.AgentTaskId == taskId && x.StepNumber == 1, CancellationToken.None);
+    AssertTrue(scheduledCommandStep.ScheduledAtUtc.HasValue, "/schedule stores scheduled time");
+    AssertTrue(scheduledCommandStep.ScheduledAtUtc > DateTime.UtcNow, "/schedule stores future scheduled time");
+    AssertEqual("Review the first step", scheduledCommandStep.ScheduleNote, "/schedule stores note after schedule expression");
+
+    CommandResult scheduleListResult = await commandRouter.TryHandleAsync(TextMessage("/schedulelist"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(scheduleListResult.Handled, "/schedulelist is handled");
+    AssertTrue(scheduleListResult.ReplyText?.Contains($"Task #{taskId}") == true, "/schedulelist shows task id");
+    AssertTrue(scheduleListResult.ReplyText?.Contains("Review the first step") == true, "/schedulelist shows schedule note");
+
+    CommandResult unscheduleResult = await commandRouter.TryHandleAsync(TextMessage($"/unschedule {taskId} 1"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(unscheduleResult.Handled, "/unschedule is handled");
+    AssertTrue(unscheduleResult.ReplyText?.Contains("unscheduled", StringComparison.OrdinalIgnoreCase) == true, "/unschedule reports cleared schedule");
+    AgentTaskStep unscheduledCommandStep = await dbContext.AgentTaskSteps.FirstAsync(x => x.AgentTaskId == taskId && x.StepNumber == 1, CancellationToken.None);
+    AssertFalse(unscheduledCommandStep.ScheduledAtUtc.HasValue, "/unschedule clears scheduled time");
+    AssertFalse(unscheduledCommandStep.ReminderSentAtUtc.HasValue, "/unschedule clears reminder sent time");
+    AssertTrue(string.IsNullOrWhiteSpace(unscheduledCommandStep.ScheduleNote), "/unschedule clears schedule note");
+
+    AssertFalse((await commandRouter.TryHandleAsync(TextMessage("/schedulex 1 1 in 30m"), testUser, dbContext, CancellationToken.None)).Handled, "/schedulex is not treated as /schedule");
 
     CommandResult doneStepResult = await commandRouter.TryHandleAsync(TextMessage($"/done {taskId} 1"), testUser, dbContext, CancellationToken.None);
     AssertTrue(doneStepResult.Handled, "/done step is handled");

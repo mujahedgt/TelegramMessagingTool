@@ -148,7 +148,8 @@ public sealed class ModelRoutingService
 
 - Task 2.1 is complete: `ScheduleParser` parses safe UTC schedule formats (`yyyy-MM-dd HH:mm`, `tomorrow HH:mm`, `in 30m`, `in 2h`) and rejects unsupported/past/zero-delay inputs.
 - Task 2.2 is complete: `AgentTaskStep` now stores `ScheduledAtUtc`, `ReminderSentAtUtc`, and `ScheduleNote`; EF migration `AddAgentTaskStepScheduling` adds the fields and a schedule-time index; task rendering displays scheduled/reminded metadata.
-- Commands and the background reminder loop are not implemented yet.
+- Task 2.3 is complete: `/schedule`, `/schedulelist`, and `/unschedule` manage scheduled task-step metadata without autonomous sending.
+- The background reminder loop is not implemented yet.
 
 ## Goal
 
@@ -582,13 +583,10 @@ dotnet list TelegramMessagingTool/TelegramMessagingTool.csproj package --vulnera
 
 # Suggested Immediate Next Patch
 
-Implement **Phase 2 Task 2.3** only:
+Implement **Phase 2 Task 2.4** only:
 
-- Add admin/user commands for scheduling metadata, not background sending yet:
-  - `/schedule <taskId> <stepNumber> <time> [note]`
-  - `/schedulelist`
-  - `/unschedule <taskId> <stepNumber>`
-- Use the existing `ScheduleParser` and `AgentTaskStep` fields.
-- Keep the background Telegram reminder loop for Phase 2 Task 2.4.
+- Add a background reminder scanner/sender that finds active task steps where `ScheduledAtUtc <= now` and `ReminderSentAtUtc == null`.
+- Send a Telegram reminder to the task chat and mark `ReminderSentAtUtc` only after successful send.
+- Keep the loop interval conservative and test the scanner logic with an injected clock/sender; avoid duplicate sends.
 
-This keeps command behavior reviewable before any autonomous reminder sending is added.
+This is the first patch that performs autonomous Telegram sending, so keep it narrowly scoped and heavily verified.

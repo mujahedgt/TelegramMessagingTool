@@ -144,6 +144,82 @@ public sealed class AgentTaskService
         return new TaskUpdateResult(true, $"Task #{task.Id} cancelled.", task);
     }
 
+    public async Task<TaskUpdateResult> ScheduleStepAsync(
+        TelegramDbContext dbContext,
+        ConnectedUser user,
+        int taskId,
+        int stepNumber,
+        DateTime scheduledAtUtc,
+        string? scheduleNote,
+        CancellationToken cancellationToken)
+    {
+        AgentTask? task = await GetAsync(dbContext, user, taskId, cancellationToken);
+        if (task is null)
+        {
+            return new TaskUpdateResult(false, $"Task #{taskId} was not found.", null);
+        }
+
+        if (task.Status != AgentTaskStatuses.Active)
+        {
+            return new TaskUpdateResult(false, $"Task #{task.Id} is already {task.Status}.", task);
+        }
+
+        AgentTaskStep? step = task.Steps.FirstOrDefault(x => x.StepNumber == stepNumber);
+        if (step is null)
+        {
+            return new TaskUpdateResult(false, $"Task #{task.Id} does not have step {stepNumber}.", task);
+        }
+
+        step.ScheduledAtUtc = EnsureUtc(scheduledAtUtc);
+        step.ReminderSentAtUtc = null;
+        step.ScheduleNote = NormalizeScheduleNote(scheduleNote);
+        task.UpdatedAt = DateTime.UtcNow;
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return new TaskUpdateResult(true, $"Task #{task.Id} step {step.StepNumber} scheduled for {FormatUtc(step.ScheduledAtUtc.Value)}.", task);
+    }
+
+    public async Task<TaskUpdateResult> UnscheduleStepAsync(
+        TelegramDbContext dbContext,
+        ConnectedUser user,
+        int taskId,
+        int stepNumber,
+        CancellationToken cancellationToken)
+    {
+        AgentTask? task = await GetAsync(dbContext, user, taskId, cancellationToken);
+        if (task is null)
+        {
+            return new TaskUpdateResult(false, $"Task #{taskId} was not found.", null);
+        }
+
+        AgentTaskStep? step = task.Steps.FirstOrDefault(x => x.StepNumber == stepNumber);
+        if (step is null)
+        {
+            return new TaskUpdateResult(false, $"Task #{task.Id} does not have step {stepNumber}.", task);
+        }
+
+        step.ScheduledAtUtc = null;
+        step.ReminderSentAtUtc = null;
+        step.ScheduleNote = null;
+        task.UpdatedAt = DateTime.UtcNow;
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return new TaskUpdateResult(true, $"Task #{task.Id} step {step.StepNumber} unscheduled.", task);
+    }
+
+    public async Task<IReadOnlyList<ScheduledTaskStep>> ListScheduledStepsAsync(
+        TelegramDbContext dbContext,
+        ConnectedUser user,
+        CancellationToken cancellationToken)
+    {
+        return await dbContext.AgentTaskSteps
+            .Include(x => x.AgentTask)
+            .Where(x => x.AgentTask.ConnectedUserId == user.Id && x.ScheduledAtUtc != null)
+            .OrderBy(x => x.ScheduledAtUtc)
+            .ThenBy(x => x.AgentTaskId)
+            .ThenBy(x => x.StepNumber)
+            .Select(x => new ScheduledTaskStep(x.AgentTask, x))
+            .ToListAsync(cancellationToken);
+    }
+
     public static string RenderTask(AgentTask task)
     {
         int done = task.Steps.Count(x => x.IsDone);
@@ -182,8 +258,29 @@ public sealed class AgentTaskService
 
     private static string FormatUtc(DateTime value)
     {
-        DateTime utcValue = value.Kind == DateTimeKind.Local ? value.ToUniversalTime() : DateTime.SpecifyKind(value, DateTimeKind.Utc);
+        DateTime utcValue = EnsureUtc(value);
         return utcValue.ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture);
+    }
+
+    private static DateTime EnsureUtc(DateTime value)
+    {
+        return value.Kind switch
+        {
+            DateTimeKind.Utc => value,
+            DateTimeKind.Local => value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+        };
+    }
+
+    private static string? NormalizeScheduleNote(string? scheduleNote)
+    {
+        if (string.IsNullOrWhiteSpace(scheduleNote))
+        {
+            return null;
+        }
+
+        scheduleNote = string.Join(' ', scheduleNote.Split(default(string[]), StringSplitOptions.RemoveEmptyEntries));
+        return scheduleNote.Length > 500 ? scheduleNote[..500] : scheduleNote;
     }
 
     private static void MarkStepDone(AgentTaskStep step)
@@ -243,3 +340,5 @@ public sealed class AgentTaskService
 }
 
 public sealed record TaskUpdateResult(bool Success, string Message, AgentTask? Task);
+
+public sealed record ScheduledTaskStep(AgentTask Task, AgentTaskStep Step);

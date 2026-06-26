@@ -58,6 +58,9 @@ TelegramMessagingTool Agent Commands
 /plan <goal> - Create a step-by-step task plan
 /tasks - List active task plans
 /task <id> - Show a task plan
+/schedule <task-id> <step-number> <time> [note] - Schedule a task step reminder time
+/schedulelist - List scheduled task step reminders
+/unschedule <task-id> <step-number> - Clear a scheduled task step reminder
 /done <task-id> [step-number] - Mark a task or step done
 /cancel <task-id> - Cancel a task plan
 
