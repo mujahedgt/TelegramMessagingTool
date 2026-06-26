@@ -53,6 +53,7 @@ using HttpClient telegramHttpClient = new(telegramHttpHandler)
 };
 
 var botClient = new TelegramBotClient(settings.BotToken, telegramHttpClient, CancellationToken.None);
+var taskReminderService = new TaskReminderService(new TelegramTaskReminderSender(botClient));
 var ollamaClient = new OllamaChatClient(qwenClient, settings);
 var ollamaEmbeddingClient = new OllamaEmbeddingClient(embeddingClient, settings);
 ITextEmbeddingService? retrievalEmbeddingService = settings.EnableDocumentEmbeddings ? ollamaEmbeddingClient : null;
@@ -156,6 +157,7 @@ try
     WriteConsoleEvent("CONSOLE", "local", "type a message or command here; use /exit to stop", ConsoleEventLevel.Info);
 
     _ = RunConsoleInputLoopAsync(cts.Token);
+    _ = RunTaskReminderLoopAsync(cts.Token);
     try
     {
         await Task.Delay(Timeout.InfiniteTimeSpan, cts.Token);
@@ -189,6 +191,44 @@ catch (Exception ex)
         LogType.Error);
 
     Console.WriteLine($"Unexpected Error: {ex.Message}");
+}
+
+async Task RunTaskReminderLoopAsync(CancellationToken cancellationToken)
+{
+    TimeSpan interval = TimeSpan.FromSeconds(60);
+    while (!cancellationToken.IsCancellationRequested)
+    {
+        try
+        {
+            await using TelegramDbContext dbContext = new();
+            ReminderScanResult result = await taskReminderService.SendDueRemindersAsync(dbContext, cancellationToken);
+            if (result.SentCount > 0 || result.FailedCount > 0)
+            {
+                WriteConsoleEvent(
+                    "REMINDER",
+                    "tasks",
+                    $"due={result.DueCount} sent={result.SentCount} failed={result.FailedCount}",
+                    result.FailedCount > 0 ? ConsoleEventLevel.Warning : ConsoleEventLevel.Success);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            WriteConsoleEvent("REMINDER", "tasks", ex.Message, ConsoleEventLevel.Error);
+        }
+
+        try
+        {
+            await Task.Delay(interval, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+    }
 }
 
 async Task RunConsoleInputLoopAsync(CancellationToken cancellationToken)

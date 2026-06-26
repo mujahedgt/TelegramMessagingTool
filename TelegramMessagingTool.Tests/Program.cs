@@ -642,6 +642,81 @@ await using (var dbContext = new TelegramDbContext())
     dbContext.AgentTasks.Remove(persistedScheduledTask);
     await dbContext.SaveChangesAsync(CancellationToken.None);
 
+    DateTime reminderNow = new(2026, 6, 28, 20, 0, 0, DateTimeKind.Utc);
+    var dueReminderTask = new AgentTask
+    {
+        ConnectedUserId = testUser.Id,
+        ChatId = testUser.ChatId,
+        Goal = "Due reminder test",
+        Status = AgentTaskStatuses.Active,
+        CreatedAt = DateTime.UtcNow,
+        UpdatedAt = DateTime.UtcNow,
+        Steps =
+        [
+            new AgentTaskStep
+            {
+                StepNumber = 1,
+                Description = "Send due reminder.",
+                ScheduledAtUtc = reminderNow.AddMinutes(-5),
+                ScheduleNote = "Important reminder note",
+                CreatedAt = DateTime.UtcNow
+            },
+            new AgentTaskStep
+            {
+                StepNumber = 2,
+                Description = "Future reminder.",
+                ScheduledAtUtc = reminderNow.AddMinutes(5),
+                CreatedAt = DateTime.UtcNow
+            },
+            new AgentTaskStep
+            {
+                StepNumber = 3,
+                Description = "Already sent reminder.",
+                ScheduledAtUtc = reminderNow.AddMinutes(-10),
+                ReminderSentAtUtc = reminderNow.AddMinutes(-1),
+                CreatedAt = DateTime.UtcNow
+            }
+        ]
+    };
+    var completedDueReminderTask = new AgentTask
+    {
+        ConnectedUserId = testUser.Id,
+        ChatId = testUser.ChatId,
+        Goal = "Completed reminder test",
+        Status = AgentTaskStatuses.Completed,
+        CreatedAt = DateTime.UtcNow,
+        UpdatedAt = DateTime.UtcNow,
+        CompletedAt = DateTime.UtcNow,
+        Steps =
+        [
+            new AgentTaskStep
+            {
+                StepNumber = 1,
+                Description = "Do not send completed task reminder.",
+                ScheduledAtUtc = reminderNow.AddMinutes(-5),
+                CreatedAt = DateTime.UtcNow
+            }
+        ]
+    };
+    dbContext.AgentTasks.AddRange(dueReminderTask, completedDueReminderTask);
+    await dbContext.SaveChangesAsync(CancellationToken.None);
+
+    var fakeReminderSender = new FakeTaskReminderSender();
+    var taskReminderService = new TaskReminderService(fakeReminderSender, () => reminderNow);
+    ReminderScanResult reminderScanResult = await taskReminderService.SendDueRemindersAsync(dbContext, CancellationToken.None);
+    AssertEqual(1, reminderScanResult.SentCount, "TaskReminderService sends one due unsent active reminder");
+    AssertEqual(1, fakeReminderSender.SentMessages.Count, "TaskReminderService calls sender once");
+    AssertEqual(testUser.ChatId, fakeReminderSender.SentMessages[0].ChatId, "TaskReminderService sends reminder to task chat");
+    AssertTrue(fakeReminderSender.SentMessages[0].Text.Contains("Due reminder test"), "TaskReminderService reminder includes task goal");
+    AssertTrue(fakeReminderSender.SentMessages[0].Text.Contains("Important reminder note"), "TaskReminderService reminder includes schedule note");
+    AgentTaskStep dueReminderStep = await dbContext.AgentTaskSteps.FirstAsync(x => x.AgentTaskId == dueReminderTask.Id && x.StepNumber == 1, CancellationToken.None);
+    AssertEqual(reminderNow, dueReminderStep.ReminderSentAtUtc, "TaskReminderService marks reminder sent after successful send");
+    ReminderScanResult secondReminderScanResult = await taskReminderService.SendDueRemindersAsync(dbContext, CancellationToken.None);
+    AssertEqual(0, secondReminderScanResult.SentCount, "TaskReminderService does not resend already marked reminders");
+    AssertEqual(1, fakeReminderSender.SentMessages.Count, "TaskReminderService sender is not called again after reminder is marked sent");
+    dbContext.AgentTasks.RemoveRange(dueReminderTask, completedDueReminderTask);
+    await dbContext.SaveChangesAsync(CancellationToken.None);
+
     CommandResult helpResult = await commandRouter.TryHandleAsync(TextMessage("/help"), testUser, dbContext, CancellationToken.None);
     AssertTrue(helpResult.Handled, "/help is handled");
     AssertTrue(helpResult.ReplyText?.Contains("/remember") == true, "/help lists memory commands");
@@ -1045,6 +1120,17 @@ sealed class FakeProcessTerminator : IProcessTerminator
         LastRequestedPid = processId;
         KillCallCount++;
         return ProcessTerminationResult.Ok($"Process PID {processId} was terminated successfully.");
+    }
+}
+
+sealed class FakeTaskReminderSender : ITaskReminderSender
+{
+    public List<(long ChatId, string Text)> SentMessages { get; } = [];
+
+    public Task SendReminderAsync(long chatId, string text, CancellationToken cancellationToken)
+    {
+        SentMessages.Add((chatId, text));
+        return Task.CompletedTask;
     }
 }
 
