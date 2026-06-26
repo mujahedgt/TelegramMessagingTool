@@ -16,5 +16,11 @@ public class AgentTaskStep
 
     public DateTime? CompletedAt { get; set; }
 
+    public DateTime? ScheduledAtUtc { get; set; }
+
+    public DateTime? ReminderSentAtUtc { get; set; }
+
+    public string? ScheduleNote { get; set; }
+
     public AgentTask AgentTask { get; set; } = null!;
 }

@@ -248,7 +248,11 @@ public class TelegramDbContext : DbContext
             entity.Property(x => x.CreatedAt)
                 .HasDefaultValueSql("GETUTCDATE()");
 
+            entity.Property(x => x.ScheduleNote)
+                .HasMaxLength(500);
+
             entity.HasIndex(x => x.AgentTaskId);
+            entity.HasIndex(x => x.ScheduledAtUtc);
             entity.HasIndex(x => new { x.AgentTaskId, x.StepNumber })
                 .IsUnique();
 

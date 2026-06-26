@@ -593,6 +593,52 @@ await using (var dbContext = new TelegramDbContext())
         new CancelCommand(agentTaskService)
     ]);
 
+    DateTime scheduledStepTime = new(2026, 6, 28, 18, 30, 0, DateTimeKind.Utc);
+    var scheduledTask = new AgentTask
+    {
+        ConnectedUserId = testUser.Id,
+        ChatId = testUser.ChatId,
+        Goal = "Scheduled reminder persistence test",
+        Status = AgentTaskStatuses.Active,
+        CreatedAt = DateTime.UtcNow,
+        UpdatedAt = DateTime.UtcNow,
+        Steps =
+        [
+            new AgentTaskStep
+            {
+                StepNumber = 1,
+                Description = "Prepare reminder storage.",
+                ScheduledAtUtc = scheduledStepTime,
+                ScheduleNote = "Review scheduled task storage",
+                CreatedAt = DateTime.UtcNow
+            },
+            new AgentTaskStep
+            {
+                StepNumber = 2,
+                Description = "Already reminded step.",
+                ScheduledAtUtc = scheduledStepTime.AddHours(1),
+                ReminderSentAtUtc = scheduledStepTime.AddHours(1).AddMinutes(5),
+                CreatedAt = DateTime.UtcNow
+            }
+        ]
+    };
+    dbContext.AgentTasks.Add(scheduledTask);
+    await dbContext.SaveChangesAsync(CancellationToken.None);
+
+    AgentTask persistedScheduledTask = await dbContext.AgentTasks
+        .Include(x => x.Steps)
+        .SingleAsync(x => x.Id == scheduledTask.Id, CancellationToken.None);
+    AgentTaskStep persistedScheduledStep = persistedScheduledTask.Steps.Single(x => x.StepNumber == 1);
+    AssertEqual(scheduledStepTime, persistedScheduledStep.ScheduledAtUtc, "AgentTaskStep persists ScheduledAtUtc");
+    AssertEqual("Review scheduled task storage", persistedScheduledStep.ScheduleNote, "AgentTaskStep persists ScheduleNote");
+    AssertTrue(persistedScheduledTask.Steps.Single(x => x.StepNumber == 2).ReminderSentAtUtc.HasValue, "AgentTaskStep persists ReminderSentAtUtc");
+    string renderedScheduledTask = AgentTaskService.RenderTask(persistedScheduledTask);
+    AssertTrue(renderedScheduledTask.Contains("scheduled 2026-06-28 18:30 UTC", StringComparison.OrdinalIgnoreCase), "RenderTask shows scheduled step time");
+    AssertTrue(renderedScheduledTask.Contains("Review scheduled task storage", StringComparison.OrdinalIgnoreCase), "RenderTask shows schedule note");
+    AssertTrue(renderedScheduledTask.Contains("reminded 2026-06-28 19:35 UTC", StringComparison.OrdinalIgnoreCase), "RenderTask shows reminder sent time");
+    dbContext.AgentTasks.Remove(persistedScheduledTask);
+    await dbContext.SaveChangesAsync(CancellationToken.None);
+
     CommandResult helpResult = await commandRouter.TryHandleAsync(TextMessage("/help"), testUser, dbContext, CancellationToken.None);
     AssertTrue(helpResult.Handled, "/help is handled");
     AssertTrue(helpResult.ReplyText?.Contains("/remember") == true, "/help lists memory commands");

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 using TelegramMessagingTool.Data;
 using TelegramMessagingTool.Models;
 
@@ -149,10 +150,40 @@ public sealed class AgentTaskService
         int total = task.Steps.Count;
         string steps = total == 0
             ? "No steps."
-            : string.Join("\n", task.Steps.OrderBy(x => x.StepNumber).Select(step =>
-                $"{(step.IsDone ? "[x]" : "[ ]")} {step.StepNumber}. {step.Description}"));
+            : string.Join("\n", task.Steps.OrderBy(x => x.StepNumber).Select(RenderTaskStep));
 
         return $"Task #{task.Id} [{task.Status}] {done}/{total} done\nGoal: {task.Goal}\n{steps}";
+    }
+
+    private static string RenderTaskStep(AgentTaskStep step)
+    {
+        string line = $"{(step.IsDone ? "[x]" : "[ ]")} {step.StepNumber}. {step.Description}";
+        List<string> scheduleParts = [];
+
+        if (step.ScheduledAtUtc is DateTime scheduledAtUtc)
+        {
+            scheduleParts.Add($"scheduled {FormatUtc(scheduledAtUtc)}");
+        }
+
+        if (step.ReminderSentAtUtc is DateTime reminderSentAtUtc)
+        {
+            scheduleParts.Add($"reminded {FormatUtc(reminderSentAtUtc)}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(step.ScheduleNote))
+        {
+            scheduleParts.Add(step.ScheduleNote.Trim());
+        }
+
+        return scheduleParts.Count == 0
+            ? line
+            : $"{line} ({string.Join("; ", scheduleParts)})";
+    }
+
+    private static string FormatUtc(DateTime value)
+    {
+        DateTime utcValue = value.Kind == DateTimeKind.Local ? value.ToUniversalTime() : DateTime.SpecifyKind(value, DateTimeKind.Utc);
+        return utcValue.ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture);
     }
 
     private static void MarkStepDone(AgentTaskStep step)
