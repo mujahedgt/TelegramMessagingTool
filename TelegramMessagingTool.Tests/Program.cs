@@ -155,6 +155,24 @@ string searchFinalAnswer = await searchFinalRunner.RunAsync([new OllamaMessageDt
 AssertEqual("Search-grounded final answer", searchFinalAnswer, "AgentRunner returns final search synthesis answer");
 AssertEqual(ModelTaskKind.ToolFinalAnswer, searchFinalChatClient.ModelTaskKinds.Single(), "AgentRunner uses tool-final model route for online-search final synthesis");
 
+DateTime scheduleNow = new(2026, 6, 26, 12, 0, 0, DateTimeKind.Utc);
+AssertTrue(ScheduleParser.TryParse("2026-06-28 18:30", scheduleNow, out ScheduleParseResult absoluteSchedule), "ScheduleParser parses yyyy-MM-dd HH:mm");
+AssertEqual(new DateTime(2026, 6, 28, 18, 30, 0, DateTimeKind.Utc), absoluteSchedule.ScheduledAtUtc, "ScheduleParser returns UTC absolute schedule time");
+AssertEqual("2026-06-28 18:30 UTC", absoluteSchedule.DisplayText, "ScheduleParser renders absolute schedule display");
+
+AssertTrue(ScheduleParser.TryParse("tomorrow 09:15", scheduleNow, out ScheduleParseResult tomorrowSchedule), "ScheduleParser parses tomorrow HH:mm");
+AssertEqual(new DateTime(2026, 6, 27, 9, 15, 0, DateTimeKind.Utc), tomorrowSchedule.ScheduledAtUtc, "ScheduleParser schedules tomorrow at requested UTC time");
+
+AssertTrue(ScheduleParser.TryParse("in 30m", scheduleNow, out ScheduleParseResult inMinutesSchedule), "ScheduleParser parses in Nm");
+AssertEqual(scheduleNow.AddMinutes(30), inMinutesSchedule.ScheduledAtUtc, "ScheduleParser schedules relative minutes");
+
+AssertTrue(ScheduleParser.TryParse("in 2h", scheduleNow, out ScheduleParseResult inHoursSchedule), "ScheduleParser parses in Nh");
+AssertEqual(scheduleNow.AddHours(2), inHoursSchedule.ScheduledAtUtc, "ScheduleParser schedules relative hours");
+
+AssertFalse(ScheduleParser.TryParse("yesterday 09:00", scheduleNow, out _), "ScheduleParser rejects unsupported natural language");
+AssertFalse(ScheduleParser.TryParse("in 0m", scheduleNow, out _), "ScheduleParser rejects zero delay");
+AssertFalse(ScheduleParser.TryParse("2026-06-26 11:59", scheduleNow, out _), "ScheduleParser rejects past absolute time");
+
 var searchDisabledSettings = new BotSettings(
     BotToken: "test-token",
     OllamaUrl: "http://localhost:11434/api/chat",

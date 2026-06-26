@@ -144,6 +144,11 @@ public sealed class ModelRoutingService
 
 # Phase 2: Scheduled Tasks and Telegram Reminders
 
+## Status
+
+- Task 2.1 is complete: `ScheduleParser` parses safe UTC schedule formats (`yyyy-MM-dd HH:mm`, `tomorrow HH:mm`, `in 30m`, `in 2h`) and rejects unsupported/past/zero-delay inputs.
+- Database fields, commands, and the background reminder loop are not implemented yet.
+
 ## Goal
 
 Allow task steps to have scheduled execution/reminder times and run a background reminder loop that sends Telegram reminders.
@@ -576,10 +581,11 @@ dotnet list TelegramMessagingTool/TelegramMessagingTool.csproj package --vulnera
 
 # Suggested Immediate Next Patch
 
-Implement **Phase 2 Task 2.1** only:
+Implement **Phase 2 Task 2.2** only:
 
-- Add `ScheduleParser` with safe formats: `yyyy-MM-dd HH:mm`, `tomorrow HH:mm`, `in 30m`, and `in 2h`.
-- Add parser tests only; do not add DB fields or background sending in the same patch.
-- Keep scheduling reminder execution for later Phase 2 tasks.
+- Add scheduled-reminder fields to `AgentTaskStep`: `ScheduledAtUtc`, `ReminderSentAtUtc`, and `ScheduleNote`.
+- Add an EF migration for the fields.
+- Update task rendering to show scheduled steps.
+- Add tests for model persistence and rendering only; do not add `/schedule` commands or background sending yet.
 
-This is the safest next foundation because it prepares scheduled task reminders without changing database schema or sending background Telegram messages yet.
+This keeps the next patch focused on storage/schema before Telegram reminder behavior.
