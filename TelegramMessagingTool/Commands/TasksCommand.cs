@@ -2,6 +2,7 @@ using Telegram.Bot.Types;
 using TelegramMessagingTool.Data;
 using TelegramMessagingTool.Models;
 using TelegramMessagingTool.Services;
+using TelegramMessagingTool.Telegram;
 
 namespace TelegramMessagingTool.Commands;
 
@@ -39,6 +40,9 @@ public sealed class TasksCommand : IBotCommand
             return $"#{task.Id} [{task.Status}] {done}/{total} - {task.Goal}";
         }));
 
-        return new CommandResult(true, "Task plans:\n" + reply + "\n\nUse /task <id> to view details.");
+        return new CommandResult(
+            true,
+            "Task plans:\n" + reply + "\n\nUse /task <id> to view details.",
+            InlineKeyboardFactory.ForTaskSummary(tasks[0].Id));
     }
 }

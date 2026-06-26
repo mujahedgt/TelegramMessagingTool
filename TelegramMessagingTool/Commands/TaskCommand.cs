@@ -2,6 +2,7 @@ using Telegram.Bot.Types;
 using TelegramMessagingTool.Data;
 using TelegramMessagingTool.Models;
 using TelegramMessagingTool.Services;
+using TelegramMessagingTool.Telegram;
 
 namespace TelegramMessagingTool.Commands;
 
@@ -33,7 +34,7 @@ public sealed class TaskCommand : IBotCommand
         AgentTask? task = await _agentTaskService.GetAsync(dbContext, user, taskId, cancellationToken);
         return task is null
             ? new CommandResult(true, $"Task #{taskId} was not found.")
-            : new CommandResult(true, AgentTaskService.RenderTask(task));
+            : new CommandResult(true, AgentTaskService.RenderTask(task), InlineKeyboardFactory.ForTaskDetails(task.Id));
     }
 
     private static bool TryParseTaskId(string messageText, string commandName, out int taskId)

@@ -941,10 +941,32 @@ await using (var dbContext = new TelegramDbContext())
     CommandResult tasksResult = await commandRouter.TryHandleAsync(TextMessage("/tasks"), testUser, dbContext, CancellationToken.None);
     AssertTrue(tasksResult.Handled, "/tasks is handled");
     AssertTrue(tasksResult.ReplyText?.Contains("inventory API", StringComparison.OrdinalIgnoreCase) == true, "/tasks lists planned goal");
+    AssertTrue(tasksResult.ReplyMarkup is not null, "/tasks includes inline task keyboard metadata");
+    AssertTrue(tasksResult.ReplyMarkup!.InlineKeyboard.SelectMany(row => row).Any(button => button.Text == "Open" && button.CallbackData == $"task:open:{taskId}"), "/tasks keyboard includes open callback for first task");
+
+    AssertTrue(TaskCallbackParser.TryParse($"task:open:{taskId}", out TaskCallback openTaskCallback), "TaskCallbackParser parses open callback");
+    AssertEqual(TaskCallbackVerb.Open, openTaskCallback.Verb, "TaskCallbackParser reads open verb");
+    AssertEqual(taskId, openTaskCallback.TaskId, "TaskCallbackParser reads open task id");
+    AssertTrue(TaskCallbackParser.TryParse($"task:done:{taskId}", out TaskCallback doneTaskCallback), "TaskCallbackParser parses done callback");
+    AssertEqual(TaskCallbackVerb.Done, doneTaskCallback.Verb, "TaskCallbackParser reads done verb");
+    AssertTrue(TaskCallbackParser.TryParse($"task:cancel:{taskId}", out TaskCallback cancelTaskCallback), "TaskCallbackParser parses cancel callback");
+    AssertEqual(TaskCallbackVerb.Cancel, cancelTaskCallback.Verb, "TaskCallbackParser reads cancel verb");
+    AssertFalse(TaskCallbackParser.TryParse("act:details:1", out _), "TaskCallbackParser rejects pending-action domain");
+    AssertFalse(TaskCallbackParser.TryParse("task:unknown:1", out _), "TaskCallbackParser rejects unknown task verb");
+    AssertFalse(TaskCallbackParser.TryParse("task:open:nope", out _), "TaskCallbackParser rejects non-numeric task id");
+    AssertFalse(TaskCallbackParser.TryParse("task:open", out _), "TaskCallbackParser rejects missing task id");
+    AssertFalse(TaskCallbackParser.TryParse("task:open:1:extra", out _), "TaskCallbackParser rejects extra callback parts");
+
+    InlineKeyboardMarkup taskDetailsMarkup = InlineKeyboardFactory.ForTaskDetails(taskId);
+    AssertTrue(taskDetailsMarkup.InlineKeyboard.SelectMany(row => row).Any(button => button.Text == "Done" && button.CallbackData == $"task:done:{taskId}"), "InlineKeyboardFactory creates task done button");
+    AssertTrue(taskDetailsMarkup.InlineKeyboard.SelectMany(row => row).Any(button => button.Text == "Cancel" && button.CallbackData == $"task:cancel:{taskId}"), "InlineKeyboardFactory creates task cancel button");
 
     CommandResult taskResult = await commandRouter.TryHandleAsync(TextMessage($"/task {taskId}"), testUser, dbContext, CancellationToken.None);
     AssertTrue(taskResult.Handled, "/task is handled");
     AssertTrue(taskResult.ReplyText?.Contains("[ ] 1.") == true, "/task shows task steps");
+    AssertTrue(taskResult.ReplyMarkup is not null, "/task includes inline task action keyboard metadata");
+    AssertTrue(taskResult.ReplyMarkup!.InlineKeyboard.SelectMany(row => row).Any(button => button.CallbackData == $"task:done:{taskId}"), "/task keyboard includes done callback");
+    AssertTrue(taskResult.ReplyMarkup!.InlineKeyboard.SelectMany(row => row).Any(button => button.CallbackData == $"task:cancel:{taskId}"), "/task keyboard includes cancel callback");
 
     CommandResult invalidScheduleResult = await commandRouter.TryHandleAsync(TextMessage($"/schedule {taskId} 1 yesterday 09:00"), testUser, dbContext, CancellationToken.None);
     AssertTrue(invalidScheduleResult.Handled, "/schedule invalid time is handled");

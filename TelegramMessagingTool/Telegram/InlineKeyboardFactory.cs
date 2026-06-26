@@ -14,4 +14,21 @@ public static class InlineKeyboardFactory
             ]
         ]);
     }
+
+    public static InlineKeyboardMarkup ForTaskSummary(int taskId)
+    {
+        return new InlineKeyboardMarkup([
+            [InlineKeyboardButton.WithCallbackData("Open", $"task:open:{taskId}")]
+        ]);
+    }
+
+    public static InlineKeyboardMarkup ForTaskDetails(int taskId)
+    {
+        return new InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton.WithCallbackData("Done", $"task:done:{taskId}"),
+                InlineKeyboardButton.WithCallbackData("Cancel", $"task:cancel:{taskId}")
+            ]
+        ]);
+    }
 }
