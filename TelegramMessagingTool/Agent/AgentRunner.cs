@@ -1,3 +1,5 @@
+using TelegramMessagingTool.Data;
+using TelegramMessagingTool.Models;
 using TelegramMessagingTool.Services;
 using TelegramMessagingTool.Tools;
 
@@ -24,7 +26,11 @@ public sealed class AgentRunner
         _maxToolIterations = Math.Max(1, maxToolIterations);
     }
 
-    public async Task<string> RunAsync(List<OllamaMessageDto> conversationContext, CancellationToken cancellationToken)
+    public async Task<string> RunAsync(
+        List<OllamaMessageDto> conversationContext,
+        CancellationToken cancellationToken,
+        TelegramDbContext? dbContext = null,
+        ConnectedUser? user = null)
     {
         SearchRoutingDecision searchRoutingDecision = await _searchRoutingClassifier.ClassifyAsync(conversationContext, cancellationToken);
         if (searchRoutingDecision.ShouldSearch
@@ -52,6 +58,18 @@ public sealed class AgentRunner
 
             if (tool.RequiresApproval)
             {
+                if (tool is IApprovalRequestTool approvalRequestTool && dbContext is not null && user is not null)
+                {
+                    ToolResult approvalRequestResult = await approvalRequestTool.CreatePendingActionAsync(
+                        toolCall.Input,
+                        dbContext,
+                        user,
+                        cancellationToken);
+                    return approvalRequestResult.Success
+                        ? approvalRequestResult.Output
+                        : $"Could not create approval request for tool '{tool.Name}': {approvalRequestResult.Output}";
+                }
+
                 return $"Tool '{tool.Name}' requires approval. Use /pending, /approve <id>, and /deny <id> for risky actions once that tool is wired into the approval flow.";
             }
 

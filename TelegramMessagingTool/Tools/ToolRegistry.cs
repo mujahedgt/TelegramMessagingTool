@@ -65,6 +65,11 @@ public sealed class ToolRegistry
             builder.AppendLine("Use run_dotnet_tests only when the user asks to run or verify the helper tests. Its input must be strict JSON: {\"target\":\"helper-tests\"}.");
         }
 
+        if (TryGet("publish_release", out _) || TryGet("restart_latest_bot", out _))
+        {
+            builder.AppendLine("publish_release and restart_latest_bot create high-risk pending approval requests only. They do not publish, stop, or restart anything directly.");
+        }
+
         builder.AppendLine("Available tools:");
 
         foreach (IAgentTool tool in Tools)

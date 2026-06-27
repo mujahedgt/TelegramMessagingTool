@@ -58,13 +58,14 @@ var taskReminderService = new TaskReminderService(new TelegramTaskReminderSender
 var ollamaClient = new OllamaChatClient(qwenClient, settings);
 var ollamaEmbeddingClient = new OllamaEmbeddingClient(embeddingClient, settings);
 ITextEmbeddingService? retrievalEmbeddingService = settings.EnableDocumentEmbeddings ? ollamaEmbeddingClient : null;
-var toolRegistry = ToolRegistryFactory.Create(settings, searchClient);
-ISearchRoutingClassifier searchRoutingClassifier = SearchRoutingClassifierFactory.Create(settings.SearchRoutingMode, ollamaClient);
 var documentStorage = new DocumentStorageService(Path.Combine(Environment.CurrentDirectory, "UserFiles"));
 string importDirectory = Path.Combine(Environment.CurrentDirectory, "ImportInbox");
 var pendingActionService = new PendingActionService();
+var toolRegistry = ToolRegistryFactory.Create(settings, searchClient, pendingActionService);
+ISearchRoutingClassifier searchRoutingClassifier = SearchRoutingClassifierFactory.Create(settings.SearchRoutingMode, ollamaClient);
 var pendingActionExecutor = new PendingActionExecutor(new SystemProcessTerminator(), documentStorage);
 var pendingActionCallbackService = new PendingActionCallbackService(pendingActionService, pendingActionExecutor, settings);
+
 var agentTaskService = new AgentTaskService();
 var taskCallbackService = new TaskCallbackService(agentTaskService);
 var documentIndexingService = new DocumentIndexingService(documentStorage);
@@ -322,7 +323,11 @@ async Task<string> ProcessConsoleInputAsync(string input, CancellationToken canc
         cancellationToken: cancellationToken,
         toolInstructions: toolRegistry.RenderToolInstructions());
 
-    string finalAnswer = await agentRunner.RunAsync(conversationContext, cancellationToken);
+    string finalAnswer = await agentRunner.RunAsync(
+        conversationContext,
+        cancellationToken,
+        dbContext,
+        consoleUser);
     WriteConsoleEvent("MESSAGE", "console", $"answered {finalAnswer.Length} chars", ConsoleEventLevel.Success);
 
     dbContext.Messages.Add(new ChatMessage
@@ -530,7 +535,11 @@ async Task HandleUpdateAsync(
                 cancellationToken: cancellationToken,
                 toolInstructions: toolRegistry.RenderToolInstructions());
 
-        string finalAnswer = await agentRunner.RunAsync(conversationContext, cancellationToken);
+        string finalAnswer = await agentRunner.RunAsync(
+            conversationContext,
+            cancellationToken,
+            dbContext,
+            user);
         WriteConsoleEvent("MESSAGE", message.Chat.Username ?? message.Chat.Id.ToString(), $"answered {finalAnswer.Length} chars", ConsoleEventLevel.Success);
 
         dbContext.Messages.Add(new ChatMessage

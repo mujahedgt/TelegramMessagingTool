@@ -1,10 +1,11 @@
+using TelegramMessagingTool.Services;
 using TelegramMessagingTool.Tools.CommandExecution;
 
 namespace TelegramMessagingTool.Tools;
 
 public static class ToolRegistryFactory
 {
-    public static ToolRegistry Create(BotSettings settings, HttpClient searchClient)
+    public static ToolRegistry Create(BotSettings settings, HttpClient searchClient, PendingActionService? pendingActionService = null)
     {
         var tools = new List<IAgentTool>
         {
@@ -24,6 +25,12 @@ public static class ToolRegistryFactory
             tools.Add(new GitDiffTool(settings.SafeCommandProjectRoot));
             tools.Add(new GitLogRecentTool(settings.SafeCommandProjectRoot));
             tools.Add(new RunDotnetTestsTool(settings.SafeCommandProjectRoot));
+
+            if (pendingActionService is not null)
+            {
+                tools.Add(new PublishReleaseRequestTool(pendingActionService, settings, settings.SafeCommandProjectRoot));
+                tools.Add(new RestartLatestBotRequestTool(pendingActionService, settings, settings.SafeCommandProjectRoot));
+            }
         }
 
         return new ToolRegistry(tools);

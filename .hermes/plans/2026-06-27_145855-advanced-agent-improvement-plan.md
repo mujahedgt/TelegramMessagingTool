@@ -362,14 +362,16 @@ Input is limited to a known enum:
 
 No arbitrary command text is accepted.
 
-### Task 1.4 Add approval-gated release/restart tools later
+### Task 1.4 Add approval-gated release/restart request tools ✅ Foundation done
+
+**Status:** Added `publish_release` and `restart_latest_bot` as approval-request tools behind `ENABLE_SAFE_COMMAND_TOOLS=true`. When called through the agent with user/database context, they create high-risk `PendingAction` rows only. Approving them currently returns the existing safe `No automatic execution is registered` result; no publish, stop, start, or restart execution is wired yet.
 
 Tools:
 
 - `publish_release`
 - `restart_latest_bot`
 
-These must create pending actions and require admin approval.
+These create pending actions and require admin approval. Direct execution remains intentionally unimplemented until a later reviewable executor patch.
 
 ---
 

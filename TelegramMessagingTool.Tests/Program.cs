@@ -839,6 +839,40 @@ await using (var dbContext = new TelegramDbContext())
     AssertTrue(samplePendingMarkup.InlineKeyboard.SelectMany(row => row).Any(button => button.Text == "Deny" && button.CallbackData == "act:deny:123"), "InlineKeyboardFactory creates deny button");
     AssertTrue(samplePendingMarkup.InlineKeyboard.SelectMany(row => row).Any(button => button.Text == "Details" && button.CallbackData == "act:details:123"), "InlineKeyboardFactory creates details button");
 
+    BotSettings safeCommandAdminSettings = adminTestSettings with
+    {
+        EnableSafeCommandTools = true,
+        SafeCommandProjectRoot = Directory.GetCurrentDirectory()
+    };
+    ToolRegistry approvalToolRegistry = ToolRegistryFactory.Create(safeCommandAdminSettings, new HttpClient(), pendingActionService);
+    AssertTrue(approvalToolRegistry.TryGet("publish_release", out IAgentTool? publishReleaseTool), "ToolRegistryFactory includes publish_release approval request tool when pending service is provided");
+    AssertTrue(approvalToolRegistry.TryGet("restart_latest_bot", out IAgentTool? restartLatestBotTool), "ToolRegistryFactory includes restart_latest_bot approval request tool when pending service is provided");
+    AssertTrue(publishReleaseTool!.RequiresApproval, "publish_release requires approval");
+    AssertTrue(restartLatestBotTool!.RequiresApproval, "restart_latest_bot requires approval");
+
+    var releaseRequestChatClient = new ScriptedChatClient([
+        "{\"type\":\"tool_call\",\"tool\":\"publish_release\",\"input\":\"{\\\"reason\\\":\\\"verify latest changes\\\"}\"}"
+    ]);
+    var releaseRequestRunner = new AgentRunner(
+        releaseRequestChatClient,
+        approvalToolRegistry,
+        searchRoutingClassifier: new OffSearchRoutingClassifier());
+    string releaseRequestReply = await releaseRequestRunner.RunAsync(
+        [new OllamaMessageDto("user", "request a publish release approval")],
+        CancellationToken.None,
+        dbContext,
+        testUser);
+    AssertTrue(releaseRequestReply.Contains("Pending action #"), "AgentRunner creates a pending action for approval request tools");
+    PendingAction publishReleaseAction = await dbContext.PendingActions.OrderByDescending(x => x.Id).FirstAsync(x => x.ToolName == "publish_release", CancellationToken.None);
+    AssertEqual(PendingActionStatuses.Pending, publishReleaseAction.Status, "publish_release request is stored as pending");
+    AssertTrue(publishReleaseAction.PayloadJson.Contains("verify latest changes"), "publish_release request stores the reason in payload JSON");
+
+    PendingActionDecision publishApproval = await pendingActionService.ApproveAsync(dbContext, testUser, publishReleaseAction.Id, CancellationToken.None);
+    AssertTrue(publishApproval.Success, "publish_release pending action can be approved");
+    PendingActionExecutionResult publishExecution = await pendingActionExecutor.ExecuteApprovedAsync(dbContext, publishApproval.Action!, CancellationToken.None);
+    AssertFalse(publishExecution.Executed, "publish_release approval does not execute automatically yet");
+    AssertTrue(publishExecution.Message.Contains("No automatic execution", StringComparison.OrdinalIgnoreCase), "publish_release approval explains that no executor is registered");
+
     AssertTrue(PendingActionCallbackParser.TryParse("act:approve:123", out PendingActionCallback approveCallback), "PendingActionCallbackParser parses approve callback");
     AssertEqual(PendingActionCallbackVerb.Approve, approveCallback.Verb, "PendingActionCallbackParser reads approve verb");
     AssertEqual(123, approveCallback.ActionId, "PendingActionCallbackParser reads approve action id");
