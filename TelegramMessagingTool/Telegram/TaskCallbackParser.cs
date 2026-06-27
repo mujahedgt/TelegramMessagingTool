@@ -4,10 +4,11 @@ public enum TaskCallbackVerb
 {
     Open,
     Done,
+    DoneStep,
     Cancel
 }
 
-public sealed record TaskCallback(TaskCallbackVerb Verb, int TaskId);
+public sealed record TaskCallback(TaskCallbackVerb Verb, int TaskId, int? StepNumber = null);
 
 public static class TaskCallbackParser
 {
@@ -23,7 +24,7 @@ public static class TaskCallbackParser
         }
 
         string[] parts = callbackData.Split(':', StringSplitOptions.None);
-        if (parts.Length != 3)
+        if (parts.Length is not (3 or 4))
         {
             return false;
         }
@@ -43,6 +44,22 @@ public static class TaskCallbackParser
             return false;
         }
 
+        if (verb == TaskCallbackVerb.DoneStep)
+        {
+            if (parts.Length != 4 || !int.TryParse(parts[3], out int stepNumber) || stepNumber <= 0)
+            {
+                return false;
+            }
+
+            callback = new TaskCallback(verb, taskId, stepNumber);
+            return true;
+        }
+
+        if (parts.Length != 3)
+        {
+            return false;
+        }
+
         callback = new TaskCallback(verb, taskId);
         return true;
     }
@@ -58,6 +75,9 @@ public static class TaskCallbackParser
                 return true;
             case "done":
                 verb = TaskCallbackVerb.Done;
+                return true;
+            case "done-step":
+                verb = TaskCallbackVerb.DoneStep;
                 return true;
             case "cancel":
                 verb = TaskCallbackVerb.Cancel;

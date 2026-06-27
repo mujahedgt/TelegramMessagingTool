@@ -28,6 +28,7 @@ public sealed class TaskCallbackService
         {
             TaskCallbackVerb.Open => await OpenAsync(callback.TaskId, user, dbContext, cancellationToken),
             TaskCallbackVerb.Done => NotEnabledYet("Done"),
+            TaskCallbackVerb.DoneStep => NotEnabledYet($"Done step {callback.StepNumber}"),
             TaskCallbackVerb.Cancel => NotEnabledYet("Cancel"),
             _ => TaskCallbackResult.NotHandled
         };

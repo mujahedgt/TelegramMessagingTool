@@ -275,6 +275,7 @@ Safety:
 - Task 3A.3 is complete: callback queries for pending actions now answer Telegram callbacks and reuse the existing admin, ownership, approval, denial, details, and execution checks.
 - Task 3A.4 is complete: task callback parsing and task inline keyboard metadata are prepared for `/tasks` and `/task` without executing task mutations from buttons yet.
 - Task 3A.5 is complete: `task:open:<taskId>` callback handling is wired as a read-only action; `task:done` and `task:cancel` callbacks are acknowledged but intentionally do not mutate task state yet.
+- Task 3A.6 is complete: `/task <id>` now includes step-specific `task:done-step:<taskId>:<stepNumber>` button metadata and parser support, still without mutating task state from buttons.
 
 ### Goal
 

@@ -34,7 +34,7 @@ public sealed class TaskCommand : IBotCommand
         AgentTask? task = await _agentTaskService.GetAsync(dbContext, user, taskId, cancellationToken);
         return task is null
             ? new CommandResult(true, $"Task #{taskId} was not found.")
-            : new CommandResult(true, AgentTaskService.RenderTask(task), InlineKeyboardFactory.ForTaskDetails(task.Id));
+            : new CommandResult(true, AgentTaskService.RenderTask(task), InlineKeyboardFactory.ForTaskDetails(task));
     }
 
     private static bool TryParseTaskId(string messageText, string commandName, out int taskId)

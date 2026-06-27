@@ -949,6 +949,10 @@ await using (var dbContext = new TelegramDbContext())
     AssertEqual(taskId, openTaskCallback.TaskId, "TaskCallbackParser reads open task id");
     AssertTrue(TaskCallbackParser.TryParse($"task:done:{taskId}", out TaskCallback doneTaskCallback), "TaskCallbackParser parses done callback");
     AssertEqual(TaskCallbackVerb.Done, doneTaskCallback.Verb, "TaskCallbackParser reads done verb");
+    AssertTrue(TaskCallbackParser.TryParse($"task:done-step:{taskId}:1", out TaskCallback doneStepTaskCallback), "TaskCallbackParser parses done-step callback");
+    AssertEqual(TaskCallbackVerb.DoneStep, doneStepTaskCallback.Verb, "TaskCallbackParser reads done-step verb");
+    AssertEqual(taskId, doneStepTaskCallback.TaskId, "TaskCallbackParser reads done-step task id");
+    AssertEqual(1, doneStepTaskCallback.StepNumber, "TaskCallbackParser reads done-step step number");
     AssertTrue(TaskCallbackParser.TryParse($"task:cancel:{taskId}", out TaskCallback cancelTaskCallback), "TaskCallbackParser parses cancel callback");
     AssertEqual(TaskCallbackVerb.Cancel, cancelTaskCallback.Verb, "TaskCallbackParser reads cancel verb");
     AssertFalse(TaskCallbackParser.TryParse("act:details:1", out _), "TaskCallbackParser rejects pending-action domain");
@@ -956,6 +960,8 @@ await using (var dbContext = new TelegramDbContext())
     AssertFalse(TaskCallbackParser.TryParse("task:open:nope", out _), "TaskCallbackParser rejects non-numeric task id");
     AssertFalse(TaskCallbackParser.TryParse("task:open", out _), "TaskCallbackParser rejects missing task id");
     AssertFalse(TaskCallbackParser.TryParse("task:open:1:extra", out _), "TaskCallbackParser rejects extra callback parts");
+    AssertFalse(TaskCallbackParser.TryParse("task:done-step:1", out _), "TaskCallbackParser rejects done-step without step number");
+    AssertFalse(TaskCallbackParser.TryParse("task:done-step:1:nope", out _), "TaskCallbackParser rejects non-numeric done-step step number");
 
     InlineKeyboardMarkup taskDetailsMarkup = InlineKeyboardFactory.ForTaskDetails(taskId);
     AssertTrue(taskDetailsMarkup.InlineKeyboard.SelectMany(row => row).Any(button => button.Text == "Done" && button.CallbackData == $"task:done:{taskId}"), "InlineKeyboardFactory creates task done button");
@@ -966,6 +972,7 @@ await using (var dbContext = new TelegramDbContext())
     AssertTrue(taskResult.ReplyText?.Contains("[ ] 1.") == true, "/task shows task steps");
     AssertTrue(taskResult.ReplyMarkup is not null, "/task includes inline task action keyboard metadata");
     AssertTrue(taskResult.ReplyMarkup!.InlineKeyboard.SelectMany(row => row).Any(button => button.CallbackData == $"task:done:{taskId}"), "/task keyboard includes done callback");
+    AssertTrue(taskResult.ReplyMarkup!.InlineKeyboard.SelectMany(row => row).Any(button => button.CallbackData == $"task:done-step:{taskId}:1"), "/task keyboard includes done-step callback for step 1");
     AssertTrue(taskResult.ReplyMarkup!.InlineKeyboard.SelectMany(row => row).Any(button => button.CallbackData == $"task:cancel:{taskId}"), "/task keyboard includes cancel callback");
 
     var taskCallbackService = new TaskCallbackService(agentTaskService);
@@ -980,6 +987,10 @@ await using (var dbContext = new TelegramDbContext())
     AssertTrue(doneTaskCallbackResult.Handled, "TaskCallbackService handles done callbacks safely");
     AssertTrue(doneTaskCallbackResult.MessageText?.Contains("not enabled yet", StringComparison.OrdinalIgnoreCase) == true, "TaskCallbackService does not execute done callbacks yet");
     AssertFalse((await dbContext.AgentTaskSteps.FirstAsync(x => x.AgentTaskId == taskId && x.StepNumber == 1, CancellationToken.None)).IsDone, "TaskCallbackService done callback does not mutate task state yet");
+    TaskCallbackResult doneStepTaskCallbackResult = await taskCallbackService.HandleAsync($"task:done-step:{taskId}:1", testUser, dbContext, CancellationToken.None);
+    AssertTrue(doneStepTaskCallbackResult.Handled, "TaskCallbackService handles done-step callbacks safely");
+    AssertTrue(doneStepTaskCallbackResult.MessageText?.Contains("not enabled yet", StringComparison.OrdinalIgnoreCase) == true, "TaskCallbackService does not execute done-step callbacks yet");
+    AssertFalse((await dbContext.AgentTaskSteps.FirstAsync(x => x.AgentTaskId == taskId && x.StepNumber == 1, CancellationToken.None)).IsDone, "TaskCallbackService done-step callback does not mutate task state yet");
     TaskCallbackResult cancelTaskCallbackResult = await taskCallbackService.HandleAsync($"task:cancel:{taskId}", testUser, dbContext, CancellationToken.None);
     AssertTrue(cancelTaskCallbackResult.Handled, "TaskCallbackService handles cancel callbacks safely");
     AssertTrue(cancelTaskCallbackResult.MessageText?.Contains("not enabled yet", StringComparison.OrdinalIgnoreCase) == true, "TaskCallbackService does not execute cancel callbacks yet");
