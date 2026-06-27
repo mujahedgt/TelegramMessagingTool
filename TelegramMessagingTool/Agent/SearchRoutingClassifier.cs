@@ -1,4 +1,6 @@
+using System.Text.Json;
 using System.Text.RegularExpressions;
+using TelegramMessagingTool.Services;
 
 namespace TelegramMessagingTool.Agent;
 
@@ -31,7 +33,7 @@ public sealed class OffSearchRoutingClassifier : ISearchRoutingClassifier
 
 public static class SearchRoutingClassifierFactory
 {
-    public static ISearchRoutingClassifier Create(string? mode)
+    public static ISearchRoutingClassifier Create(string? mode, IChatClient? chatClient = null)
     {
         string normalized = string.IsNullOrWhiteSpace(mode)
             ? "heuristic"
@@ -40,9 +42,106 @@ public static class SearchRoutingClassifierFactory
         return normalized switch
         {
             "off" => new OffSearchRoutingClassifier(),
+            "llm" when chatClient is not null => new LlmSearchRoutingClassifier(chatClient),
             "heuristic" => new HeuristicSearchRoutingClassifier(),
             _ => new HeuristicSearchRoutingClassifier()
         };
+    }
+}
+
+public sealed class LlmSearchRoutingClassifier : ISearchRoutingClassifier
+{
+    private readonly IChatClient _chatClient;
+
+    public LlmSearchRoutingClassifier(IChatClient chatClient)
+    {
+        _chatClient = chatClient;
+    }
+
+    public async Task<SearchRoutingDecision> ClassifyAsync(
+        IReadOnlyList<OllamaMessageDto> conversationContext,
+        CancellationToken cancellationToken)
+    {
+        string latestUserMessage = conversationContext
+            .LastOrDefault(x => string.Equals(x.role, "user", StringComparison.OrdinalIgnoreCase))
+            ?.content
+            ?.Trim() ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(latestUserMessage))
+        {
+            return SearchRoutingDecision.NoSearch("No user message found.");
+        }
+
+        var classifierContext = new List<OllamaMessageDto>
+        {
+            new("system", BuildClassifierPrompt()),
+            new("user", latestUserMessage)
+        };
+
+        string response = await _chatClient.AskAsync(classifierContext, cancellationToken, ModelTaskKind.Chat);
+        return TryParseDecision(response, out SearchRoutingDecision decision)
+            ? decision
+            : SearchRoutingDecision.NoSearch("LLM search-routing classifier returned invalid JSON.");
+    }
+
+    public static string BuildClassifierPrompt()
+    {
+        return """
+You decide whether the latest user message needs live web search before answering.
+Return ONLY strict JSON with this exact shape:
+{"should_search":false,"query":"","reason":"brief reason","confidence":0.0}
+
+Rules:
+- should_search=true only if the answer needs current/external public facts.
+- Search for latest/current/recent versions, prices, market values, news, releases, product specs, or anything likely stale.
+- should_search=false for coding explanations, local project questions, database/schema questions, personal conversation, or definitions that do not need current facts.
+- If should_search=true, query must be a clean search query.
+- confidence must be between 0 and 1.
+""";
+    }
+
+    public static bool TryParseDecision(string response, out SearchRoutingDecision decision)
+    {
+        decision = SearchRoutingDecision.NoSearch("Invalid search-routing JSON.");
+
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(response.Trim());
+            JsonElement root = document.RootElement;
+
+            if (!root.TryGetProperty("should_search", out JsonElement shouldSearchElement)
+                || shouldSearchElement.ValueKind is not JsonValueKind.True and not JsonValueKind.False)
+            {
+                return false;
+            }
+
+            bool shouldSearch = shouldSearchElement.GetBoolean();
+            string query = root.TryGetProperty("query", out JsonElement queryElement) && queryElement.ValueKind == JsonValueKind.String
+                ? queryElement.GetString()?.Trim() ?? string.Empty
+                : string.Empty;
+            string reason = root.TryGetProperty("reason", out JsonElement reasonElement) && reasonElement.ValueKind == JsonValueKind.String
+                ? reasonElement.GetString()?.Trim() ?? string.Empty
+                : string.Empty;
+            double confidence = root.TryGetProperty("confidence", out JsonElement confidenceElement) && confidenceElement.TryGetDouble(out double parsedConfidence)
+                ? Math.Clamp(parsedConfidence, 0, 1)
+                : 0;
+
+            if (shouldSearch && string.IsNullOrWhiteSpace(query))
+            {
+                return false;
+            }
+
+            decision = new SearchRoutingDecision(
+                shouldSearch,
+                shouldSearch ? query : string.Empty,
+                string.IsNullOrWhiteSpace(reason) ? "LLM search-routing decision." : reason,
+                confidence);
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 }
 

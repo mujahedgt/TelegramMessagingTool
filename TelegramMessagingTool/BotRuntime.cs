@@ -101,7 +101,7 @@ public static class BotConfiguration
         }
 
         string normalized = value.Trim().ToLowerInvariant();
-        return normalized is "heuristic" or "off"
+        return normalized is "heuristic" or "off" or "llm"
             ? normalized
             : "heuristic";
     }

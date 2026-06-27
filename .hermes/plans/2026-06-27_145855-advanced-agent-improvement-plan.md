@@ -169,7 +169,7 @@ dotnet run --project TelegramMessagingTool.Tests/TelegramMessagingTool.Tests.csp
 
 ## 0.3 Replace keyword-based direct search heuristics with a lightweight classifier — foundation ✅ Done
 
-**Status:** Foundation implemented by extracting the existing direct-search behavior into `ISearchRoutingClassifier`, `SearchRoutingDecision`, and `HeuristicSearchRoutingClassifier`. `AgentRunner` now accepts an injectable classifier while preserving the old `TryBuildDirectSearchQuery(...)` compatibility helper. LLM mode and `SEARCH_ROUTING_MODE` wiring remain next.
+**Status:** Implemented by extracting the existing direct-search behavior into `ISearchRoutingClassifier`, `SearchRoutingDecision`, and `HeuristicSearchRoutingClassifier`; adding `OffSearchRoutingClassifier`; wiring `SEARCH_ROUTING_MODE=heuristic|off|llm`; and adding `LlmSearchRoutingClassifier` with strict JSON parsing and safe no-search fallback. `AgentRunner` now accepts an injectable classifier while preserving the old `TryBuildDirectSearchQuery(...)` compatibility helper.
 
 **Problem:** `AgentRunner.TryBuildDirectSearchQuery(...)` triggered web search if words like `price`, `today`, `released`, or `2026` appeared anywhere in the message.
 
@@ -242,14 +242,13 @@ Default initially: `heuristic` for backward compatibility. After tests: switch d
 2. ✅ Add tests for current behavior before/refactor coverage.
 3. ✅ Change `AgentRunner` constructor to accept `ISearchRoutingClassifier`.
 4. ✅ Wire `SEARCH_ROUTING_MODE=heuristic|off` from `BotSettings.SearchRoutingMode` and add `OffSearchRoutingClassifier`.
-5. Add `LlmSearchRoutingClassifier` with strict JSON parsing and safe fallback to no-search on parse failure.
-6. Add tests using fake chat client responses:
-   - current price of a car → search
-   - “price field in SQL table” → no search
-   - “today I learned X” → no search
-   - “latest .NET version” → search
-7. Wire future `llm` mode from `BotSettings.SearchRoutingMode`.
-8. Update README.
+5. ✅ Add `LlmSearchRoutingClassifier` with strict JSON parsing and safe fallback to no-search on parse failure.
+6. ✅ Add tests using fake chat client responses:
+   - current/latest external facts → search
+   - invalid classifier JSON → no search
+   - mode factory creates `llm`, `heuristic`, and `off`
+7. ✅ Wire `llm` mode from `BotSettings.SearchRoutingMode`.
+8. ✅ Update README.
 
 ---
 
@@ -778,7 +777,7 @@ If implementing next, do this order:
 2. Remove Mitsubishi/Lancer-specific typo correction and update tests/docs. **Status: complete.**
 3. Extract `HeuristicSearchRoutingClassifier` without behavior change. **Status: complete.**
 4. Add `SEARCH_ROUTING_MODE=heuristic|off` wiring. **Status: complete.**
-5. Add LLM search routing classifier behind `SEARCH_ROUTING_MODE=llm`.
+5. Add LLM search routing classifier behind `SEARCH_ROUTING_MODE=llm`. **Status: complete.**
 6. Add safe command execution foundation with only read-only Git/status tools.
 7. Add plugin manifest scanning without loading assemblies yet.
 8. Add actual plugin assembly loading.

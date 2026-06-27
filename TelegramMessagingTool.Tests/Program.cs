@@ -91,6 +91,9 @@ try
     Environment.SetEnvironmentVariable("SEARCH_ROUTING_MODE", "off");
     AssertEqual("off", BotConfiguration.LoadFromEnvironment().SearchRoutingMode, "LoadFromEnvironment reads SEARCH_ROUTING_MODE=off");
 
+    Environment.SetEnvironmentVariable("SEARCH_ROUTING_MODE", "llm");
+    AssertEqual("llm", BotConfiguration.LoadFromEnvironment().SearchRoutingMode, "LoadFromEnvironment reads SEARCH_ROUTING_MODE=llm");
+
     Environment.SetEnvironmentVariable("SEARCH_ROUTING_MODE", "unknown");
     AssertEqual("heuristic", BotConfiguration.LoadFromEnvironment().SearchRoutingMode, "LoadFromEnvironment falls back to heuristic for invalid SEARCH_ROUTING_MODE");
 }
@@ -165,6 +168,23 @@ SearchRoutingDecision offSearchDecision = await offSearchRoutingClassifier.Class
 AssertFalse(offSearchDecision.ShouldSearch, "SearchRoutingClassifierFactory creates an off classifier that disables direct online search");
 AssertTrue(SearchRoutingClassifierFactory.Create("heuristic") is HeuristicSearchRoutingClassifier, "SearchRoutingClassifierFactory creates heuristic classifier");
 AssertTrue(SearchRoutingClassifierFactory.Create("invalid") is HeuristicSearchRoutingClassifier, "SearchRoutingClassifierFactory falls back to heuristic classifier");
+var llmRoutingClient = new ScriptedChatClient([
+    "{\"should_search\":true,\"query\":\"latest .NET version\",\"reason\":\"needs current external facts\",\"confidence\":0.92}"
+]);
+ISearchRoutingClassifier llmSearchRoutingClassifier = SearchRoutingClassifierFactory.Create("llm", llmRoutingClient);
+AssertTrue(llmSearchRoutingClassifier is LlmSearchRoutingClassifier, "SearchRoutingClassifierFactory creates LLM classifier when chat client is provided");
+SearchRoutingDecision llmSearchDecision = await llmSearchRoutingClassifier.ClassifyAsync(
+    [new OllamaMessageDto("user", "what is the latest .NET version")],
+    CancellationToken.None);
+AssertTrue(llmSearchDecision.ShouldSearch, "LlmSearchRoutingClassifier accepts should_search=true JSON");
+AssertEqual("latest .NET version", llmSearchDecision.Query, "LlmSearchRoutingClassifier parses query");
+AssertEqual("needs current external facts", llmSearchDecision.Reason, "LlmSearchRoutingClassifier parses reason");
+AssertEqual(ModelTaskKind.Chat, llmRoutingClient.ModelTaskKinds.Single(), "LlmSearchRoutingClassifier uses chat route for classification");
+var invalidLlmRoutingClient = new ScriptedChatClient(["not json"]);
+SearchRoutingDecision invalidLlmSearchDecision = await new LlmSearchRoutingClassifier(invalidLlmRoutingClient).ClassifyAsync(
+    [new OllamaMessageDto("user", "latest phone price")],
+    CancellationToken.None);
+AssertFalse(invalidLlmSearchDecision.ShouldSearch, "LlmSearchRoutingClassifier falls back to no-search on invalid JSON");
 
 var calculator = new CalculatorTool();
 ToolResult calculation = await calculator.ExecuteAsync("25 * 19", CancellationToken.None);
