@@ -76,6 +76,7 @@ AssertEqual(1, BotConfiguration.ParseClampedInt("0", defaultValue: 8, minValue: 
 AssertEqual(50, BotConfiguration.ParseClampedInt("500", defaultValue: 8, minValue: 1, maxValue: 50), "ParseClampedInt clamps above maximum");
 AssertEqual(8, BotConfiguration.ParseClampedInt("not-a-number", defaultValue: 8, minValue: 1, maxValue: 50), "ParseClampedInt returns default for invalid value");
 string? previousConversationMaxHistory = Environment.GetEnvironmentVariable("CONVERSATION_MAX_HISTORY");
+string? previousSearchRoutingMode = Environment.GetEnvironmentVariable("SEARCH_ROUTING_MODE");
 try
 {
     Environment.SetEnvironmentVariable("CONVERSATION_MAX_HISTORY", "13");
@@ -83,10 +84,20 @@ try
 
     Environment.SetEnvironmentVariable("CONVERSATION_MAX_HISTORY", "500");
     AssertEqual(50, BotConfiguration.LoadFromEnvironment().ConversationMaxHistory, "LoadFromEnvironment clamps high CONVERSATION_MAX_HISTORY");
+
+    Environment.SetEnvironmentVariable("SEARCH_ROUTING_MODE", null);
+    AssertEqual("heuristic", BotConfiguration.LoadFromEnvironment().SearchRoutingMode, "LoadFromEnvironment defaults SEARCH_ROUTING_MODE to heuristic");
+
+    Environment.SetEnvironmentVariable("SEARCH_ROUTING_MODE", "off");
+    AssertEqual("off", BotConfiguration.LoadFromEnvironment().SearchRoutingMode, "LoadFromEnvironment reads SEARCH_ROUTING_MODE=off");
+
+    Environment.SetEnvironmentVariable("SEARCH_ROUTING_MODE", "unknown");
+    AssertEqual("heuristic", BotConfiguration.LoadFromEnvironment().SearchRoutingMode, "LoadFromEnvironment falls back to heuristic for invalid SEARCH_ROUTING_MODE");
 }
 finally
 {
     Environment.SetEnvironmentVariable("CONVERSATION_MAX_HISTORY", previousConversationMaxHistory);
+    Environment.SetEnvironmentVariable("SEARCH_ROUTING_MODE", previousSearchRoutingMode);
 }
 
 AssertTrue(CommandParser.TryParse("/status", out ParsedCommand parsedStatus), "CommandParser parses bare command");
@@ -147,6 +158,13 @@ AssertEqual(newestMitsubishiDecision.Query, newestMitsubishiQuery, "AgentRunner 
 AssertFalse(
     heuristicSearchRoutingClassifier.Classify([new OllamaMessageDto("user", "explain delegates in C#")]).ShouldSearch,
     "HeuristicSearchRoutingClassifier skips non-current local/explanation questions");
+ISearchRoutingClassifier offSearchRoutingClassifier = SearchRoutingClassifierFactory.Create("off");
+SearchRoutingDecision offSearchDecision = await offSearchRoutingClassifier.ClassifyAsync(
+    [new OllamaMessageDto("user", "what is the newest car from mitsubishi")],
+    CancellationToken.None);
+AssertFalse(offSearchDecision.ShouldSearch, "SearchRoutingClassifierFactory creates an off classifier that disables direct online search");
+AssertTrue(SearchRoutingClassifierFactory.Create("heuristic") is HeuristicSearchRoutingClassifier, "SearchRoutingClassifierFactory creates heuristic classifier");
+AssertTrue(SearchRoutingClassifierFactory.Create("invalid") is HeuristicSearchRoutingClassifier, "SearchRoutingClassifierFactory falls back to heuristic classifier");
 
 var calculator = new CalculatorTool();
 ToolResult calculation = await calculator.ExecuteAsync("25 * 19", CancellationToken.None);
@@ -215,7 +233,8 @@ var searchDisabledSettings = new BotSettings(
     DatabaseConnectionString: "test-db",
     ApplyMigrations: true,
     LogMessageContent: false,
-    ConversationMaxHistory: 8);
+    ConversationMaxHistory: 8,
+    SearchRoutingMode: "heuristic");
 var searchEnabledSettings = searchDisabledSettings with { EnableOnlineSearch = true };
 
 var defaultModelRouting = new ModelRoutingService(searchDisabledSettings);
@@ -563,7 +582,8 @@ await using (var dbContext = new TelegramDbContext())
         DatabaseConnectionString: Environment.GetEnvironmentVariable("TELEGRAM_DB_CONNECTION")!,
         ApplyMigrations: true,
         LogMessageContent: false,
-        ConversationMaxHistory: 8)
+        ConversationMaxHistory: 8,
+        SearchRoutingMode: "heuristic")
     {
         OllamaPlanningModel = "qwen3:4b",
         OllamaDocumentQuestionAnsweringModel = "qwen3:8b"
@@ -783,6 +803,7 @@ await using (var dbContext = new TelegramDbContext())
     AssertTrue(statusResult.ReplyText?.Contains("Model routes:") == true, "/status reports model routes heading");
     AssertTrue(statusResult.ReplyText?.Contains("plan=qwen3:4b") == true, "/status reports planning model route");
     AssertTrue(statusResult.ReplyText?.Contains("doc_qa=qwen3:8b") == true, "/status reports document QA model route");
+    AssertTrue(statusResult.ReplyText?.Contains("Search routing: heuristic") == true, "/status reports search routing mode");
 
     CommandResult statusMentionResult = await commandRouter.TryHandleAsync(TextMessage("/status@red_eye_ghost_bot"), testUser, dbContext, CancellationToken.None);
     AssertTrue(statusMentionResult.Handled, "/status@bot is handled");

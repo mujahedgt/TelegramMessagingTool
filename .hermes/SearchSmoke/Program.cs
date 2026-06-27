@@ -10,11 +10,18 @@ var settings = new BotSettings(
     BotToken: "test",
     OllamaUrl: "http://localhost:11434/api/chat",
     OllamaModel: "llama3.2:3b",
+    OllamaEmbeddingUrl: "http://localhost:11434/api/embed",
+    OllamaEmbeddingModel: BotConfiguration.DefaultEmbeddingModel,
+    EnableDocumentEmbeddings: false,
+    EnableOnlineSearch: true,
     AdminChatId: 0,
     AllowedChatIds: new HashSet<long>(),
+    AllowPublicAccess: false,
     DatabaseConnectionString: "test",
     ApplyMigrations: false,
-    LogMessageContent: false);
+    LogMessageContent: false,
+    ConversationMaxHistory: 8,
+    SearchRoutingMode: "heuristic");
 
 var registry = new ToolRegistry([
     new DateTimeTool(),

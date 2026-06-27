@@ -241,14 +241,15 @@ Default initially: `heuristic` for backward compatibility. After tests: switch d
 1. ✅ Extract current `TryBuildDirectSearchQuery` into `HeuristicSearchRoutingClassifier` unchanged.
 2. ✅ Add tests for current behavior before/refactor coverage.
 3. ✅ Change `AgentRunner` constructor to accept `ISearchRoutingClassifier`.
-4. Add `LlmSearchRoutingClassifier` with strict JSON parsing and safe fallback to no-search on parse failure.
-5. Add tests using fake chat client responses:
+4. ✅ Wire `SEARCH_ROUTING_MODE=heuristic|off` from `BotSettings.SearchRoutingMode` and add `OffSearchRoutingClassifier`.
+5. Add `LlmSearchRoutingClassifier` with strict JSON parsing and safe fallback to no-search on parse failure.
+6. Add tests using fake chat client responses:
    - current price of a car → search
    - “price field in SQL table” → no search
    - “today I learned X” → no search
    - “latest .NET version” → search
-6. Wire mode from `BotSettings.SearchRoutingMode`.
-7. Update README.
+7. Wire future `llm` mode from `BotSettings.SearchRoutingMode`.
+8. Update README.
 
 ---
 
@@ -774,13 +775,14 @@ dotnet list TelegramMessagingTool/TelegramMessagingTool.csproj package --vulnera
 If implementing next, do this order:
 
 1. `CONVERSATION_MAX_HISTORY` setting. **Status: complete** — `BotSettings.ConversationMaxHistory` is loaded from `CONVERSATION_MAX_HISTORY`, clamped to `1..50`, and used by both Telegram and console conversation context paths.
-2. Remove Mitsubishi/Lancer-specific typo correction and update tests/docs.
-3. Extract `HeuristicSearchRoutingClassifier` without behavior change.
-4. Add LLM search routing classifier behind `SEARCH_ROUTING_MODE=llm`.
-5. Add safe command execution foundation with only read-only Git/status tools.
-6. Add plugin manifest scanning without loading assemblies yet.
-7. Add actual plugin assembly loading.
-8. Add read-only GitHub tools.
+2. Remove Mitsubishi/Lancer-specific typo correction and update tests/docs. **Status: complete.**
+3. Extract `HeuristicSearchRoutingClassifier` without behavior change. **Status: complete.**
+4. Add `SEARCH_ROUTING_MODE=heuristic|off` wiring. **Status: complete.**
+5. Add LLM search routing classifier behind `SEARCH_ROUTING_MODE=llm`.
+6. Add safe command execution foundation with only read-only Git/status tools.
+7. Add plugin manifest scanning without loading assemblies yet.
+8. Add actual plugin assembly loading.
+9. Add read-only GitHub tools.
 
 This gives fast wins first, then unlocks bigger extensibility.
 

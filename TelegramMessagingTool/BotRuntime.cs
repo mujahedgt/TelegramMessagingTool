@@ -14,7 +14,8 @@ public sealed record BotSettings(
     string DatabaseConnectionString,
     bool ApplyMigrations,
     bool LogMessageContent,
-    int ConversationMaxHistory)
+    int ConversationMaxHistory,
+    string SearchRoutingMode)
 {
     public string OllamaChatModel { get; init; } = OllamaModel;
 
@@ -65,7 +66,8 @@ public static class BotConfiguration
             DatabaseConnectionString: databaseConnectionString,
             ApplyMigrations: IsEnabled(Environment.GetEnvironmentVariable("APPLY_MIGRATIONS"), defaultValue: true),
             LogMessageContent: IsEnabled(Environment.GetEnvironmentVariable("LOG_MESSAGE_CONTENT"), defaultValue: false),
-            ConversationMaxHistory: ParseClampedInt(Environment.GetEnvironmentVariable("CONVERSATION_MAX_HISTORY"), defaultValue: 8, minValue: 1, maxValue: 50))
+            ConversationMaxHistory: ParseClampedInt(Environment.GetEnvironmentVariable("CONVERSATION_MAX_HISTORY"), defaultValue: 8, minValue: 1, maxValue: 50),
+            SearchRoutingMode: NormalizeSearchRoutingMode(Environment.GetEnvironmentVariable("SEARCH_ROUTING_MODE")))
         {
             OllamaChatModel = NormalizeModelRoute(Environment.GetEnvironmentVariable("OLLAMA_MODEL_CHAT"), ollamaModel),
             OllamaPlanningModel = NormalizeModelRoute(Environment.GetEnvironmentVariable("OLLAMA_MODEL_PLAN"), ollamaModel),
@@ -89,6 +91,19 @@ public static class BotConfiguration
         return string.IsNullOrWhiteSpace(value)
             ? fallbackModel.Trim()
             : value.Trim();
+    }
+
+    public static string NormalizeSearchRoutingMode(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "heuristic";
+        }
+
+        string normalized = value.Trim().ToLowerInvariant();
+        return normalized is "heuristic" or "off"
+            ? normalized
+            : "heuristic";
     }
 
     public static int ParseClampedInt(string? value, int defaultValue, int minValue, int maxValue)

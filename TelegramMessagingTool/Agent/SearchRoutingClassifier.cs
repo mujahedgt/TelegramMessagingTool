@@ -18,6 +18,34 @@ public sealed record SearchRoutingDecision(
     public static SearchRoutingDecision NoSearch(string reason) => new(false, string.Empty, reason, 0);
 }
 
+public sealed class OffSearchRoutingClassifier : ISearchRoutingClassifier
+{
+    public Task<SearchRoutingDecision> ClassifyAsync(
+        IReadOnlyList<OllamaMessageDto> conversationContext,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(SearchRoutingDecision.NoSearch("Direct search routing is disabled by SEARCH_ROUTING_MODE=off."));
+    }
+}
+
+public static class SearchRoutingClassifierFactory
+{
+    public static ISearchRoutingClassifier Create(string? mode)
+    {
+        string normalized = string.IsNullOrWhiteSpace(mode)
+            ? "heuristic"
+            : mode.Trim().ToLowerInvariant();
+
+        return normalized switch
+        {
+            "off" => new OffSearchRoutingClassifier(),
+            "heuristic" => new HeuristicSearchRoutingClassifier(),
+            _ => new HeuristicSearchRoutingClassifier()
+        };
+    }
+}
+
 public sealed class HeuristicSearchRoutingClassifier : ISearchRoutingClassifier
 {
     public Task<SearchRoutingDecision> ClassifyAsync(

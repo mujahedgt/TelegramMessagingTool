@@ -42,6 +42,7 @@ Model routes: {modelRoutingService.RenderSummary()}
 Access mode: {BotAccessPolicy.DescribeAccessMode(_settings.AllowedChatIds, _settings.AdminChatId, _settings.AllowPublicAccess)}
 Document embeddings: {(_settings.EnableDocumentEmbeddings ? "enabled" : "disabled")}
 Online search: {(_settings.EnableOnlineSearch ? "enabled" : "disabled")}
+Search routing: {_settings.SearchRoutingMode}
 Message content logging: {(_settings.LogMessageContent ? "enabled" : "disabled")}
 Apply migrations: {_settings.ApplyMigrations}
 """;

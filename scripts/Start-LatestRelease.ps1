@@ -37,9 +37,11 @@ $RuntimeEnvironmentVariables = @(
     'OLLAMA_EMBEDDING_MODEL',
     'ENABLE_DOCUMENT_EMBEDDINGS',
     'ENABLE_ONLINE_SEARCH',
+    'SEARCH_ROUTING_MODE',
     'TELEGRAM_DB_CONNECTION',
     'APPLY_MIGRATIONS',
-    'LOG_MESSAGE_CONTENT'
+    'LOG_MESSAGE_CONTENT',
+    'CONVERSATION_MAX_HISTORY'
 )
 
 foreach ($Name in $RuntimeEnvironmentVariables) {

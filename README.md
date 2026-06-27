@@ -66,6 +66,7 @@ Configuration is read from environment variables.
 | `OLLAMA_EMBEDDING_MODEL` | No | `nomic-embed-text` | Local embedding model used by `/embedfile` and `/embeddocs` |
 | `ENABLE_DOCUMENT_EMBEDDINGS` | No | `false` | If true, `/askfile` and `/askdocs` use stored embeddings for hybrid semantic retrieval when available |
 | `ENABLE_ONLINE_SEARCH` | No | `false` | If true, registers `online_search` and lets the agent use public web search for current facts. Keep false when you want offline/private behavior. |
+| `SEARCH_ROUTING_MODE` | No | `heuristic` | Controls direct web-search routing before normal chat. `heuristic` uses the current keyword/current-facts classifier; `off` disables direct search routing while keeping model-requested `online_search` available when registered. |
 | `TELEGRAM_DB_CONNECTION` | No | LocalDB connection | SQL Server connection string |
 | `APPLY_MIGRATIONS` | No | `true` | Apply EF migrations on startup |
 | `LOG_MESSAGE_CONTENT` | No | `false` | Log user messages and assistant responses. Keep disabled for privacy. |
@@ -85,6 +86,7 @@ export OLLAMA_MODEL_DOC_QA='llama3.2:3b'
 export OLLAMA_EMBEDDING_MODEL='nomic-embed-text'
 export ENABLE_DOCUMENT_EMBEDDINGS='false'
 export ENABLE_ONLINE_SEARCH='false'
+export SEARCH_ROUTING_MODE='heuristic'
 export LOG_MESSAGE_CONTENT='false'
 export CONVERSATION_MAX_HISTORY='8'
 ```
@@ -144,6 +146,7 @@ Available tools:
 Search behavior notes:
 
 - When `ENABLE_ONLINE_SEARCH=true`, a heuristic search-routing classifier can directly use `online_search` for current facts, prices, market values, specs, products, cars, and news.
+- Set `SEARCH_ROUTING_MODE=off` to disable direct web-search routing; the model can still request `online_search` through the normal tool-call loop when the tool is registered.
 - When `ENABLE_ONLINE_SEARCH=false`, the tool is not registered or advertised; the bot should say live web search is disabled instead of guessing current facts.
 - The bot now hides raw `tool_call` JSON from the final answer after the tool runs.
 - The search tool preserves the user's original query after whitespace cleanup. It no longer applies hardcoded domain-specific typo corrections; the model should correct obvious spelling only when the intended term is clear from context.

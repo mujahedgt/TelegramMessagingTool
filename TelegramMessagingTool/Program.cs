@@ -59,6 +59,7 @@ var ollamaClient = new OllamaChatClient(qwenClient, settings);
 var ollamaEmbeddingClient = new OllamaEmbeddingClient(embeddingClient, settings);
 ITextEmbeddingService? retrievalEmbeddingService = settings.EnableDocumentEmbeddings ? ollamaEmbeddingClient : null;
 var toolRegistry = ToolRegistryFactory.Create(settings, searchClient);
+ISearchRoutingClassifier searchRoutingClassifier = SearchRoutingClassifierFactory.Create(settings.SearchRoutingMode);
 var documentStorage = new DocumentStorageService(Path.Combine(Environment.CurrentDirectory, "UserFiles"));
 string importDirectory = Path.Combine(Environment.CurrentDirectory, "ImportInbox");
 var pendingActionService = new PendingActionService();
@@ -71,7 +72,7 @@ var documentEmbeddingService = new DocumentEmbeddingService(ollamaEmbeddingClien
 var documentRetrievalService = new DocumentRetrievalService(retrievalEmbeddingService);
 var documentQuestionAnsweringService = new DocumentQuestionAnsweringService(ollamaClient);
 var documentSummaryService = new DocumentSummaryService(ollamaClient);
-var agentRunner = new AgentRunner(ollamaClient, toolRegistry);
+var agentRunner = new AgentRunner(ollamaClient, toolRegistry, searchRoutingClassifier: searchRoutingClassifier);
 var conversationService = new ConversationService();
 var commandRouter = new CommandRouter([
     new HelpCommand(),
