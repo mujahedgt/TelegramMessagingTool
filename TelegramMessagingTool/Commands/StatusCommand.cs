@@ -43,6 +43,7 @@ Access mode: {BotAccessPolicy.DescribeAccessMode(_settings.AllowedChatIds, _sett
 Document embeddings: {(_settings.EnableDocumentEmbeddings ? "enabled" : "disabled")}
 Online search: {(_settings.EnableOnlineSearch ? "enabled" : "disabled")}
 Search routing: {_settings.SearchRoutingMode}
+Safe command tools: {(_settings.EnableSafeCommandTools ? "enabled" : "disabled")}
 Message content logging: {(_settings.LogMessageContent ? "enabled" : "disabled")}
 Apply migrations: {_settings.ApplyMigrations}
 """;

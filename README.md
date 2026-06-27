@@ -67,6 +67,8 @@ Configuration is read from environment variables.
 | `ENABLE_DOCUMENT_EMBEDDINGS` | No | `false` | If true, `/askfile` and `/askdocs` use stored embeddings for hybrid semantic retrieval when available |
 | `ENABLE_ONLINE_SEARCH` | No | `false` | If true, registers `online_search` and lets the agent use public web search for current facts. Keep false when you want offline/private behavior. |
 | `SEARCH_ROUTING_MODE` | No | `heuristic` | Controls direct web-search routing before normal chat. `heuristic` uses the current keyword/current-facts classifier; `llm` asks the chat model for a strict JSON search/no-search decision; `off` disables direct search routing while keeping model-requested `online_search` available when registered. |
+| `ENABLE_SAFE_COMMAND_TOOLS` | No | `false` | If true, registers read-only safe command tools such as `git_status`, `git_diff`, and `git_log_recent`. No arbitrary shell access is exposed. |
+| `SAFE_COMMAND_PROJECT_ROOT` | No | current working directory | Project root used by safe command tools. Commands run with fixed executable/argument lists under this directory. |
 | `TELEGRAM_DB_CONNECTION` | No | LocalDB connection | SQL Server connection string |
 | `APPLY_MIGRATIONS` | No | `true` | Apply EF migrations on startup |
 | `LOG_MESSAGE_CONTENT` | No | `false` | Log user messages and assistant responses. Keep disabled for privacy. |
@@ -87,6 +89,8 @@ export OLLAMA_EMBEDDING_MODEL='nomic-embed-text'
 export ENABLE_DOCUMENT_EMBEDDINGS='false'
 export ENABLE_ONLINE_SEARCH='false'
 export SEARCH_ROUTING_MODE='heuristic'
+export ENABLE_SAFE_COMMAND_TOOLS='false'
+export SAFE_COMMAND_PROJECT_ROOT='/c/temp/TelegramMessagingTool'
 export LOG_MESSAGE_CONTENT='false'
 export CONVERSATION_MAX_HISTORY='8'
 ```
@@ -142,6 +146,9 @@ Available tools:
 | `calculator` | No | Safe arithmetic expressions only |
 | `status` | No | Runtime configuration summary |
 | `online_search` | No | Optional. Registered only when `ENABLE_ONLINE_SEARCH=true`. Public web search through DuckDuckGo Lite, Startpage, and Mojeek fallbacks; uses clean query variants and expands vehicle searches with price/spec terms |
+| `git_status` | No | Optional. Registered only when `ENABLE_SAFE_COMMAND_TOOLS=true`. Read-only `git status --short --branch` for `SAFE_COMMAND_PROJECT_ROOT` |
+| `git_diff` | No | Optional. Registered only when `ENABLE_SAFE_COMMAND_TOOLS=true`. Read-only `git diff -- .` for `SAFE_COMMAND_PROJECT_ROOT` |
+| `git_log_recent` | No | Optional. Registered only when `ENABLE_SAFE_COMMAND_TOOLS=true`. Read-only `git log --oneline -5` for `SAFE_COMMAND_PROJECT_ROOT` |
 
 Search behavior notes:
 
@@ -159,7 +166,13 @@ Multi-step tool loop notes:
 - After each safe tool result, the model receives a structured observation and can either request one more safe tool or answer.
 - If the model keeps requesting tools after the limit, the bot stops and asks the user to narrow or continue with a smaller task.
 
-Risky tools such as shell, file write/delete, database mutation, or outbound messaging are intentionally not included yet. Use the approval flow before adding dangerous tools.
+Safe command tool notes:
+
+- `ENABLE_SAFE_COMMAND_TOOLS=false` by default.
+- The first safe command tools are read-only Git inspection tools only: `git_status`, `git_diff`, and `git_log_recent`.
+- These tools use fixed executable/argument lists and do not expose arbitrary shell, PowerShell, cmd, bash, file write, delete, commit, push, release, or restart access.
+
+Risky tools such as shell, file write/delete, database mutation, outbound messaging, release, restart, commit, push, or process control are intentionally not included as model tools yet. Use the approval flow before adding dangerous tools.
 
 ## P2 image and voice harness planning
 

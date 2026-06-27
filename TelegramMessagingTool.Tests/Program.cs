@@ -77,6 +77,8 @@ AssertEqual(50, BotConfiguration.ParseClampedInt("500", defaultValue: 8, minValu
 AssertEqual(8, BotConfiguration.ParseClampedInt("not-a-number", defaultValue: 8, minValue: 1, maxValue: 50), "ParseClampedInt returns default for invalid value");
 string? previousConversationMaxHistory = Environment.GetEnvironmentVariable("CONVERSATION_MAX_HISTORY");
 string? previousSearchRoutingMode = Environment.GetEnvironmentVariable("SEARCH_ROUTING_MODE");
+string? previousEnableSafeCommandTools = Environment.GetEnvironmentVariable("ENABLE_SAFE_COMMAND_TOOLS");
+string? previousSafeCommandProjectRoot = Environment.GetEnvironmentVariable("SAFE_COMMAND_PROJECT_ROOT");
 try
 {
     Environment.SetEnvironmentVariable("CONVERSATION_MAX_HISTORY", "13");
@@ -96,11 +98,22 @@ try
 
     Environment.SetEnvironmentVariable("SEARCH_ROUTING_MODE", "unknown");
     AssertEqual("heuristic", BotConfiguration.LoadFromEnvironment().SearchRoutingMode, "LoadFromEnvironment falls back to heuristic for invalid SEARCH_ROUTING_MODE");
+
+    Environment.SetEnvironmentVariable("ENABLE_SAFE_COMMAND_TOOLS", null);
+    AssertFalse(BotConfiguration.LoadFromEnvironment().EnableSafeCommandTools, "LoadFromEnvironment defaults safe command tools to disabled");
+
+    Environment.SetEnvironmentVariable("ENABLE_SAFE_COMMAND_TOOLS", "true");
+    Environment.SetEnvironmentVariable("SAFE_COMMAND_PROJECT_ROOT", Directory.GetCurrentDirectory());
+    BotSettings safeCommandEnvironmentSettings = BotConfiguration.LoadFromEnvironment();
+    AssertTrue(safeCommandEnvironmentSettings.EnableSafeCommandTools, "LoadFromEnvironment parses ENABLE_SAFE_COMMAND_TOOLS truthy values");
+    AssertEqual(Path.GetFullPath(Directory.GetCurrentDirectory()), safeCommandEnvironmentSettings.SafeCommandProjectRoot, "LoadFromEnvironment reads SAFE_COMMAND_PROJECT_ROOT as a full path");
 }
 finally
 {
     Environment.SetEnvironmentVariable("CONVERSATION_MAX_HISTORY", previousConversationMaxHistory);
     Environment.SetEnvironmentVariable("SEARCH_ROUTING_MODE", previousSearchRoutingMode);
+    Environment.SetEnvironmentVariable("ENABLE_SAFE_COMMAND_TOOLS", previousEnableSafeCommandTools);
+    Environment.SetEnvironmentVariable("SAFE_COMMAND_PROJECT_ROOT", previousSafeCommandProjectRoot);
 }
 
 AssertTrue(CommandParser.TryParse("/status", out ParsedCommand parsedStatus), "CommandParser parses bare command");
@@ -254,7 +267,9 @@ var searchDisabledSettings = new BotSettings(
     ApplyMigrations: true,
     LogMessageContent: false,
     ConversationMaxHistory: 8,
-    SearchRoutingMode: "heuristic");
+    SearchRoutingMode: "heuristic",
+    EnableSafeCommandTools: false,
+    SafeCommandProjectRoot: Directory.GetCurrentDirectory());
 var searchEnabledSettings = searchDisabledSettings with { EnableOnlineSearch = true };
 
 var defaultModelRouting = new ModelRoutingService(searchDisabledSettings);
@@ -290,7 +305,20 @@ var registry = new ToolRegistry([
 ]);
 ToolRegistry privacyGatedRegistry = ToolRegistryFactory.Create(searchDisabledSettings, new HttpClient());
 AssertFalse(privacyGatedRegistry.TryGet("online_search", out _), "ToolRegistryFactory excludes online_search by default");
-AssertFalse(privacyGatedRegistry.RenderToolInstructions().Contains("online_search"), "Disabled online_search is not advertised in model instructions");
+AssertFalse(privacyGatedRegistry.TryGet("git_status", out _), "ToolRegistryFactory excludes safe command tools by default");
+AssertFalse(privacyGatedRegistry.RenderToolInstructions().Contains("git_status"), "Disabled safe command tools are not advertised in model instructions");
+ToolRegistry safeCommandRegistry = ToolRegistryFactory.Create(searchDisabledSettings with
+{
+    EnableSafeCommandTools = true,
+    SafeCommandProjectRoot = Directory.GetCurrentDirectory()
+}, new HttpClient());
+AssertTrue(safeCommandRegistry.TryGet("git_status", out IAgentTool? gitStatusTool), "ToolRegistryFactory includes git_status when safe command tools are enabled");
+AssertTrue(safeCommandRegistry.TryGet("git_diff", out _), "ToolRegistryFactory includes git_diff when safe command tools are enabled");
+AssertTrue(safeCommandRegistry.TryGet("git_log_recent", out _), "ToolRegistryFactory includes git_log_recent when safe command tools are enabled");
+AssertFalse(gitStatusTool!.RequiresApproval, "git_status is read-only and does not require approval");
+ToolResult gitStatusResult = await gitStatusTool.ExecuteAsync(string.Empty, CancellationToken.None);
+AssertTrue(gitStatusResult.Success, "git_status runs successfully in the project root");
+AssertTrue(gitStatusResult.Output.Contains("git status", StringComparison.OrdinalIgnoreCase), "git_status output identifies the command");
 ToolRegistry enabledSearchRegistry = ToolRegistryFactory.Create(searchEnabledSettings, new HttpClient());
 AssertTrue(enabledSearchRegistry.TryGet("online_search", out _), "ToolRegistryFactory includes online_search only when enabled");
 AssertTrue(enabledSearchRegistry.RenderToolInstructions().Contains("online_search"), "Enabled online_search is advertised in model instructions");
@@ -603,7 +631,9 @@ await using (var dbContext = new TelegramDbContext())
         ApplyMigrations: true,
         LogMessageContent: false,
         ConversationMaxHistory: 8,
-        SearchRoutingMode: "heuristic")
+        SearchRoutingMode: "heuristic",
+        EnableSafeCommandTools: false,
+        SafeCommandProjectRoot: Directory.GetCurrentDirectory())
     {
         OllamaPlanningModel = "qwen3:4b",
         OllamaDocumentQuestionAnsweringModel = "qwen3:8b"
@@ -824,6 +854,7 @@ await using (var dbContext = new TelegramDbContext())
     AssertTrue(statusResult.ReplyText?.Contains("plan=qwen3:4b") == true, "/status reports planning model route");
     AssertTrue(statusResult.ReplyText?.Contains("doc_qa=qwen3:8b") == true, "/status reports document QA model route");
     AssertTrue(statusResult.ReplyText?.Contains("Search routing: heuristic") == true, "/status reports search routing mode");
+    AssertTrue(statusResult.ReplyText?.Contains("Safe command tools: disabled") == true, "/status reports safe command tools mode");
 
     CommandResult statusMentionResult = await commandRouter.TryHandleAsync(TextMessage("/status@red_eye_ghost_bot"), testUser, dbContext, CancellationToken.None);
     AssertTrue(statusMentionResult.Handled, "/status@bot is handled");

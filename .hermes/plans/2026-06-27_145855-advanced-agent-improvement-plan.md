@@ -252,7 +252,7 @@ Default initially: `heuristic` for backward compatibility. After tests: switch d
 
 ---
 
-# Phase 1: Safe Model-Generated Command Execution
+# Phase 1: Safe Model-Generated Command Execution — foundation started ✅
 
 ## Goal
 
@@ -320,7 +320,9 @@ SAFE_COMMAND_OUTPUT_MAX_CHARS=12000
 
 ## Bite-sized tasks
 
-### Task 1.1 Add command spec and executor
+### Task 1.1 Add command spec and executor — partial foundation ✅
+
+**Status:** Added a conservative first implementation for read-only Git tools using fixed `git` executable/arguments, configured project root, timeout, output truncation, and no shell wrapper. A fuller reusable `CommandSpec`/`SafeCommandExecutor` abstraction can still be extracted before medium-risk tools.
 
 Tests:
 
@@ -330,7 +332,9 @@ Tests:
 - truncates output
 - returns exit code and output
 
-### Task 1.2 Add read-only Git tools
+### Task 1.2 Add read-only Git tools ✅ Done
+
+**Status:** Added `ENABLE_SAFE_COMMAND_TOOLS=false` default, `SAFE_COMMAND_PROJECT_ROOT`, and optional read-only Git tools in `ToolRegistryFactory`. The tools are disabled by default and require no approval because they only inspect repository state.
 
 Tools:
 
@@ -778,10 +782,11 @@ If implementing next, do this order:
 3. Extract `HeuristicSearchRoutingClassifier` without behavior change. **Status: complete.**
 4. Add `SEARCH_ROUTING_MODE=heuristic|off` wiring. **Status: complete.**
 5. Add LLM search routing classifier behind `SEARCH_ROUTING_MODE=llm`. **Status: complete.**
-6. Add safe command execution foundation with only read-only Git/status tools.
-7. Add plugin manifest scanning without loading assemblies yet.
-8. Add actual plugin assembly loading.
-9. Add read-only GitHub tools.
+6. Add safe command execution foundation with only read-only Git/status tools. **Status: complete for read-only Git tools.**
+7. Add fixed `run_dotnet_tests` safe command tool or extract reusable `CommandSpec`/`SafeCommandExecutor` before medium-risk tools.
+8. Add plugin manifest scanning without loading assemblies yet.
+9. Add actual plugin assembly loading.
+10. Add read-only GitHub tools.
 
 This gives fast wins first, then unlocks bigger extensibility.
 
