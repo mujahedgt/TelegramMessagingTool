@@ -11,6 +11,7 @@ using TelegramMessagingTool.Models;
 using TelegramMessagingTool.Services;
 using TelegramMessagingTool.Telegram;
 using TelegramMessagingTool.Tools;
+using TelegramMessagingTool.Tools.CommandExecution;
 
 static void AssertEqual<T>(T expected, T actual, string name)
 {
@@ -315,10 +316,18 @@ ToolRegistry safeCommandRegistry = ToolRegistryFactory.Create(searchDisabledSett
 AssertTrue(safeCommandRegistry.TryGet("git_status", out IAgentTool? gitStatusTool), "ToolRegistryFactory includes git_status when safe command tools are enabled");
 AssertTrue(safeCommandRegistry.TryGet("git_diff", out _), "ToolRegistryFactory includes git_diff when safe command tools are enabled");
 AssertTrue(safeCommandRegistry.TryGet("git_log_recent", out _), "ToolRegistryFactory includes git_log_recent when safe command tools are enabled");
+AssertTrue(safeCommandRegistry.TryGet("run_dotnet_tests", out IAgentTool? runDotnetTestsTool), "ToolRegistryFactory includes run_dotnet_tests when safe command tools are enabled");
 AssertFalse(gitStatusTool!.RequiresApproval, "git_status is read-only and does not require approval");
+AssertFalse(runDotnetTestsTool!.RequiresApproval, "run_dotnet_tests uses a fixed bounded command and does not require approval");
+AssertTrue(safeCommandRegistry.RenderToolInstructions().Contains("{\"target\":\"helper-tests\"}"), "ToolRegistry instructions document run_dotnet_tests strict JSON input");
 ToolResult gitStatusResult = await gitStatusTool.ExecuteAsync(string.Empty, CancellationToken.None);
 AssertTrue(gitStatusResult.Success, "git_status runs successfully in the project root");
 AssertTrue(gitStatusResult.Output.Contains("git status", StringComparison.OrdinalIgnoreCase), "git_status output identifies the command");
+ToolResult invalidTestTargetResult = await runDotnetTestsTool.ExecuteAsync("{\"target\":\"all\"}", CancellationToken.None);
+AssertFalse(invalidTestTargetResult.Success, "run_dotnet_tests rejects unsupported test targets");
+AssertTrue(invalidTestTargetResult.Output.Contains("helper-tests", StringComparison.OrdinalIgnoreCase), "run_dotnet_tests rejection explains the allowed target");
+ToolResult malformedTestTargetResult = await runDotnetTestsTool.ExecuteAsync("helper-tests", CancellationToken.None);
+AssertFalse(malformedTestTargetResult.Success, "run_dotnet_tests rejects non-JSON input");
 ToolRegistry enabledSearchRegistry = ToolRegistryFactory.Create(searchEnabledSettings, new HttpClient());
 AssertTrue(enabledSearchRegistry.TryGet("online_search", out _), "ToolRegistryFactory includes online_search only when enabled");
 AssertTrue(enabledSearchRegistry.RenderToolInstructions().Contains("online_search"), "Enabled online_search is advertised in model instructions");

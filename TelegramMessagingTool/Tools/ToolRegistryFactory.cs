@@ -23,6 +23,7 @@ public static class ToolRegistryFactory
             tools.Add(new GitStatusTool(settings.SafeCommandProjectRoot));
             tools.Add(new GitDiffTool(settings.SafeCommandProjectRoot));
             tools.Add(new GitLogRecentTool(settings.SafeCommandProjectRoot));
+            tools.Add(new RunDotnetTestsTool(settings.SafeCommandProjectRoot));
         }
 
         return new ToolRegistry(tools);

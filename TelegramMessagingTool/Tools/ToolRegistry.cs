@@ -59,6 +59,12 @@ public sealed class ToolRegistry
         {
             builder.AppendLine("Online search is disabled by configuration. Do not claim access to current web data; answer from local context only or say that live web search is disabled.");
         }
+
+        if (TryGet("run_dotnet_tests", out _))
+        {
+            builder.AppendLine("Use run_dotnet_tests only when the user asks to run or verify the helper tests. Its input must be strict JSON: {\"target\":\"helper-tests\"}.");
+        }
+
         builder.AppendLine("Available tools:");
 
         foreach (IAgentTool tool in Tools)

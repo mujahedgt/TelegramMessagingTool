@@ -344,7 +344,9 @@ Tools:
 
 All should be `RequiresApproval=false` because they are read-only.
 
-### Task 1.3 Add fixed test runner tool
+### Task 1.3 Add fixed test runner tool ✅ Done
+
+**Status:** Added `run_dotnet_tests` behind `ENABLE_SAFE_COMMAND_TOOLS=true`. It runs only the helper test project with a fixed `dotnet run --project TelegramMessagingTool.Tests/TelegramMessagingTool.Tests.csproj --configuration Release --nologo` command under `SAFE_COMMAND_PROJECT_ROOT`, uses a 120-second timeout, truncates output, and rejects non-JSON or unsupported targets.
 
 Tool:
 
@@ -352,13 +354,13 @@ Tool:
 run_dotnet_tests
 ```
 
-Input should be limited to a known enum:
+Input is limited to a known enum:
 
 ```json
 {"target":"helper-tests"}
 ```
 
-Not arbitrary command text.
+No arbitrary command text is accepted.
 
 ### Task 1.4 Add approval-gated release/restart tools later
 

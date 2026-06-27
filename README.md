@@ -12,7 +12,7 @@ TelegramMessagingTool is a C#/.NET console application that connects a Telegram 
 - Optional chat allowlist via environment variable
 - Long Telegram responses are split into safe chunks
 - Safe agent tool system with bounded multi-step tool calling
-- Built-in tools: `datetime`, `calculator`, `status`, and optional `online_search` when `ENABLE_ONLINE_SEARCH=true`
+- Built-in tools: `datetime`, `calculator`, `status`, optional `online_search` when `ENABLE_ONLINE_SEARCH=true`, and optional fixed safe command tools when `ENABLE_SAFE_COMMAND_TOOLS=true`
 - `/tools` command to show available tools
 - Agent-style startup console panel with commands, model, safety, and tool status
 - Local console chat/command input using the same command router, memory, tools, and agent runner as Telegram
@@ -67,7 +67,7 @@ Configuration is read from environment variables.
 | `ENABLE_DOCUMENT_EMBEDDINGS` | No | `false` | If true, `/askfile` and `/askdocs` use stored embeddings for hybrid semantic retrieval when available |
 | `ENABLE_ONLINE_SEARCH` | No | `false` | If true, registers `online_search` and lets the agent use public web search for current facts. Keep false when you want offline/private behavior. |
 | `SEARCH_ROUTING_MODE` | No | `heuristic` | Controls direct web-search routing before normal chat. `heuristic` uses the current keyword/current-facts classifier; `llm` asks the chat model for a strict JSON search/no-search decision; `off` disables direct search routing while keeping model-requested `online_search` available when registered. |
-| `ENABLE_SAFE_COMMAND_TOOLS` | No | `false` | If true, registers read-only safe command tools such as `git_status`, `git_diff`, and `git_log_recent`. No arbitrary shell access is exposed. |
+| `ENABLE_SAFE_COMMAND_TOOLS` | No | `false` | If true, registers fixed safe command tools: `git_status`, `git_diff`, `git_log_recent`, and `run_dotnet_tests`. No arbitrary shell access is exposed. `run_dotnet_tests` accepts only `{"target":"helper-tests"}` and runs the helper test project. |
 | `SAFE_COMMAND_PROJECT_ROOT` | No | current working directory | Project root used by safe command tools. Commands run with fixed executable/argument lists under this directory. |
 | `TELEGRAM_DB_CONNECTION` | No | LocalDB connection | SQL Server connection string |
 | `APPLY_MIGRATIONS` | No | `true` | Apply EF migrations on startup |
