@@ -69,6 +69,7 @@ Configuration is read from environment variables.
 | `TELEGRAM_DB_CONNECTION` | No | LocalDB connection | SQL Server connection string |
 | `APPLY_MIGRATIONS` | No | `true` | Apply EF migrations on startup |
 | `LOG_MESSAGE_CONTENT` | No | `false` | Log user messages and assistant responses. Keep disabled for privacy. |
+| `CONVERSATION_MAX_HISTORY` | No | `8` | Number of recent persisted chat messages included in normal agent context. Values are clamped from `1` to `50`. |
 
 Example Git Bash setup:
 
@@ -85,6 +86,7 @@ export OLLAMA_EMBEDDING_MODEL='nomic-embed-text'
 export ENABLE_DOCUMENT_EMBEDDINGS='false'
 export ENABLE_ONLINE_SEARCH='false'
 export LOG_MESSAGE_CONTENT='false'
+export CONVERSATION_MAX_HISTORY='8'
 ```
 
 ## Build

@@ -13,7 +13,8 @@ public sealed record BotSettings(
     bool AllowPublicAccess,
     string DatabaseConnectionString,
     bool ApplyMigrations,
-    bool LogMessageContent)
+    bool LogMessageContent,
+    int ConversationMaxHistory)
 {
     public string OllamaChatModel { get; init; } = OllamaModel;
 
@@ -63,7 +64,8 @@ public static class BotConfiguration
             AllowPublicAccess: allowPublicAccess,
             DatabaseConnectionString: databaseConnectionString,
             ApplyMigrations: IsEnabled(Environment.GetEnvironmentVariable("APPLY_MIGRATIONS"), defaultValue: true),
-            LogMessageContent: IsEnabled(Environment.GetEnvironmentVariable("LOG_MESSAGE_CONTENT"), defaultValue: false))
+            LogMessageContent: IsEnabled(Environment.GetEnvironmentVariable("LOG_MESSAGE_CONTENT"), defaultValue: false),
+            ConversationMaxHistory: ParseClampedInt(Environment.GetEnvironmentVariable("CONVERSATION_MAX_HISTORY"), defaultValue: 8, minValue: 1, maxValue: 50))
         {
             OllamaChatModel = NormalizeModelRoute(Environment.GetEnvironmentVariable("OLLAMA_MODEL_CHAT"), ollamaModel),
             OllamaPlanningModel = NormalizeModelRoute(Environment.GetEnvironmentVariable("OLLAMA_MODEL_PLAN"), ollamaModel),
@@ -87,6 +89,17 @@ public static class BotConfiguration
         return string.IsNullOrWhiteSpace(value)
             ? fallbackModel.Trim()
             : value.Trim();
+    }
+
+    public static int ParseClampedInt(string? value, int defaultValue, int minValue, int maxValue)
+    {
+        if (minValue > maxValue)
+        {
+            throw new ArgumentException("Minimum value cannot be greater than maximum value.", nameof(minValue));
+        }
+
+        int parsedValue = int.TryParse(value, out int parsed) ? parsed : defaultValue;
+        return Math.Clamp(parsedValue, minValue, maxValue);
     }
 
     public static bool IsEnabled(string? value, bool defaultValue)

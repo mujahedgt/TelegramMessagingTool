@@ -317,7 +317,7 @@ async Task<string> ProcessConsoleInputAsync(string input, CancellationToken canc
     List<OllamaMessageDto> conversationContext = await conversationService.CreateConversationContextAsync(
         dbContext,
         consoleUser.Id,
-        maxHistory: 8,
+        maxHistory: settings.ConversationMaxHistory,
         cancellationToken: cancellationToken,
         toolInstructions: toolRegistry.RenderToolInstructions());
 
@@ -525,7 +525,7 @@ async Task HandleUpdateAsync(
             await conversationService.CreateConversationContextAsync(
                 dbContext,
                 user.Id,
-                maxHistory: 8,
+                maxHistory: settings.ConversationMaxHistory,
                 cancellationToken: cancellationToken,
                 toolInstructions: toolRegistry.RenderToolInstructions());
 

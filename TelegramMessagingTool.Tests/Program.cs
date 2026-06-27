@@ -70,6 +70,25 @@ AssertEqual("admin-only", BotAccessPolicy.DescribeAccessMode(emptyAllowlist, adm
 AssertEqual("public override", BotAccessPolicy.DescribeAccessMode(emptyAllowlist, adminChatId: 0, allowPublicAccess: true), "DescribeAccessMode reports public override mode");
 AssertEqual("locked", BotAccessPolicy.DescribeAccessMode(emptyAllowlist, adminChatId: 0, allowPublicAccess: false), "DescribeAccessMode reports locked mode");
 
+AssertEqual(8, BotConfiguration.ParseClampedInt(null, defaultValue: 8, minValue: 1, maxValue: 50), "ParseClampedInt returns default for missing value");
+AssertEqual(12, BotConfiguration.ParseClampedInt("12", defaultValue: 8, minValue: 1, maxValue: 50), "ParseClampedInt parses valid value");
+AssertEqual(1, BotConfiguration.ParseClampedInt("0", defaultValue: 8, minValue: 1, maxValue: 50), "ParseClampedInt clamps below minimum");
+AssertEqual(50, BotConfiguration.ParseClampedInt("500", defaultValue: 8, minValue: 1, maxValue: 50), "ParseClampedInt clamps above maximum");
+AssertEqual(8, BotConfiguration.ParseClampedInt("not-a-number", defaultValue: 8, minValue: 1, maxValue: 50), "ParseClampedInt returns default for invalid value");
+string? previousConversationMaxHistory = Environment.GetEnvironmentVariable("CONVERSATION_MAX_HISTORY");
+try
+{
+    Environment.SetEnvironmentVariable("CONVERSATION_MAX_HISTORY", "13");
+    AssertEqual(13, BotConfiguration.LoadFromEnvironment().ConversationMaxHistory, "LoadFromEnvironment reads CONVERSATION_MAX_HISTORY");
+
+    Environment.SetEnvironmentVariable("CONVERSATION_MAX_HISTORY", "500");
+    AssertEqual(50, BotConfiguration.LoadFromEnvironment().ConversationMaxHistory, "LoadFromEnvironment clamps high CONVERSATION_MAX_HISTORY");
+}
+finally
+{
+    Environment.SetEnvironmentVariable("CONVERSATION_MAX_HISTORY", previousConversationMaxHistory);
+}
+
 AssertTrue(CommandParser.TryParse("/status", out ParsedCommand parsedStatus), "CommandParser parses bare command");
 AssertEqual("/status", parsedStatus.Command, "CommandParser normalizes bare command token");
 AssertEqual(string.Empty, parsedStatus.Arguments, "CommandParser returns empty arguments for bare command");
@@ -188,7 +207,8 @@ var searchDisabledSettings = new BotSettings(
     AllowPublicAccess: false,
     DatabaseConnectionString: "test-db",
     ApplyMigrations: true,
-    LogMessageContent: false);
+    LogMessageContent: false,
+    ConversationMaxHistory: 8);
 var searchEnabledSettings = searchDisabledSettings with { EnableOnlineSearch = true };
 
 var defaultModelRouting = new ModelRoutingService(searchDisabledSettings);
@@ -532,7 +552,8 @@ await using (var dbContext = new TelegramDbContext())
         AllowPublicAccess: false,
         DatabaseConnectionString: Environment.GetEnvironmentVariable("TELEGRAM_DB_CONNECTION")!,
         ApplyMigrations: true,
-        LogMessageContent: false)
+        LogMessageContent: false,
+        ConversationMaxHistory: 8)
     {
         OllamaPlanningModel = "qwen3:4b",
         OllamaDocumentQuestionAnsweringModel = "qwen3:8b"
