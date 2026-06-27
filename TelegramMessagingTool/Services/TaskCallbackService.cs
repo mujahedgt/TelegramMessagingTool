@@ -29,7 +29,7 @@ public sealed class TaskCallbackService
             TaskCallbackVerb.Open => await OpenAsync(callback.TaskId, user, dbContext, cancellationToken),
             TaskCallbackVerb.Done => await DoneAsync(callback.TaskId, user, dbContext, cancellationToken),
             TaskCallbackVerb.DoneStep => await DoneStepAsync(callback.TaskId, callback.StepNumber, user, dbContext, cancellationToken),
-            TaskCallbackVerb.Cancel => NotEnabledYet("Cancel"),
+            TaskCallbackVerb.Cancel => await CancelAsync(callback.TaskId, user, dbContext, cancellationToken),
             _ => TaskCallbackResult.NotHandled
         };
     }
@@ -79,12 +79,16 @@ public sealed class TaskCallbackService
         return new TaskCallbackResult(true, answerText, result.Message + details);
     }
 
-    private static TaskCallbackResult NotEnabledYet(string verb)
+    private async Task<TaskCallbackResult> CancelAsync(
+        int taskId,
+        ConnectedUser user,
+        TelegramDbContext dbContext,
+        CancellationToken cancellationToken)
     {
-        return new TaskCallbackResult(
-            true,
-            "Not enabled yet",
-            $"{verb} task buttons are visible, but task mutation from inline buttons is not enabled yet. Use the slash command for now.");
+        TaskUpdateResult result = await _agentTaskService.CancelAsync(dbContext, user, taskId, cancellationToken);
+        string details = result.Task is null ? string.Empty : "\n\n" + AgentTaskService.RenderTask(result.Task);
+        string answerText = result.Success ? "Cancelled" : "Cancel failed";
+        return new TaskCallbackResult(true, answerText, result.Message + details);
     }
 }
 
