@@ -277,6 +277,7 @@ Safety:
 - Task 3A.5 is complete: `task:open:<taskId>` callback handling is wired as a read-only action; `task:done` and `task:cancel` callbacks are acknowledged but intentionally do not mutate task state yet.
 - Task 3A.6 is complete: `/task <id>` now includes step-specific `task:done-step:<taskId>:<stepNumber>` button metadata and parser support, still without mutating task state from buttons.
 - Task 3A.7 is complete: `task:done-step:<taskId>:<stepNumber>` now safely marks only the selected owned step done via `AgentTaskService.MarkDoneAsync`; whole-task done and cancel buttons remain disabled placeholders.
+- Task 3A.8 is complete: `task:done:<taskId>` now safely completes only the selected owned task via `AgentTaskService.MarkDoneAsync(..., stepNumber: null)`; cancel remains a disabled placeholder.
 
 ### Goal
 

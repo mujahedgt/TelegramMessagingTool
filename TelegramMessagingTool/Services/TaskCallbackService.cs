@@ -27,7 +27,7 @@ public sealed class TaskCallbackService
         return callback.Verb switch
         {
             TaskCallbackVerb.Open => await OpenAsync(callback.TaskId, user, dbContext, cancellationToken),
-            TaskCallbackVerb.Done => NotEnabledYet("Done"),
+            TaskCallbackVerb.Done => await DoneAsync(callback.TaskId, user, dbContext, cancellationToken),
             TaskCallbackVerb.DoneStep => await DoneStepAsync(callback.TaskId, callback.StepNumber, user, dbContext, cancellationToken),
             TaskCallbackVerb.Cancel => NotEnabledYet("Cancel"),
             _ => TaskCallbackResult.NotHandled
@@ -47,6 +47,18 @@ public sealed class TaskCallbackService
         }
 
         return new TaskCallbackResult(true, "Opened task", AgentTaskService.RenderTask(task));
+    }
+
+    private async Task<TaskCallbackResult> DoneAsync(
+        int taskId,
+        ConnectedUser user,
+        TelegramDbContext dbContext,
+        CancellationToken cancellationToken)
+    {
+        TaskUpdateResult result = await _agentTaskService.MarkDoneAsync(dbContext, user, taskId, stepNumber: null, cancellationToken);
+        string details = result.Task is null ? string.Empty : "\n\n" + AgentTaskService.RenderTask(result.Task);
+        string answerText = result.Success ? "Done" : "Done failed";
+        return new TaskCallbackResult(true, answerText, result.Message + details);
     }
 
     private async Task<TaskCallbackResult> DoneStepAsync(

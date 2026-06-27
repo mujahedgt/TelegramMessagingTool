@@ -983,10 +983,6 @@ await using (var dbContext = new TelegramDbContext())
     AssertTrue(openTaskCallbackResult.AnswerText.Contains("Opened"), "TaskCallbackService answers open callbacks");
     AssertTrue(openTaskCallbackResult.MessageText?.Contains($"Task #{taskId}") == true, "TaskCallbackService open returns task details");
     AssertTrue(openTaskCallbackResult.MessageText?.Contains("inventory API", StringComparison.OrdinalIgnoreCase) == true, "TaskCallbackService open includes task goal");
-    TaskCallbackResult doneTaskCallbackResult = await taskCallbackService.HandleAsync($"task:done:{taskId}", testUser, dbContext, CancellationToken.None);
-    AssertTrue(doneTaskCallbackResult.Handled, "TaskCallbackService handles done callbacks safely");
-    AssertTrue(doneTaskCallbackResult.MessageText?.Contains("not enabled yet", StringComparison.OrdinalIgnoreCase) == true, "TaskCallbackService does not execute done callbacks yet");
-    AssertFalse((await dbContext.AgentTaskSteps.FirstAsync(x => x.AgentTaskId == taskId && x.StepNumber == 1, CancellationToken.None)).IsDone, "TaskCallbackService done callback does not mutate task state yet");
     TaskCallbackResult missingStepTaskCallbackResult = await taskCallbackService.HandleAsync($"task:done-step:{taskId}:99", testUser, dbContext, CancellationToken.None);
     AssertTrue(missingStepTaskCallbackResult.Handled, "TaskCallbackService handles missing done-step callbacks safely");
     AssertTrue(missingStepTaskCallbackResult.MessageText?.Contains("does not have step 99", StringComparison.OrdinalIgnoreCase) == true, "TaskCallbackService reports missing step");
@@ -1002,6 +998,15 @@ await using (var dbContext = new TelegramDbContext())
     AssertTrue(cancelTaskCallbackResult.Handled, "TaskCallbackService handles cancel callbacks safely");
     AssertTrue(cancelTaskCallbackResult.MessageText?.Contains("not enabled yet", StringComparison.OrdinalIgnoreCase) == true, "TaskCallbackService does not execute cancel callbacks yet");
     AssertEqual(AgentTaskStatuses.Active, (await dbContext.AgentTasks.FindAsync([taskId], CancellationToken.None))!.Status, "TaskCallbackService cancel callback does not mutate task state yet");
+
+    AgentTask wholeDoneTask = await agentTaskService.CreatePlanAsync(dbContext, testUser, "ship the whole done button", CancellationToken.None);
+    TaskCallbackResult doneTaskCallbackResult = await taskCallbackService.HandleAsync($"task:done:{wholeDoneTask.Id}", testUser, dbContext, CancellationToken.None);
+    AssertTrue(doneTaskCallbackResult.Handled, "TaskCallbackService handles done callbacks safely");
+    AssertTrue(doneTaskCallbackResult.AnswerText.Contains("Done", StringComparison.OrdinalIgnoreCase), "TaskCallbackService answers successful done callbacks");
+    AssertTrue(doneTaskCallbackResult.MessageText?.Contains("marked completed", StringComparison.OrdinalIgnoreCase) == true, "TaskCallbackService reports whole-task done success");
+    AssertEqual(AgentTaskStatuses.Completed, (await dbContext.AgentTasks.FindAsync([wholeDoneTask.Id], CancellationToken.None))!.Status, "TaskCallbackService done callback completes the selected task");
+    AssertEqual(5, await dbContext.AgentTaskSteps.CountAsync(x => x.AgentTaskId == wholeDoneTask.Id && x.IsDone, CancellationToken.None), "TaskCallbackService done callback marks all selected task steps done");
+    AssertEqual(AgentTaskStatuses.Active, (await dbContext.AgentTasks.FindAsync([taskId], CancellationToken.None))!.Status, "TaskCallbackService done callback does not complete a different task");
 
     CommandResult invalidScheduleResult = await commandRouter.TryHandleAsync(TextMessage($"/schedule {taskId} 1 yesterday 09:00"), testUser, dbContext, CancellationToken.None);
     AssertTrue(invalidScheduleResult.Handled, "/schedule invalid time is handled");
