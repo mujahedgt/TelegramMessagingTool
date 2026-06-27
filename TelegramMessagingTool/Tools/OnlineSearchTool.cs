@@ -100,39 +100,23 @@ public sealed partial class OnlineSearchTool : IAgentTool
     public static IReadOnlyList<string> BuildSearchQueryVariants(string query)
     {
         string trimmed = WhitespaceRegex().Replace(query.Trim(), " ");
-        string corrected = CorrectCommonSearchTypos(trimmed);
-        bool correctedQuery = !string.Equals(corrected, trimmed, StringComparison.OrdinalIgnoreCase);
-        bool vehicleQuery = LooksLikeVehicleQuery(corrected);
-        bool hasPriceOrSpecs = ContainsAny(corrected, ["price", "prices", "value", "market", "spec", "specs", "review"]);
-        bool hasMarketTerms = ContainsAny(corrected, ["used", "sale", "market", "classic.com", "carsforsale"]);
+        bool vehicleQuery = LooksLikeVehicleQuery(trimmed);
+        bool hasPriceOrSpecs = ContainsAny(trimmed, ["price", "prices", "value", "market", "spec", "specs", "review"]);
+        bool hasMarketTerms = ContainsAny(trimmed, ["used", "sale", "market", "classic.com", "carsforsale"]);
 
-        var variants = new List<string>();
-
-        if (correctedQuery && vehicleQuery && !hasPriceOrSpecs)
+        var variants = new List<string>
         {
-            variants.Add(corrected + " price specs review");
+            trimmed
+        };
+
+        if (vehicleQuery && !hasPriceOrSpecs)
+        {
+            variants.Add(trimmed + " price specs review");
         }
 
-        if (correctedQuery && vehicleQuery && !hasMarketTerms)
+        if (vehicleQuery && !hasMarketTerms)
         {
-            variants.Add(corrected + " used price market value");
-        }
-
-        if (correctedQuery)
-        {
-            variants.Add(corrected);
-        }
-
-        variants.Add(trimmed);
-
-        if (!correctedQuery && vehicleQuery && !hasPriceOrSpecs)
-        {
-            variants.Add(corrected + " price specs review");
-        }
-
-        if (!correctedQuery && vehicleQuery && !hasMarketTerms)
-        {
-            variants.Add(corrected + " used price market value");
+            variants.Add(trimmed + " used price market value");
         }
 
         return variants
@@ -305,16 +289,6 @@ public sealed partial class OnlineSearchTool : IAgentTool
         }
 
         return text;
-    }
-
-    private static string CorrectCommonSearchTypos(string query)
-    {
-        string corrected = Regex.Replace(query, "\\bMitsubateie\\b", "Mitsubishi", RegexOptions.IgnoreCase);
-        corrected = Regex.Replace(corrected, "\\bMitsubatie\\b", "Mitsubishi", RegexOptions.IgnoreCase);
-        corrected = Regex.Replace(corrected, "\\bMitsubashi\\b", "Mitsubishi", RegexOptions.IgnoreCase);
-        corrected = Regex.Replace(corrected, "\\bMitsubisi\\b", "Mitsubishi", RegexOptions.IgnoreCase);
-        corrected = Regex.Replace(corrected, "\\bLanser\\b", "Lancer", RegexOptions.IgnoreCase);
-        return corrected;
     }
 
     private static bool LooksLikeVehicleQuery(string query)

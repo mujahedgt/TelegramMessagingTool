@@ -248,6 +248,8 @@ AssertFalse(privacyGatedRegistry.RenderToolInstructions().Contains("online_searc
 ToolRegistry enabledSearchRegistry = ToolRegistryFactory.Create(searchEnabledSettings, new HttpClient());
 AssertTrue(enabledSearchRegistry.TryGet("online_search", out _), "ToolRegistryFactory includes online_search only when enabled");
 AssertTrue(enabledSearchRegistry.RenderToolInstructions().Contains("online_search"), "Enabled online_search is advertised in model instructions");
+AssertFalse(registry.RenderToolInstructions().Contains("Mitsubateie", StringComparison.OrdinalIgnoreCase), "ToolRegistry online_search instructions avoid domain-specific typo examples");
+AssertFalse(registry.RenderToolInstructions().Contains("Mitsubishi Lancer", StringComparison.OrdinalIgnoreCase), "ToolRegistry online_search instructions avoid hardcoded correction examples");
 AssertTrue(registry.TryGet("calculator", out IAgentTool? registeredCalculator), "ToolRegistry finds calculator");
 AssertEqual("calculator", registeredCalculator!.Name, "ToolRegistry returns matching tool");
 AssertTrue(registry.RenderToolList().Contains("online_search"), "ToolRegistry lists online search");
@@ -277,8 +279,9 @@ Uri searchUri = OnlineSearchTool.BuildSearchUri("asp.net core performance tips")
 AssertTrue(searchUri.ToString().Contains("startpage.com"), "OnlineSearchTool primary endpoint uses Startpage compatibility helper");
 AssertTrue(searchUri.Query.Contains("asp.net"), "OnlineSearchTool includes query text");
 IReadOnlyList<string> typoSearchVariants = OnlineSearchTool.BuildSearchQueryVariants("Mitsubateie Lanser 1992");
-AssertTrue(typoSearchVariants.Any(x => x.Contains("Mitsubishi Lancer 1992", StringComparison.OrdinalIgnoreCase)), "OnlineSearchTool corrects obvious Mitsubishi Lancer typo");
-AssertTrue(typoSearchVariants.Any(x => x.Contains("price", StringComparison.OrdinalIgnoreCase) && x.Contains("spec", StringComparison.OrdinalIgnoreCase)), "OnlineSearchTool expands vehicle searches with price/spec terms");
+AssertTrue(typoSearchVariants.Contains("Mitsubateie Lanser 1992"), "OnlineSearchTool preserves the user's original query instead of applying domain-specific typo corrections");
+AssertFalse(typoSearchVariants.Any(x => x.Contains("Mitsubishi Lancer", StringComparison.OrdinalIgnoreCase)), "OnlineSearchTool does not hardcode Mitsubishi/Lancer typo correction");
+AssertTrue(typoSearchVariants.Any(x => x.Contains("price", StringComparison.OrdinalIgnoreCase) && x.Contains("spec", StringComparison.OrdinalIgnoreCase)), "OnlineSearchTool still expands year-based vehicle searches with price/spec terms");
 
 string startPageFixture = """
 <a class="result-title result-link" href="https://www.microsoft.com/en-us/surface/devices/surface-laptop"><h2>Surface Laptop 8th Edition - Microsoft</h2></a>

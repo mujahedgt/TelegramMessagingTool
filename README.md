@@ -139,14 +139,14 @@ Available tools:
 | `datetime` | No | Current UTC and local server time |
 | `calculator` | No | Safe arithmetic expressions only |
 | `status` | No | Runtime configuration summary |
-| `online_search` | No | Optional. Registered only when `ENABLE_ONLINE_SEARCH=true`. Public web search through DuckDuckGo Lite, Startpage, and Mojeek fallbacks; corrects common obvious query typos and expands vehicle searches with price/spec terms |
+| `online_search` | No | Optional. Registered only when `ENABLE_ONLINE_SEARCH=true`. Public web search through DuckDuckGo Lite, Startpage, and Mojeek fallbacks; uses clean query variants and expands vehicle searches with price/spec terms |
 
 Search behavior notes:
 
 - When `ENABLE_ONLINE_SEARCH=true`, the model is instructed to use `online_search` for current facts, prices, market values, specs, products, cars, and news.
 - When `ENABLE_ONLINE_SEARCH=false`, the tool is not registered or advertised; the bot should say live web search is disabled instead of guessing current facts.
 - The bot now hides raw `tool_call` JSON from the final answer after the tool runs.
-- For clear misspellings such as `Mitsubateie Lanser 1992`, the search tool tries corrected/expanded variants such as `Mitsubishi Lancer 1992 price specs review`.
+- The search tool preserves the user's original query after whitespace cleanup. It no longer applies hardcoded domain-specific typo corrections; the model should correct obvious spelling only when the intended term is clear from context.
 - Final search answers should summarize only what the returned search results support and include useful source links.
 
 Multi-step tool loop notes:

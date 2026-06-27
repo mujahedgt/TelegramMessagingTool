@@ -52,9 +52,11 @@ Main improvement themes:
 
 Remove hardcoded behavior that will become painful as the agent grows.
 
-## 0.1 Move conversation history window into `BotSettings`
+## 0.1 Move conversation history window into `BotSettings` ✅ Done
 
-**Problem:** `Program.cs` hardcodes `maxHistory: 8` in both console and Telegram paths.
+**Status:** Implemented in commit `5ca5395` with `CONVERSATION_MAX_HISTORY`, default `8`, clamp `1..50`, tests, README docs, publish, push, and runtime verification.
+
+**Problem:** `Program.cs` hardcoded `maxHistory: 8` in both console and Telegram paths.
 
 **Files:**
 
@@ -103,9 +105,11 @@ dotnet build TelegramMessagingTool.slnx --configuration Release --nologo
 
 ---
 
-## 0.2 Generalize or remove Mitsubishi/Lancer typo correction
+## 0.2 Generalize or remove Mitsubishi/Lancer typo correction ✅ Done
 
-**Problem:** `OnlineSearchTool.CorrectCommonSearchTypos(...)` contains vehicle-specific corrections:
+**Status:** Implemented by preserving the user's whitespace-normalized query, removing `CorrectCommonSearchTypos(...)`, removing the hardcoded Mitsubishi/Lancer instruction example, keeping generic model-side correction guidance, and adding tests/README docs.
+
+**Problem:** `OnlineSearchTool.CorrectCommonSearchTypos(...)` contained vehicle-specific corrections:
 
 ```csharp
 Mitsubateie -> Mitsubishi

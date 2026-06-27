@@ -52,7 +52,7 @@ public sealed class ToolRegistry
         if (TryGet("online_search", out _))
         {
             builder.AppendLine("Use online_search for current facts, prices, market values, news, products, cars, specs, or anything likely to need web data.");
-            builder.AppendLine("For online_search, make the input a clean search query. Correct obvious spelling mistakes before searching when the intended term is clear, for example 'Mitsubateie Lanser 1992' -> 'Mitsubishi Lancer 1992 price specs'.");
+            builder.AppendLine("For online_search, make the input a clean search query. Correct obvious spelling mistakes before searching only when the intended term is clear from the user's wording and context.");
             builder.AppendLine("If the user asks for prices, include words like price, used price, market value, or sale in the search query.");
         }
         else
