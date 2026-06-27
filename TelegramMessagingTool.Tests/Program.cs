@@ -135,11 +135,18 @@ ToolCallParseResult embeddedToolCall = ToolCallParser.Parse("I will search now:\
 AssertTrue(embeddedToolCall.IsToolCall, "ToolCallParser extracts embedded tool call JSON from chatty model output");
 AssertEqual("online_search", embeddedToolCall.ToolName, "ToolCallParser extracts embedded tool name");
 
+var heuristicSearchRoutingClassifier = new HeuristicSearchRoutingClassifier();
+SearchRoutingDecision newestMitsubishiDecision = heuristicSearchRoutingClassifier.Classify([new OllamaMessageDto("user", "what is the newest car from mitsubishi")]);
+AssertTrue(newestMitsubishiDecision.ShouldSearch, "HeuristicSearchRoutingClassifier directly searches newest/current factual questions");
+AssertTrue(newestMitsubishiDecision.Query.Contains("Mitsubishi", StringComparison.OrdinalIgnoreCase), "HeuristicSearchRoutingClassifier keeps the requested brand in direct search query");
+AssertTrue(newestMitsubishiDecision.Query.Contains("official", StringComparison.OrdinalIgnoreCase), "HeuristicSearchRoutingClassifier expands newest/current direct search query with official/latest context");
 AssertTrue(
     AgentRunner.TryBuildDirectSearchQuery([new OllamaMessageDto("user", "what is the newest car from mitsubishi")], out string newestMitsubishiQuery),
-    "AgentRunner directly searches newest/current factual questions");
-AssertTrue(newestMitsubishiQuery.Contains("Mitsubishi", StringComparison.OrdinalIgnoreCase), "AgentRunner keeps the requested brand in direct search query");
-AssertTrue(newestMitsubishiQuery.Contains("official", StringComparison.OrdinalIgnoreCase), "AgentRunner expands newest/current direct search query with official/latest context");
+    "AgentRunner compatibility helper delegates direct search classification");
+AssertEqual(newestMitsubishiDecision.Query, newestMitsubishiQuery, "AgentRunner compatibility helper preserves heuristic search query behavior");
+AssertFalse(
+    heuristicSearchRoutingClassifier.Classify([new OllamaMessageDto("user", "explain delegates in C#")]).ShouldSearch,
+    "HeuristicSearchRoutingClassifier skips non-current local/explanation questions");
 
 var calculator = new CalculatorTool();
 ToolResult calculation = await calculator.ExecuteAsync("25 * 19", CancellationToken.None);

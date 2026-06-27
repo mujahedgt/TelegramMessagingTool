@@ -167,9 +167,11 @@ dotnet run --project TelegramMessagingTool.Tests/TelegramMessagingTool.Tests.csp
 
 ---
 
-## 0.3 Replace keyword-based direct search heuristics with a lightweight classifier
+## 0.3 Replace keyword-based direct search heuristics with a lightweight classifier — foundation ✅ Done
 
-**Problem:** `AgentRunner.TryBuildDirectSearchQuery(...)` triggers web search if words like `price`, `today`, `released`, or `2026` appear anywhere in the message.
+**Status:** Foundation implemented by extracting the existing direct-search behavior into `ISearchRoutingClassifier`, `SearchRoutingDecision`, and `HeuristicSearchRoutingClassifier`. `AgentRunner` now accepts an injectable classifier while preserving the old `TryBuildDirectSearchQuery(...)` compatibility helper. LLM mode and `SEARCH_ROUTING_MODE` wiring remain next.
+
+**Problem:** `AgentRunner.TryBuildDirectSearchQuery(...)` triggered web search if words like `price`, `today`, `released`, or `2026` appeared anywhere in the message.
 
 This can cause false positives:
 
@@ -236,9 +238,9 @@ Default initially: `heuristic` for backward compatibility. After tests: switch d
 
 **Implementation tasks:**
 
-1. Extract current `TryBuildDirectSearchQuery` into `HeuristicSearchRoutingClassifier` unchanged.
-2. Add tests for current behavior before refactor.
-3. Change `AgentRunner` constructor to accept `ISearchRoutingClassifier`.
+1. ✅ Extract current `TryBuildDirectSearchQuery` into `HeuristicSearchRoutingClassifier` unchanged.
+2. ✅ Add tests for current behavior before/refactor coverage.
+3. ✅ Change `AgentRunner` constructor to accept `ISearchRoutingClassifier`.
 4. Add `LlmSearchRoutingClassifier` with strict JSON parsing and safe fallback to no-search on parse failure.
 5. Add tests using fake chat client responses:
    - current price of a car → search

@@ -143,7 +143,7 @@ Available tools:
 
 Search behavior notes:
 
-- When `ENABLE_ONLINE_SEARCH=true`, the model is instructed to use `online_search` for current facts, prices, market values, specs, products, cars, and news.
+- When `ENABLE_ONLINE_SEARCH=true`, a heuristic search-routing classifier can directly use `online_search` for current facts, prices, market values, specs, products, cars, and news.
 - When `ENABLE_ONLINE_SEARCH=false`, the tool is not registered or advertised; the bot should say live web search is disabled instead of guessing current facts.
 - The bot now hides raw `tool_call` JSON from the final answer after the tool runs.
 - The search tool preserves the user's original query after whitespace cleanup. It no longer applies hardcoded domain-specific typo corrections; the model should correct obvious spelling only when the intended term is clear from context.

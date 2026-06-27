@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using TelegramMessagingTool.Services;
 using TelegramMessagingTool.Tools;
 
@@ -10,23 +9,30 @@ public sealed class AgentRunner
 
     private readonly IChatClient _chatClient;
     private readonly ToolRegistry _toolRegistry;
+    private readonly ISearchRoutingClassifier _searchRoutingClassifier;
     private readonly int _maxToolIterations;
 
-    public AgentRunner(IChatClient chatClient, ToolRegistry toolRegistry, int maxToolIterations = DefaultMaxToolIterations)
+    public AgentRunner(
+        IChatClient chatClient,
+        ToolRegistry toolRegistry,
+        int maxToolIterations = DefaultMaxToolIterations,
+        ISearchRoutingClassifier? searchRoutingClassifier = null)
     {
         _chatClient = chatClient;
         _toolRegistry = toolRegistry;
+        _searchRoutingClassifier = searchRoutingClassifier ?? new HeuristicSearchRoutingClassifier();
         _maxToolIterations = Math.Max(1, maxToolIterations);
     }
 
     public async Task<string> RunAsync(List<OllamaMessageDto> conversationContext, CancellationToken cancellationToken)
     {
-        if (TryBuildDirectSearchQuery(conversationContext, out string directSearchQuery)
+        SearchRoutingDecision searchRoutingDecision = await _searchRoutingClassifier.ClassifyAsync(conversationContext, cancellationToken);
+        if (searchRoutingDecision.ShouldSearch
             && _toolRegistry.TryGet("online_search", out IAgentTool? searchTool)
             && searchTool is not null)
         {
-            ToolResult searchResult = await searchTool.ExecuteAsync(directSearchQuery, cancellationToken);
-            return await BuildOnlineSearchAnswerAsync(conversationContext, directSearchQuery, searchResult, cancellationToken);
+            ToolResult searchResult = await searchTool.ExecuteAsync(searchRoutingDecision.Query, cancellationToken);
+            return await BuildOnlineSearchAnswerAsync(conversationContext, searchRoutingDecision.Query, searchResult, cancellationToken);
         }
 
         for (int step = 1; step <= _maxToolIterations; step++)
@@ -132,42 +138,6 @@ Rules:
 
     public static bool TryBuildDirectSearchQuery(List<OllamaMessageDto> conversationContext, out string query)
     {
-        query = string.Empty;
-        string? userText = conversationContext
-            .LastOrDefault(x => string.Equals(x.role, "user", StringComparison.OrdinalIgnoreCase))
-            ?.content;
-
-        if (string.IsNullOrWhiteSpace(userText))
-        {
-            return false;
-        }
-
-        bool asksForSearch = ContainsAny(userText, ["search", "searsh", "google", "look up", "find online", "online", "web"]);
-        bool asksForCurrentInfo = ContainsAny(userText, ["latest", "newest", "recent", "current", "currently", "today", "this year", "new model", "new car", "just released", "released", "upcoming", "2025", "2026"]);
-        bool asksForCurrentMarketData = ContainsAny(userText, ["price", "prices", "market value", "current value", "for sale"]);
-        if (!asksForSearch && !asksForCurrentInfo && !asksForCurrentMarketData)
-        {
-            return false;
-        }
-
-        Match quoted = Regex.Match(userText, "[\"“”'](?<query>[^\"“”']{2,120})[\"“”']");
-        query = quoted.Success ? quoted.Groups["query"].Value.Trim() : userText.Trim();
-
-        if (asksForCurrentMarketData && !ContainsAny(query, ["price", "prices", "market", "value", "sale", "spec", "specs"]))
-        {
-            query += " price specs";
-        }
-
-        if (asksForCurrentInfo && !ContainsAny(query, ["official", "2025", "2026", "latest model", "new model"]))
-        {
-            query += " 2026 official latest model";
-        }
-
-        return !string.IsNullOrWhiteSpace(query);
-    }
-
-    private static bool ContainsAny(string text, IReadOnlyList<string> terms)
-    {
-        return terms.Any(term => text.Contains(term, StringComparison.OrdinalIgnoreCase));
+        return HeuristicSearchRoutingClassifier.TryBuildDirectSearchQuery(conversationContext, out query);
     }
 }
