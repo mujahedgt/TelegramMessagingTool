@@ -17,7 +17,9 @@ public sealed record BotSettings(
     int ConversationMaxHistory,
     string SearchRoutingMode,
     bool EnableSafeCommandTools,
-    string SafeCommandProjectRoot)
+    string SafeCommandProjectRoot,
+    bool EnablePlugins,
+    string PluginDirectory)
 {
     public string OllamaChatModel { get; init; } = OllamaModel;
 
@@ -49,8 +51,10 @@ public static class BotConfiguration
         bool enableDocumentEmbeddings = IsEnabled(Environment.GetEnvironmentVariable("ENABLE_DOCUMENT_EMBEDDINGS"), defaultValue: false);
         bool enableOnlineSearch = IsEnabled(Environment.GetEnvironmentVariable("ENABLE_ONLINE_SEARCH"), defaultValue: false);
         bool enableSafeCommandTools = IsEnabled(Environment.GetEnvironmentVariable("ENABLE_SAFE_COMMAND_TOOLS"), defaultValue: false);
+        bool enablePlugins = IsEnabled(Environment.GetEnvironmentVariable("ENABLE_PLUGINS"), defaultValue: false);
         bool allowPublicAccess = IsEnabled(Environment.GetEnvironmentVariable("ALLOW_PUBLIC_ACCESS"), defaultValue: false);
         string safeCommandProjectRoot = NormalizeFullPath(Environment.GetEnvironmentVariable("SAFE_COMMAND_PROJECT_ROOT"), Environment.CurrentDirectory);
+        string pluginDirectory = NormalizeFullPath(Environment.GetEnvironmentVariable("PLUGIN_DIRECTORY"), Path.Combine(Environment.CurrentDirectory, "plugins"));
         string databaseConnectionString = Environment.GetEnvironmentVariable("TELEGRAM_DB_CONNECTION")
             ?? @"Server=(localdb)\MSSQLLocalDB;Database=TelegramMessagingTool;Trusted_Connection=True;TrustServerCertificate=True";
 
@@ -73,7 +77,9 @@ public static class BotConfiguration
             ConversationMaxHistory: ParseClampedInt(Environment.GetEnvironmentVariable("CONVERSATION_MAX_HISTORY"), defaultValue: 8, minValue: 1, maxValue: 50),
             SearchRoutingMode: NormalizeSearchRoutingMode(Environment.GetEnvironmentVariable("SEARCH_ROUTING_MODE")),
             EnableSafeCommandTools: enableSafeCommandTools,
-            SafeCommandProjectRoot: safeCommandProjectRoot)
+            SafeCommandProjectRoot: safeCommandProjectRoot,
+            EnablePlugins: enablePlugins,
+            PluginDirectory: pluginDirectory)
         {
             OllamaChatModel = NormalizeModelRoute(Environment.GetEnvironmentVariable("OLLAMA_MODEL_CHAT"), ollamaModel),
             OllamaPlanningModel = NormalizeModelRoute(Environment.GetEnvironmentVariable("OLLAMA_MODEL_PLAN"), ollamaModel),

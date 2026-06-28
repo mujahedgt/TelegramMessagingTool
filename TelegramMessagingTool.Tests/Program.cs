@@ -8,6 +8,7 @@ using TelegramMessagingTool.Commands;
 using TelegramMessagingTool.ConsoleUi;
 using TelegramMessagingTool.Data;
 using TelegramMessagingTool.Models;
+using TelegramMessagingTool.Plugins;
 using TelegramMessagingTool.Services;
 using TelegramMessagingTool.Telegram;
 using TelegramMessagingTool.Tools;
@@ -80,6 +81,8 @@ string? previousConversationMaxHistory = Environment.GetEnvironmentVariable("CON
 string? previousSearchRoutingMode = Environment.GetEnvironmentVariable("SEARCH_ROUTING_MODE");
 string? previousEnableSafeCommandTools = Environment.GetEnvironmentVariable("ENABLE_SAFE_COMMAND_TOOLS");
 string? previousSafeCommandProjectRoot = Environment.GetEnvironmentVariable("SAFE_COMMAND_PROJECT_ROOT");
+string? previousEnablePlugins = Environment.GetEnvironmentVariable("ENABLE_PLUGINS");
+string? previousPluginDirectory = Environment.GetEnvironmentVariable("PLUGIN_DIRECTORY");
 try
 {
     Environment.SetEnvironmentVariable("CONVERSATION_MAX_HISTORY", "13");
@@ -108,6 +111,16 @@ try
     BotSettings safeCommandEnvironmentSettings = BotConfiguration.LoadFromEnvironment();
     AssertTrue(safeCommandEnvironmentSettings.EnableSafeCommandTools, "LoadFromEnvironment parses ENABLE_SAFE_COMMAND_TOOLS truthy values");
     AssertEqual(Path.GetFullPath(Directory.GetCurrentDirectory()), safeCommandEnvironmentSettings.SafeCommandProjectRoot, "LoadFromEnvironment reads SAFE_COMMAND_PROJECT_ROOT as a full path");
+
+    Environment.SetEnvironmentVariable("ENABLE_PLUGINS", null);
+    AssertFalse(BotConfiguration.LoadFromEnvironment().EnablePlugins, "LoadFromEnvironment defaults plugins to disabled");
+
+    string pluginDirectory = Path.Combine(Directory.GetCurrentDirectory(), "custom-plugins");
+    Environment.SetEnvironmentVariable("ENABLE_PLUGINS", "yes");
+    Environment.SetEnvironmentVariable("PLUGIN_DIRECTORY", pluginDirectory);
+    BotSettings pluginEnvironmentSettings = BotConfiguration.LoadFromEnvironment();
+    AssertTrue(pluginEnvironmentSettings.EnablePlugins, "LoadFromEnvironment parses ENABLE_PLUGINS truthy values");
+    AssertEqual(Path.GetFullPath(pluginDirectory), pluginEnvironmentSettings.PluginDirectory, "LoadFromEnvironment reads PLUGIN_DIRECTORY as a full path");
 }
 finally
 {
@@ -115,7 +128,65 @@ finally
     Environment.SetEnvironmentVariable("SEARCH_ROUTING_MODE", previousSearchRoutingMode);
     Environment.SetEnvironmentVariable("ENABLE_SAFE_COMMAND_TOOLS", previousEnableSafeCommandTools);
     Environment.SetEnvironmentVariable("SAFE_COMMAND_PROJECT_ROOT", previousSafeCommandProjectRoot);
+    Environment.SetEnvironmentVariable("ENABLE_PLUGINS", previousEnablePlugins);
+    Environment.SetEnvironmentVariable("PLUGIN_DIRECTORY", previousPluginDirectory);
 }
+
+AssertTrue(PluginManifest.TryParse("""
+{
+  "id": "sample-plugin",
+  "name": "Sample Plugin",
+  "version": "1.0.0",
+  "entryAssembly": "SamplePlugin.dll",
+  "enabled": true,
+  "riskLevel": "low",
+  "allowedToolNames": ["sample_tool"]
+}
+""" ).Success, "PluginManifest parses a valid manifest");
+AssertFalse(PluginManifest.IsValidToolName("BadTool"), "PluginManifest rejects uppercase tool names");
+AssertFalse(PluginManifest.TryParse("""
+{
+  "id": "bad-plugin",
+  "name": "Bad Plugin",
+  "version": "1.0.0",
+  "entryAssembly": "BadPlugin.dll",
+  "enabled": true,
+  "riskLevel": "low",
+  "allowedToolNames": ["BadTool"]
+}
+""" ).Success, "PluginManifest rejects invalid allowed tool names");
+
+string pluginTestRoot = Path.Combine(Path.GetTempPath(), $"TelegramMessagingTool_Plugins_{Guid.NewGuid():N}");
+Directory.CreateDirectory(Path.Combine(pluginTestRoot, "SamplePlugin"));
+Directory.CreateDirectory(Path.Combine(pluginTestRoot, "DuplicatePlugin"));
+await File.WriteAllTextAsync(Path.Combine(pluginTestRoot, "SamplePlugin", "plugin.json"), """
+{
+  "id": "sample-plugin",
+  "name": "Sample Plugin",
+  "version": "1.0.0",
+  "entryAssembly": "SamplePlugin.dll",
+  "enabled": true,
+  "riskLevel": "low",
+  "allowedToolNames": ["sample_tool"]
+}
+""");
+await File.WriteAllTextAsync(Path.Combine(pluginTestRoot, "DuplicatePlugin", "plugin.json"), """
+{
+  "id": "duplicate-plugin",
+  "name": "Duplicate Plugin",
+  "version": "1.0.0",
+  "entryAssembly": "DuplicatePlugin.dll",
+  "enabled": true,
+  "riskLevel": "low",
+  "allowedToolNames": ["sample_tool"]
+}
+""");
+PluginScanResult pluginScanResult = new PluginManifestScanner().Scan(pluginTestRoot);
+AssertEqual(1, pluginScanResult.Manifests.Count, "PluginManifestScanner skips duplicate tool names across manifests");
+AssertTrue(pluginScanResult.Manifests[0].Manifest.AllowedToolNames.Contains("sample_tool"), "PluginManifestScanner keeps one plugin manifest for the duplicated tool name");
+AssertTrue(pluginScanResult.Diagnostics.Any(x => x.Contains("duplicated", StringComparison.OrdinalIgnoreCase)), "PluginManifestScanner reports duplicate tool diagnostics");
+AssertTrue(pluginScanResult.RenderSummary().Contains("plugin", StringComparison.OrdinalIgnoreCase), "PluginScanResult summary includes discovered plugin information");
+Directory.Delete(pluginTestRoot, recursive: true);
 
 AssertTrue(CommandParser.TryParse("/status", out ParsedCommand parsedStatus), "CommandParser parses bare command");
 AssertEqual("/status", parsedStatus.Command, "CommandParser normalizes bare command token");
@@ -270,7 +341,9 @@ var searchDisabledSettings = new BotSettings(
     ConversationMaxHistory: 8,
     SearchRoutingMode: "heuristic",
     EnableSafeCommandTools: false,
-    SafeCommandProjectRoot: Directory.GetCurrentDirectory());
+    SafeCommandProjectRoot: Directory.GetCurrentDirectory(),
+    EnablePlugins: false,
+    PluginDirectory: Path.Combine(Directory.GetCurrentDirectory(), "plugins"));
 var searchEnabledSettings = searchDisabledSettings with { EnableOnlineSearch = true };
 
 var defaultModelRouting = new ModelRoutingService(searchDisabledSettings);
@@ -642,7 +715,9 @@ await using (var dbContext = new TelegramDbContext())
         ConversationMaxHistory: 8,
         SearchRoutingMode: "heuristic",
         EnableSafeCommandTools: false,
-        SafeCommandProjectRoot: Directory.GetCurrentDirectory())
+        SafeCommandProjectRoot: Directory.GetCurrentDirectory(),
+        EnablePlugins: false,
+        PluginDirectory: Path.Combine(Directory.GetCurrentDirectory(), "plugins"))
     {
         OllamaPlanningModel = "qwen3:4b",
         OllamaDocumentQuestionAnsweringModel = "qwen3:8b"

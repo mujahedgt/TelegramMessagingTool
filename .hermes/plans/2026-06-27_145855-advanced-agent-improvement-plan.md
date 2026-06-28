@@ -468,14 +468,14 @@ PLUGIN_DIRECTORY=plugins
 
 ## Bite-sized tasks
 
-1. Add `PluginManifest` parser with tests.
-2. Add tool-name validation with tests.
-3. Add duplicate handling tests.
-4. Add `PluginLoader` that scans but does not execute tools yet.
-5. Add test plugin fixture under `TelegramMessagingTool.Tests/TestPlugins/`.
-6. Register plugin tools only when `ENABLE_PLUGINS=true`.
-7. Show plugin source in `/tools` or a new `/plugins` command.
-8. Document plugin authoring.
+1. Add `PluginManifest` parser with tests. ✅ Done
+2. Add tool-name validation with tests. ✅ Done
+3. Add duplicate handling tests. ✅ Done
+4. Add `PluginManifestScanner` that scans manifests but does not load or execute plugin assemblies yet. ✅ Done
+5. Add test plugin fixture under temporary test directory. ✅ Done
+6. Register plugin tools only when `ENABLE_PLUGINS=true`. Pending — no plugin tool loading yet.
+7. Show plugin source in `/tools` or a new `/plugins` command. Pending.
+8. Document plugin authoring. Started with env/safety docs; full authoring guide pending.
 
 ---
 
