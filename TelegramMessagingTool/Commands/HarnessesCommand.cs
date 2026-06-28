@@ -7,6 +7,13 @@ namespace TelegramMessagingTool.Commands;
 
 public sealed class HarnessesCommand : IBotCommand
 {
+    private readonly BotSettings _settings;
+
+    public HarnessesCommand(BotSettings settings)
+    {
+        _settings = settings;
+    }
+
     public string Name => "/harnesses";
 
     public string Description => "Show planned image and voice agent harnesses.";
@@ -22,6 +29,6 @@ public sealed class HarnessesCommand : IBotCommand
             return Task.FromResult(new CommandResult(false, null));
         }
 
-        return Task.FromResult(new CommandResult(true, AgentHarnessCatalog.RenderHarnesses()));
+        return Task.FromResult(new CommandResult(true, AgentHarnessCatalog.RenderHarnesses(_settings)));
     }
 }

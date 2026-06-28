@@ -69,13 +69,25 @@ public static class AgentHarnessCatalog
         ];
     }
 
-    public static string RenderHarnesses(IReadOnlyList<AgentHarnessDefinition>? harnesses = null)
+    public static string RenderHarnesses(IReadOnlyList<AgentHarnessDefinition> harnesses) => RenderHarnesses(settings: null, harnesses: harnesses);
+
+    public static string RenderHarnesses(BotSettings? settings = null, IReadOnlyList<AgentHarnessDefinition>? harnesses = null)
     {
         IReadOnlyList<AgentHarnessDefinition> selectedHarnesses = harnesses ?? GetDefaultHarnesses();
         var builder = new StringBuilder();
         builder.AppendLine("P2 Agent Harness Plan");
         builder.AppendLine();
         builder.AppendLine("These are planning harnesses only. They do not execute image, OCR, audio, transcription, TTS, or generation work yet.");
+
+        if (settings is not null)
+        {
+            builder.AppendLine();
+            builder.AppendLine("Harness model routes:");
+            builder.AppendLine($"- image_agent route: {settings.OllamaImageModel}");
+            builder.AppendLine($"- voice_agent route: {settings.OllamaVoiceModel}");
+            builder.AppendLine("- image readiness target: pull/configure an Ollama vision model before enabling /describeimage vision execution.");
+            builder.AppendLine("- voice readiness target: transcription still needs a dedicated audio/Whisper provider later; the voice route is for transcript summarization/task extraction.");
+        }
 
         foreach (AgentHarnessDefinition harness in selectedHarnesses)
         {

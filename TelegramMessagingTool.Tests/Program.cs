@@ -420,7 +420,10 @@ string renderedHarnesses = AgentHarnessCatalog.RenderHarnesses(harnesses);
 AssertTrue(renderedHarnesses.Contains("P2 Agent Harness Plan"), "AgentHarnessCatalog renders a P2 title");
 AssertTrue(renderedHarnesses.Contains("image_agent"), "AgentHarnessCatalog render includes image harness");
 AssertTrue(renderedHarnesses.Contains("voice_agent"), "AgentHarnessCatalog render includes voice harness");
-var harnessesCommand = new HarnessesCommand();
+string renderedHarnessesWithRoutes = AgentHarnessCatalog.RenderHarnesses(searchDisabledSettings, harnesses);
+AssertTrue(renderedHarnessesWithRoutes.Contains("Harness model routes"), "AgentHarnessCatalog renders harness model routes when settings are provided");
+AssertTrue(renderedHarnessesWithRoutes.Contains("image_agent route"), "AgentHarnessCatalog shows image route model");
+var harnessesCommand = new HarnessesCommand(searchDisabledSettings);
 CommandResult harnessesCommandResult = await harnessesCommand.TryHandleAsync(
     new Message { Text = "/harnesses" },
     new ConnectedUser { ChatId = 123, FirstName = "Test" },

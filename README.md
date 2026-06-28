@@ -60,8 +60,8 @@ Configuration is read from environment variables.
 | `OLLAMA_MODEL_DOC_QA` | No | `OLLAMA_MODEL` | Model route for `/askfile` and `/askdocs` |
 | `OLLAMA_MODEL_SUMMARY` | No | `OLLAMA_MODEL` | Model route for `/summarizefile` and `/summarizedocs` |
 | `OLLAMA_MODEL_TOOL_FINAL` | No | `OLLAMA_MODEL` | Model route for tool final-answer synthesis |
-| `OLLAMA_MODEL_IMAGE` | No | `OLLAMA_MODEL` | Reserved model route for future image-agent features |
-| `OLLAMA_MODEL_VOICE` | No | `OLLAMA_MODEL` | Reserved model route for future voice-agent features |
+| `OLLAMA_MODEL_IMAGE` | No | `OLLAMA_MODEL` | Reserved model route for future image-agent features. Recommended local vision model after `ollama pull`: `llama3.2-vision:11b`. |
+| `OLLAMA_MODEL_VOICE` | No | `OLLAMA_MODEL` | Reserved model route for future voice-agent transcript summarization/task extraction. Audio transcription itself still needs a dedicated transcription provider later. |
 | `OLLAMA_EMBEDDING_URL` | No | derived from `OLLAMA_URL` as `/api/embed` | Ollama embedding API endpoint |
 | `OLLAMA_EMBEDDING_MODEL` | No | `nomic-embed-text` | Local embedding model used by `/embedfile` and `/embeddocs` |
 | `ENABLE_DOCUMENT_EMBEDDINGS` | No | `false` | If true, `/askfile` and `/askdocs` use stored embeddings for hybrid semantic retrieval when available |
@@ -87,6 +87,8 @@ export OLLAMA_MODEL='llama3.2:3b'
 # Optional route-specific overrides; blank/unset routes fall back to OLLAMA_MODEL.
 export OLLAMA_MODEL_PLAN='llama3.2:3b'
 export OLLAMA_MODEL_DOC_QA='llama3.2:3b'
+export OLLAMA_MODEL_IMAGE='llama3.2-vision:11b'
+export OLLAMA_MODEL_VOICE='llama3.2:3b'
 export OLLAMA_EMBEDDING_MODEL='nomic-embed-text'
 export ENABLE_DOCUMENT_EMBEDDINGS='false'
 export ENABLE_ONLINE_SEARCH='false'

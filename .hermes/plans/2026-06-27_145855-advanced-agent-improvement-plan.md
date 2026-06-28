@@ -473,9 +473,10 @@ PLUGIN_DIRECTORY=plugins
 3. Add duplicate handling tests. ✅ Done
 4. Add `PluginManifestScanner` that scans manifests but does not load or execute plugin assemblies yet. ✅ Done
 5. Add test plugin fixture under temporary test directory. ✅ Done
-6. Register plugin tools only when `ENABLE_PLUGINS=true`. Pending — no plugin tool loading yet.
-7. Show plugin source in `/tools` or a new `/plugins` command. Pending.
-8. Document plugin authoring. Started with env/safety docs; full authoring guide pending.
+6. Add harness model-route visibility and pull/configure the local image harness model (`llama3.2-vision:11b`). ✅ Done
+7. Register plugin tools only when `ENABLE_PLUGINS=true`. Pending — no plugin tool loading yet.
+8. Show plugin source in `/tools` or a new `/plugins` command. Pending.
+9. Document plugin authoring. Started with env/safety docs; full authoring guide pending.
 
 ---
 
