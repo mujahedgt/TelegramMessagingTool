@@ -87,6 +87,7 @@ var commandRouter = new CommandRouter([
     new ForgetCommand(),
     new FilesCommand(documentStorage),
     new ImagesCommand(),
+    new DescribeImageCommand(settings),
     new ReadFileCommand(documentStorage),
     new CreateFileCommand(documentStorage),
     new ImportFilesCommand(importDirectory, documentStorage, settings),

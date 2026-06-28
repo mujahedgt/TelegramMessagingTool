@@ -18,7 +18,7 @@ TelegramMessagingTool is a C#/.NET console application that connects a Telegram 
 - Local console chat/command input using the same command router, memory, tools, and agent runner as Telegram
 - Live console event lines for startup, commands, messages, denied users, shutdown, and errors
 - Sandboxed document/file support for `.txt`, `.md`, `.json`, `.csv`, `.pdf`, `.docx`, `.xlsx`, `.png`, `.jpg`, `.jpeg`, `.webp`, and `.gif`
-- File commands: `/files`, `/images`, `/readfile <id>`, `/createfile <filename> <content>`, admin-only local import via `/importfiles` and `/importfile <filename>`, and admin-approved `/deletefile <id>`
+- File commands: `/files`, `/images`, `/describeimage <id>`, `/readfile <id>`, `/createfile <filename> <content>`, admin-only local import via `/importfiles` and `/importfile <filename>`, and admin-approved `/deletefile <id>`
 - Document Q&A indexing, question, summary, and embedding commands: `/indexfile`, `/indexdocs`, `/docchunks`, `/askfile`, `/askdocs`, `/summarizefile`, `/summarizedocs`, `/embedfile`, and `/embeddocs`
 - Read-only local device commands: `/systeminfo`, `/diskstatus`, and `/processes [count]`
 - Safe approval foundation for future risky tools
@@ -187,7 +187,7 @@ The `/harnesses` command shows the next planned agent harnesses before their too
 | `image_agent` | planned | `describe_image`, `extract_image_text`, `generate_image_prompt`, `create_image` |
 | `voice_agent` | planned | `transcribe_audio`, `summarize_audio`, `extract_audio_tasks`, `speak_text` |
 
-These harnesses are currently **planning only**. The first image-agent foundation is implemented: `/images` lists sandboxed `.png/.jpg/.jpeg/.webp/.gif` files that were uploaded as Telegram documents. Image description/OCR/generation and all voice/audio transcription/TTS tools are still planned next and should remain read-only/sandboxed first, followed by optional providers behind explicit feature flags.
+These harnesses are currently **planning only**. The first image-agent foundation is implemented: `/images` lists sandboxed `.png/.jpg/.jpeg/.webp/.gif` files that were uploaded as Telegram documents, and `/describeimage <id>` returns safe metadata plus the configured image model route without running OCR/vision yet. Image description/OCR/generation and all voice/audio transcription/TTS tools are still planned next and should remain read-only/sandboxed first, followed by optional providers behind explicit feature flags.
 
 ## Command parsing
 

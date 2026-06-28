@@ -723,7 +723,8 @@ await using (var dbContext = new TelegramDbContext())
         PluginDirectory: Path.Combine(Directory.GetCurrentDirectory(), "plugins"))
     {
         OllamaPlanningModel = "qwen3:4b",
-        OllamaDocumentQuestionAnsweringModel = "qwen3:8b"
+        OllamaDocumentQuestionAnsweringModel = "qwen3:8b",
+        OllamaImageModel = "llama3.2-vision:11b"
     };
 
     var pendingActionService = new PendingActionService();
@@ -756,6 +757,7 @@ await using (var dbContext = new TelegramDbContext())
         new ForgetCommand(),
         new FilesCommand(documentStorage),
         new ImagesCommand(),
+        new DescribeImageCommand(adminTestSettings),
         new ReadFileCommand(documentStorage),
         new CreateFileCommand(documentStorage),
         new ImportFilesCommand(importDirectory, documentStorage, adminTestSettings),
@@ -1346,6 +1348,21 @@ await using (var dbContext = new TelegramDbContext())
     CommandResult imagesMentionResult = await commandRouter.TryHandleAsync(TextMessage("/images@red_eye_ghost_bot"), testUser, dbContext, CancellationToken.None);
     AssertTrue(imagesMentionResult.Handled, "/images@bot is handled");
     AssertFalse((await commandRouter.TryHandleAsync(TextMessage("/imagesx"), testUser, dbContext, CancellationToken.None)).Handled, "/imagesx is not treated as /images");
+
+    CommandResult invalidDescribeImageResult = await commandRouter.TryHandleAsync(TextMessage("/describeimage nope"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(invalidDescribeImageResult.Handled, "/describeimage invalid input is handled");
+    AssertTrue(invalidDescribeImageResult.ReplyText?.Contains("Usage: /describeimage <image-file-id>") == true, "/describeimage validates image file id input");
+
+    CommandResult nonImageDescribeImageResult = await commandRouter.TryHandleAsync(TextMessage($"/describeimage {uploadedFileId}"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(nonImageDescribeImageResult.Handled, "/describeimage non-image input is handled");
+    AssertTrue(nonImageDescribeImageResult.ReplyText?.Contains("not an image", StringComparison.OrdinalIgnoreCase) == true, "/describeimage rejects non-image documents");
+
+    CommandResult describeImageResult = await commandRouter.TryHandleAsync(TextMessage($"/describeimage {uploadedImage.Id}"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(describeImageResult.Handled, "/describeimage is handled");
+    AssertTrue(describeImageResult.ReplyText?.Contains("sample.png") == true, "/describeimage reports image filename");
+    AssertTrue(describeImageResult.ReplyText?.Contains("llama3.2-vision:11b") == true, "/describeimage reports configured image route");
+    AssertTrue(describeImageResult.ReplyText?.Contains("not implemented yet", StringComparison.OrdinalIgnoreCase) == true, "/describeimage stays metadata-only before vision execution");
+    AssertFalse((await commandRouter.TryHandleAsync(TextMessage("/describeimagex 1"), testUser, dbContext, CancellationToken.None)).Handled, "/describeimagex is not treated as /describeimage");
 
     UploadedFile fileBeforeDelete = await dbContext.UploadedFiles.FirstAsync(x => x.Id == uploadedFileId, CancellationToken.None);
     string filePathBeforeDelete = fileBeforeDelete.AbsolutePath;
