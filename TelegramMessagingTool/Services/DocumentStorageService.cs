@@ -24,7 +24,14 @@ public sealed class DocumentStorageService
         ".jpg",
         ".jpeg",
         ".webp",
-        ".gif"
+        ".gif",
+        ".mp3",
+        ".wav",
+        ".m4a",
+        ".ogg",
+        ".oga",
+        ".opus",
+        ".flac"
     };
 
     private static readonly HashSet<string> TextBasedExtensions = new(StringComparer.OrdinalIgnoreCase)
@@ -42,6 +49,17 @@ public sealed class DocumentStorageService
         ".jpeg",
         ".webp",
         ".gif"
+    };
+
+    private static readonly HashSet<string> AudioExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".mp3",
+        ".wav",
+        ".m4a",
+        ".ogg",
+        ".oga",
+        ".opus",
+        ".flac"
     };
 
     private readonly string _rootDirectory;
@@ -72,6 +90,12 @@ public sealed class DocumentStorageService
     {
         string extension = Path.GetExtension(fileName);
         return !string.IsNullOrWhiteSpace(extension) && ImageExtensions.Contains(extension);
+    }
+
+    public static bool IsAudioFileName(string fileName)
+    {
+        string extension = Path.GetExtension(fileName);
+        return !string.IsNullOrWhiteSpace(extension) && AudioExtensions.Contains(extension);
     }
 
     public static string SanitizeFileName(string fileName)
@@ -242,6 +266,11 @@ public sealed class DocumentStorageService
         if (ImageExtensions.Contains(extension))
         {
             return "Image files are saved for the image-agent harness. Text extraction/OCR is not implemented yet. Use /images to list saved images.";
+        }
+
+        if (AudioExtensions.Contains(extension))
+        {
+            return "Audio files are saved for the voice-agent harness. Transcription is not implemented yet. Use /voicefiles to list saved audio files.";
         }
 
         string text = extension switch
@@ -503,6 +532,12 @@ public sealed class DocumentStorageService
             ".jpg" or ".jpeg" => "image/jpeg",
             ".webp" => "image/webp",
             ".gif" => "image/gif",
+            ".mp3" => "audio/mpeg",
+            ".wav" => "audio/wav",
+            ".m4a" => "audio/mp4",
+            ".ogg" or ".oga" => "audio/ogg",
+            ".opus" => "audio/opus",
+            ".flac" => "audio/flac",
             _ => "text/plain"
         };
     }

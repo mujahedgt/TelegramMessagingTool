@@ -36,6 +36,7 @@ TelegramMessagingTool Agent Commands
 /files - List saved files and uploaded documents
 /images - List saved sandboxed image files for the planned image-agent harness
 /describeimage <id> - Show safe metadata for a saved image; vision description/OCR is planned next
+/voicefiles - List saved sandboxed audio files for the planned voice-agent harness
 /readfile <id> - Read a saved text/PDF/DOCX/XLSX document
 /createfile <filename> <content> - Create a sandboxed .txt/.md/.json/.csv/.pdf/.docx/.xlsx file
 /importfiles - Admin-only: list local ImportInbox files

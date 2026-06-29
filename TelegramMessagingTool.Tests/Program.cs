@@ -596,6 +596,10 @@ AssertTrue(documentStorage.IsAllowedFileName("photo.png"), "DocumentStorageServi
 AssertTrue(documentStorage.IsAllowedFileName("photo.jpg"), "DocumentStorageService allows JPG image files");
 AssertTrue(DocumentStorageService.IsImageFileName("photo.webp"), "DocumentStorageService recognizes WEBP image files");
 AssertFalse(DocumentStorageService.IsImageFileName("manual.pdf"), "DocumentStorageService does not classify PDFs as images");
+AssertTrue(documentStorage.IsAllowedFileName("voice-note.mp3"), "DocumentStorageService allows MP3 audio files");
+AssertTrue(documentStorage.IsAllowedFileName("voice-note.ogg"), "DocumentStorageService allows OGG audio files");
+AssertTrue(DocumentStorageService.IsAudioFileName("voice-note.opus"), "DocumentStorageService recognizes OPUS audio files");
+AssertFalse(DocumentStorageService.IsAudioFileName("photo.png"), "DocumentStorageService does not classify images as audio");
 AssertFalse(documentStorage.IsAllowedFileName("malware.exe"), "DocumentStorageService rejects executable files");
 
 var storageTestUser = new ConnectedUser { Id = 42, ChatId = 123456789, Name = "tester" };
@@ -762,6 +766,7 @@ await using (var dbContext = new TelegramDbContext())
         new FilesCommand(documentStorage),
         new ImagesCommand(),
         new DescribeImageCommand(adminTestSettings, documentStorage),
+        new VoiceFilesCommand(),
         new ReadFileCommand(documentStorage),
         new CreateFileCommand(documentStorage),
         new ImportFilesCommand(importDirectory, documentStorage, adminTestSettings),
@@ -1379,6 +1384,35 @@ await using (var dbContext = new TelegramDbContext())
     AssertTrue(visionDescribeImageResult.ReplyText?.Contains("A small test image fixture.") == true, "/describeimage includes image service output");
     AssertEqual(uploadedImage.Id, fakeImageDescriptionService.LastImageId, "/describeimage passes selected image to image service");
     AssertFalse((await commandRouter.TryHandleAsync(TextMessage("/describeimagex 1"), testUser, dbContext, CancellationToken.None)).Handled, "/describeimagex is not treated as /describeimage");
+
+    CommandResult emptyVoiceFilesResult = await commandRouter.TryHandleAsync(TextMessage("/voicefiles"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(emptyVoiceFilesResult.Handled, "/voicefiles is handled without saved audio");
+    AssertTrue(emptyVoiceFilesResult.ReplyText?.Contains("No audio files", StringComparison.OrdinalIgnoreCase) == true, "/voicefiles reports no saved audio before upload");
+
+    await using var audioStream = new MemoryStream([0x4F, 0x67, 0x67, 0x53, 0x00, 0x02]);
+    UploadedFile uploadedAudio = await documentStorage.SaveUploadedFileAsync(
+        testUser,
+        "voice-note.ogg",
+        "telegram-audio-file-id",
+        "audio/ogg",
+        audioStream,
+        audioStream.Length,
+        CancellationToken.None);
+    dbContext.UploadedFiles.Add(uploadedAudio);
+    await dbContext.SaveChangesAsync(CancellationToken.None);
+    CommandResult voiceFilesResult = await commandRouter.TryHandleAsync(TextMessage("/voicefiles"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(voiceFilesResult.Handled, "/voicefiles is handled");
+    AssertTrue(voiceFilesResult.ReplyText?.Contains("voice-note.ogg") == true, "/voicefiles lists saved audio files");
+    AssertFalse(voiceFilesResult.ReplyText?.Contains("sample.png") == true, "/voicefiles does not list image files");
+    AssertFalse(voiceFilesResult.ReplyText?.Contains("notes.md") == true, "/voicefiles does not list non-audio documents");
+
+    CommandResult voiceFilesMentionResult = await commandRouter.TryHandleAsync(TextMessage("/voicefiles@red_eye_ghost_bot"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(voiceFilesMentionResult.Handled, "/voicefiles@bot is handled");
+    AssertFalse((await commandRouter.TryHandleAsync(TextMessage("/voicefilesx"), testUser, dbContext, CancellationToken.None)).Handled, "/voicefilesx is not treated as /voicefiles");
+
+    CommandResult readAudioResult = await commandRouter.TryHandleAsync(TextMessage($"/readfile {uploadedAudio.Id}"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(readAudioResult.Handled, "/readfile audio file is handled");
+    AssertTrue(readAudioResult.ReplyText?.Contains("Transcription is not implemented", StringComparison.OrdinalIgnoreCase) == true, "/readfile audio reports transcription placeholder safely");
 
     UploadedFile fileBeforeDelete = await dbContext.UploadedFiles.FirstAsync(x => x.Id == uploadedFileId, CancellationToken.None);
     string filePathBeforeDelete = fileBeforeDelete.AbsolutePath;
