@@ -479,9 +479,9 @@ PLUGIN_DIRECTORY=plugins
 9. Add voice sandbox foundation: audio extensions plus `/voicefiles` listing and safe `/readfile <audio-id>` transcription placeholder. ✅ Done
 10. Add `ENABLE_AUDIO_TRANSCRIPTION=false` gate plus `/transcribe <audio-id>` metadata/provider-readiness command. ✅ Done
 11. Add `/plugins` read-only inspection command for manifest scan summaries and diagnostics. ✅ Done
-12. Register plugin tools only when `ENABLE_PLUGINS=true`. Pending — no plugin tool loading yet.
-13. Show plugin source/path and entry-assembly presence in `/plugins` details. ✅ Done
-14. Document plugin authoring. Started with env/safety docs; full authoring guide pending.
+12. Show plugin source/path and entry-assembly presence in `/plugins` details. ✅ Done
+13. Add plugin authoring documentation and sample manifest template while keeping assembly loading disabled. ✅ Done
+14. Register plugin tools only when `ENABLE_PLUGINS=true`. Pending — no plugin tool loading yet.
 
 ---
 
