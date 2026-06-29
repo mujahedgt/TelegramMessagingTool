@@ -480,7 +480,7 @@ PLUGIN_DIRECTORY=plugins
 10. Add `ENABLE_AUDIO_TRANSCRIPTION=false` gate plus `/transcribe <audio-id>` metadata/provider-readiness command. ✅ Done
 11. Add `/plugins` read-only inspection command for manifest scan summaries and diagnostics. ✅ Done
 12. Register plugin tools only when `ENABLE_PLUGINS=true`. Pending — no plugin tool loading yet.
-13. Show plugin source in `/tools` or extended `/plugins` details. Pending.
+13. Show plugin source/path and entry-assembly presence in `/plugins` details. ✅ Done
 14. Document plugin authoring. Started with env/safety docs; full authoring guide pending.
 
 ---

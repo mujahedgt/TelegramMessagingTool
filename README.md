@@ -25,7 +25,7 @@ TelegramMessagingTool is a C#/.NET console application that connects a Telegram 
 - Approval commands: `/pending`, `/approve <id>`, and `/deny <id>`
 - Task planner commands: `/plan <goal>`, `/tasks`, `/task <id>`, `/done <task-id> [step-number]`, and `/cancel <task-id>`
 - P2 planning harness command: `/harnesses` shows the planned `image_agent` and `voice_agent` tool/safety roadmap before implementation
-- Read-only plugin manifest inspection via `/plugins`; this scans `plugin.json` files only and does not load plugin assemblies
+- Read-only plugin manifest inspection via `/plugins`; this scans `plugin.json` files only, shows manifest paths and entry assembly presence, and does not load plugin assemblies
 
 ## Development note
 

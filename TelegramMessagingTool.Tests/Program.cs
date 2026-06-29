@@ -818,6 +818,19 @@ await using (var dbContext = new TelegramDbContext())
       "allowedToolNames": ["sample_tool"]
     }
     """);
+    await File.WriteAllTextAsync(Path.Combine(pluginCommandRoot, "SamplePlugin", "SamplePlugin.dll"), "placeholder assembly fixture", CancellationToken.None);
+    Directory.CreateDirectory(Path.Combine(pluginCommandRoot, "MissingAssemblyPlugin"));
+    await File.WriteAllTextAsync(Path.Combine(pluginCommandRoot, "MissingAssemblyPlugin", "plugin.json"), """
+    {
+      "id": "missing-assembly-plugin",
+      "name": "Missing Assembly Plugin",
+      "version": "1.0.0",
+      "entryAssembly": "MissingAssemblyPlugin.dll",
+      "enabled": false,
+      "riskLevel": "medium",
+      "allowedToolNames": ["missing_assembly_tool"]
+    }
+    """);
     var pluginCommand = new PluginsCommand(adminTestSettings with
     {
         EnablePlugins = true,
@@ -826,6 +839,9 @@ await using (var dbContext = new TelegramDbContext())
     CommandResult pluginsResult = await pluginCommand.TryHandleAsync(TextMessage("/plugins"), testUser, dbContext, CancellationToken.None);
     AssertTrue(pluginsResult.Handled, "/plugins is handled");
     AssertTrue(pluginsResult.ReplyText?.Contains("sample-plugin") == true, "/plugins lists discovered manifest id");
+    AssertTrue(pluginsResult.ReplyText?.Contains("plugin.json") == true, "/plugins shows manifest path details");
+    AssertTrue(pluginsResult.ReplyText?.Contains("SamplePlugin.dll (present)") == true, "/plugins reports present entry assembly fixture");
+    AssertTrue(pluginsResult.ReplyText?.Contains("MissingAssemblyPlugin.dll (missing)") == true, "/plugins reports missing entry assembly safely");
     AssertTrue(pluginsResult.ReplyText?.Contains("Assembly loading: disabled", StringComparison.OrdinalIgnoreCase) == true, "/plugins explains assembly loading remains disabled");
     AssertTrue(pluginsResult.ReplyText?.Contains("sample_tool") == true, "/plugins lists allowed tool names");
 
