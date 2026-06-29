@@ -788,6 +788,8 @@ await using (var dbContext = new TelegramDbContext())
         new EmbedFileCommand(documentIndexingService, documentEmbeddingService),
         new EmbedDocsCommand(documentIndexingService, documentEmbeddingService),
         new ToolsCommand(registry),
+        new HarnessesCommand(adminTestSettings),
+        new PluginsCommand(adminTestSettings),
         new KillProcessCommand(pendingActionService, adminTestSettings),
         new ActionCommand(pendingActionService, adminTestSettings),
         new PendingCommand(pendingActionService, adminTestSettings),
@@ -802,6 +804,43 @@ await using (var dbContext = new TelegramDbContext())
         new DoneCommand(agentTaskService),
         new CancelCommand(agentTaskService)
     ]);
+
+    string pluginCommandRoot = Path.Combine(Path.GetTempPath(), $"TelegramMessagingTool_PluginsCommand_{Guid.NewGuid():N}");
+    Directory.CreateDirectory(Path.Combine(pluginCommandRoot, "SamplePlugin"));
+    await File.WriteAllTextAsync(Path.Combine(pluginCommandRoot, "SamplePlugin", "plugin.json"), """
+    {
+      "id": "sample-plugin",
+      "name": "Sample Plugin",
+      "version": "1.0.0",
+      "entryAssembly": "SamplePlugin.dll",
+      "enabled": true,
+      "riskLevel": "low",
+      "allowedToolNames": ["sample_tool"]
+    }
+    """);
+    var pluginCommand = new PluginsCommand(adminTestSettings with
+    {
+        EnablePlugins = true,
+        PluginDirectory = pluginCommandRoot
+    });
+    CommandResult pluginsResult = await pluginCommand.TryHandleAsync(TextMessage("/plugins"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(pluginsResult.Handled, "/plugins is handled");
+    AssertTrue(pluginsResult.ReplyText?.Contains("sample-plugin") == true, "/plugins lists discovered manifest id");
+    AssertTrue(pluginsResult.ReplyText?.Contains("Assembly loading: disabled", StringComparison.OrdinalIgnoreCase) == true, "/plugins explains assembly loading remains disabled");
+    AssertTrue(pluginsResult.ReplyText?.Contains("sample_tool") == true, "/plugins lists allowed tool names");
+
+    CommandResult pluginsMentionResult = await pluginCommand.TryHandleAsync(TextMessage("/plugins@red_eye_ghost_bot"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(pluginsMentionResult.Handled, "/plugins@bot is handled");
+    AssertFalse((await pluginCommand.TryHandleAsync(TextMessage("/pluginsx"), testUser, dbContext, CancellationToken.None)).Handled, "/pluginsx is not treated as /plugins");
+
+    var missingPluginsCommand = new PluginsCommand(adminTestSettings with
+    {
+        PluginDirectory = Path.Combine(pluginCommandRoot, "missing")
+    });
+    CommandResult missingPluginsResult = await missingPluginsCommand.TryHandleAsync(TextMessage("/plugins"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(missingPluginsResult.Handled, "/plugins missing directory is handled");
+    AssertTrue(missingPluginsResult.ReplyText?.Contains("does not exist", StringComparison.OrdinalIgnoreCase) == true, "/plugins reports missing plugin directory diagnostic");
+    Directory.Delete(pluginCommandRoot, recursive: true);
 
     DateTime scheduledStepTime = new(2026, 6, 28, 18, 30, 0, DateTimeKind.Utc);
     var scheduledTask = new AgentTask

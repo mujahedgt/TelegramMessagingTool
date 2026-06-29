@@ -478,9 +478,10 @@ PLUGIN_DIRECTORY=plugins
 8. Add `ENABLE_IMAGE_VISION=false` feature flag and wire `/describeimage <id>` to the local Ollama image route only when explicitly enabled. ✅ Done
 9. Add voice sandbox foundation: audio extensions plus `/voicefiles` listing and safe `/readfile <audio-id>` transcription placeholder. ✅ Done
 10. Add `ENABLE_AUDIO_TRANSCRIPTION=false` gate plus `/transcribe <audio-id>` metadata/provider-readiness command. ✅ Done
-11. Register plugin tools only when `ENABLE_PLUGINS=true`. Pending — no plugin tool loading yet.
-12. Show plugin source in `/tools` or a new `/plugins` command. Pending.
-13. Document plugin authoring. Started with env/safety docs; full authoring guide pending.
+11. Add `/plugins` read-only inspection command for manifest scan summaries and diagnostics. ✅ Done
+12. Register plugin tools only when `ENABLE_PLUGINS=true`. Pending — no plugin tool loading yet.
+13. Show plugin source in `/tools` or extended `/plugins` details. Pending.
+14. Document plugin authoring. Started with env/safety docs; full authoring guide pending.
 
 ---
 

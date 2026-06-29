@@ -25,6 +25,7 @@ TelegramMessagingTool is a C#/.NET console application that connects a Telegram 
 - Approval commands: `/pending`, `/approve <id>`, and `/deny <id>`
 - Task planner commands: `/plan <goal>`, `/tasks`, `/task <id>`, `/done <task-id> [step-number]`, and `/cancel <task-id>`
 - P2 planning harness command: `/harnesses` shows the planned `image_agent` and `voice_agent` tool/safety roadmap before implementation
+- Read-only plugin manifest inspection via `/plugins`; this scans `plugin.json` files only and does not load plugin assemblies
 
 ## Development note
 
@@ -71,8 +72,8 @@ Configuration is read from environment variables.
 | `ENABLE_AUDIO_TRANSCRIPTION` | No | `false` | Reserved gate for `/transcribe <id>`. Keep false until a trusted local Whisper/audio transcription provider is configured; the current command returns metadata/provider-readiness only. |
 | `ENABLE_SAFE_COMMAND_TOOLS` | No | `false` | If true, registers fixed safe command tools: `git_status`, `git_diff`, `git_log_recent`, `run_dotnet_tests`, `publish_release`, and `restart_latest_bot`. No arbitrary shell access is exposed. `run_dotnet_tests` accepts only `{"target":"helper-tests"}` and runs the helper test project. `publish_release` and `restart_latest_bot` only create high-risk pending approval requests; they do not execute release/restart directly. |
 | `SAFE_COMMAND_PROJECT_ROOT` | No | current working directory | Project root used by safe command tools. Commands run with fixed executable/argument lists under this directory. |
-| `ENABLE_PLUGINS` | No | `false` | If true, enables plugin manifest discovery from `PLUGIN_DIRECTORY`. This phase scans manifests only and does not load plugin assemblies. |
-| `PLUGIN_DIRECTORY` | No | `<current working directory>/plugins` | Directory scanned for plugin folders containing `plugin.json`. Plugin assemblies are trusted OS-level code and should only come from trusted sources before loading is enabled. |
+| `ENABLE_PLUGINS` | No | `false` | If true, enables plugin manifest discovery from `PLUGIN_DIRECTORY`. This phase scans manifests only and does not load plugin assemblies. Use `/plugins` for read-only manifest diagnostics. |
+| `PLUGIN_DIRECTORY` | No | `<current working directory>/plugins` | Directory scanned by `/plugins` for plugin folders containing `plugin.json`. Plugin assemblies are trusted OS-level code and should only come from trusted sources before loading is enabled. |
 | `TELEGRAM_DB_CONNECTION` | No | LocalDB connection | SQL Server connection string |
 | `APPLY_MIGRATIONS` | No | `true` | Apply EF migrations on startup |
 | `LOG_MESSAGE_CONTENT` | No | `false` | Log user messages and assistant responses. Keep disabled for privacy. |

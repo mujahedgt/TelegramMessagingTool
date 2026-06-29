@@ -107,6 +107,7 @@ var commandRouter = new CommandRouter([
     new EmbedDocsCommand(documentIndexingService, documentEmbeddingService),
     new ToolsCommand(toolRegistry),
     new HarnessesCommand(settings),
+    new PluginsCommand(settings),
     new KillProcessCommand(pendingActionService, settings),
     new ActionCommand(pendingActionService, settings),
     new PendingCommand(pendingActionService, settings),

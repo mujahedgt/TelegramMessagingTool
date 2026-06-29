@@ -54,6 +54,7 @@ TelegramMessagingTool Agent Commands
 /embeddocs - Generate local embeddings for all indexed documents
 /tools - List available safe agent tools
 /harnesses - Show planned image and voice agent harnesses
+/plugins - Show read-only plugin manifest discovery status
 /pending - List actions waiting for your approval
 /action <id> - Show pending/approved action audit details
 /approve <id> - Approve a pending risky action
