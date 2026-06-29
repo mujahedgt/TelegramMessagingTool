@@ -547,6 +547,7 @@ string? previousOllamaModel = Environment.GetEnvironmentVariable("OLLAMA_MODEL")
 string? previousOllamaModelPlan = Environment.GetEnvironmentVariable("OLLAMA_MODEL_PLAN");
 string? previousOllamaModelDocQa = Environment.GetEnvironmentVariable("OLLAMA_MODEL_DOC_QA");
 string? previousEnableImageVision = Environment.GetEnvironmentVariable("ENABLE_IMAGE_VISION");
+string? previousEnableAudioTranscription = Environment.GetEnvironmentVariable("ENABLE_AUDIO_TRANSCRIPTION");
 try
 {
     Environment.SetEnvironmentVariable("ALLOW_PUBLIC_ACCESS", null);
@@ -558,6 +559,7 @@ try
     BotSettings defaultPrivacySettings = BotConfiguration.LoadFromEnvironment();
     AssertFalse(defaultPrivacySettings.AllowPublicAccess, "BotConfiguration defaults public access override to false");
     AssertFalse(defaultPrivacySettings.EnableOnlineSearch, "BotConfiguration defaults online search to disabled");
+    AssertFalse(defaultPrivacySettings.EnableAudioTranscription, "BotConfiguration defaults audio transcription to disabled");
     AssertEqual("base-model:test", defaultPrivacySettings.OllamaChatModel, "BotConfiguration defaults chat route to OLLAMA_MODEL");
     AssertEqual("base-model:test", defaultPrivacySettings.OllamaPlanningModel, "BotConfiguration defaults planning route to OLLAMA_MODEL");
 
@@ -570,11 +572,13 @@ try
     Environment.SetEnvironmentVariable("OLLAMA_MODEL_PLAN", "plan-model:test");
     Environment.SetEnvironmentVariable("OLLAMA_MODEL_DOC_QA", "docqa-model:test");
     Environment.SetEnvironmentVariable("ENABLE_IMAGE_VISION", "true");
+    Environment.SetEnvironmentVariable("ENABLE_AUDIO_TRANSCRIPTION", "yes");
     BotSettings routedEnvironmentSettings = BotConfiguration.LoadFromEnvironment();
     AssertEqual("base-model:test", routedEnvironmentSettings.OllamaChatModel, "BotConfiguration keeps chat model on OLLAMA_MODEL when chat override is blank");
     AssertEqual("plan-model:test", routedEnvironmentSettings.OllamaPlanningModel, "BotConfiguration loads OLLAMA_MODEL_PLAN");
     AssertEqual("docqa-model:test", routedEnvironmentSettings.OllamaDocumentQuestionAnsweringModel, "BotConfiguration loads OLLAMA_MODEL_DOC_QA");
     AssertTrue(routedEnvironmentSettings.EnableImageVision, "BotConfiguration parses ENABLE_IMAGE_VISION truthy values");
+    AssertTrue(routedEnvironmentSettings.EnableAudioTranscription, "BotConfiguration parses ENABLE_AUDIO_TRANSCRIPTION truthy values");
 }
 finally
 {
@@ -585,6 +589,7 @@ finally
     Environment.SetEnvironmentVariable("OLLAMA_MODEL_PLAN", previousOllamaModelPlan);
     Environment.SetEnvironmentVariable("OLLAMA_MODEL_DOC_QA", previousOllamaModelDocQa);
     Environment.SetEnvironmentVariable("ENABLE_IMAGE_VISION", previousEnableImageVision);
+    Environment.SetEnvironmentVariable("ENABLE_AUDIO_TRANSCRIPTION", previousEnableAudioTranscription);
 }
 AssertEqual("report.md", DocumentStorageService.SanitizeFileName("..\\..//report.md"), "SanitizeFileName removes path segments");
 AssertTrue(documentStorage.IsAllowedFileName("notes.txt"), "DocumentStorageService allows txt files");
@@ -767,6 +772,7 @@ await using (var dbContext = new TelegramDbContext())
         new ImagesCommand(),
         new DescribeImageCommand(adminTestSettings, documentStorage),
         new VoiceFilesCommand(),
+        new TranscribeCommand(adminTestSettings, documentStorage),
         new ReadFileCommand(documentStorage),
         new CreateFileCommand(documentStorage),
         new ImportFilesCommand(importDirectory, documentStorage, adminTestSettings),
@@ -1414,6 +1420,38 @@ await using (var dbContext = new TelegramDbContext())
     AssertTrue(readAudioResult.Handled, "/readfile audio file is handled");
     AssertTrue(readAudioResult.ReplyText?.Contains("Transcription is not implemented", StringComparison.OrdinalIgnoreCase) == true, "/readfile audio reports transcription placeholder safely");
 
+    CommandResult invalidTranscribeResult = await commandRouter.TryHandleAsync(TextMessage("/transcribe nope"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(invalidTranscribeResult.Handled, "/transcribe invalid input is handled");
+    AssertTrue(invalidTranscribeResult.ReplyText?.Contains("Usage: /transcribe <audio-file-id>") == true, "/transcribe validates audio file id input");
+
+    CommandResult nonAudioTranscribeResult = await commandRouter.TryHandleAsync(TextMessage($"/transcribe {uploadedImage.Id}"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(nonAudioTranscribeResult.Handled, "/transcribe non-audio input is handled");
+    AssertTrue(nonAudioTranscribeResult.ReplyText?.Contains("not an audio", StringComparison.OrdinalIgnoreCase) == true, "/transcribe rejects non-audio files");
+
+    CommandResult transcribeResult = await commandRouter.TryHandleAsync(TextMessage($"/transcribe {uploadedAudio.Id}"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(transcribeResult.Handled, "/transcribe is handled");
+    AssertTrue(transcribeResult.ReplyText?.Contains("voice-note.ogg") == true, "/transcribe reports audio filename");
+    AssertTrue(transcribeResult.ReplyText?.Contains("qwen3:0.6b") == true, "/transcribe reports configured voice route fallback");
+    AssertTrue(transcribeResult.ReplyText?.Contains("Audio transcription is disabled", StringComparison.OrdinalIgnoreCase) == true, "/transcribe stays metadata-only when audio transcription is disabled");
+
+    CommandResult noProviderTranscribeResult = await new TranscribeCommand(
+        adminTestSettings with { EnableAudioTranscription = true },
+        documentStorage).TryHandleAsync(TextMessage($"/transcribe {uploadedAudio.Id}"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(noProviderTranscribeResult.Handled, "/transcribe is handled when transcription is enabled without provider");
+    AssertTrue(noProviderTranscribeResult.ReplyText?.Contains("no transcription provider is configured", StringComparison.OrdinalIgnoreCase) == true, "/transcribe reports missing provider when enabled");
+
+    var fakeAudioTranscriptionService = new FakeAudioTranscriptionService("Transcript text from fixture.");
+    var transcriptionEnabledCommand = new TranscribeCommand(
+        adminTestSettings with { EnableAudioTranscription = true },
+        documentStorage,
+        fakeAudioTranscriptionService);
+    CommandResult enabledTranscribeResult = await transcriptionEnabledCommand.TryHandleAsync(TextMessage($"/transcribe {uploadedAudio.Id}"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(enabledTranscribeResult.Handled, "/transcribe is handled when transcription service is configured");
+    AssertTrue(enabledTranscribeResult.ReplyText?.Contains("Transcript:") == true, "/transcribe returns transcript label when configured");
+    AssertTrue(enabledTranscribeResult.ReplyText?.Contains("Transcript text from fixture.") == true, "/transcribe includes transcription service output");
+    AssertEqual(uploadedAudio.Id, fakeAudioTranscriptionService.LastAudioId, "/transcribe passes selected audio to transcription service");
+    AssertFalse((await commandRouter.TryHandleAsync(TextMessage("/transcribex 1"), testUser, dbContext, CancellationToken.None)).Handled, "/transcribex is not treated as /transcribe");
+
     UploadedFile fileBeforeDelete = await dbContext.UploadedFiles.FirstAsync(x => x.Id == uploadedFileId, CancellationToken.None);
     string filePathBeforeDelete = fileBeforeDelete.AbsolutePath;
     AssertTrue(File.Exists(filePathBeforeDelete), "/deletefile test file exists before deletion approval");
@@ -1590,6 +1628,26 @@ sealed class FakeImageDescriptionService : IImageDescriptionService
     {
         LastImageId = imageFile.Id;
         return Task.FromResult(ImageDescriptionResult.Ok(_output));
+    }
+}
+
+sealed class FakeAudioTranscriptionService : IAudioTranscriptionService
+{
+    private readonly string _output;
+
+    public FakeAudioTranscriptionService(string output)
+    {
+        _output = output;
+    }
+
+    public int? LastAudioId { get; private set; }
+
+    public Task<AudioTranscriptionResult> TranscribeAsync(
+        UploadedFile audioFile,
+        CancellationToken cancellationToken)
+    {
+        LastAudioId = audioFile.Id;
+        return Task.FromResult(new AudioTranscriptionResult(true, _output));
     }
 }
 

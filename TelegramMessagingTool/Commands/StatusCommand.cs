@@ -44,6 +44,7 @@ Document embeddings: {(_settings.EnableDocumentEmbeddings ? "enabled" : "disable
 Online search: {(_settings.EnableOnlineSearch ? "enabled" : "disabled")}
 Search routing: {_settings.SearchRoutingMode}
 Image vision: {(_settings.EnableImageVision ? "enabled" : "disabled")}
+Audio transcription: {(_settings.EnableAudioTranscription ? "enabled" : "disabled")}
 Safe command tools: {(_settings.EnableSafeCommandTools ? "enabled" : "disabled")}
 Plugins: {(_settings.EnablePlugins ? "enabled" : "disabled")} ({_settings.PluginDirectory})
 Message content logging: {(_settings.LogMessageContent ? "enabled" : "disabled")}
