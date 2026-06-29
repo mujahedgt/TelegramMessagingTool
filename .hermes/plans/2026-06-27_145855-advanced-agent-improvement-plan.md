@@ -555,9 +555,9 @@ Defer high-risk:
 
 ## Suggested first implementation
 
-1. Add GitHub settings parsing.
-2. Add `GitHubRepoPolicy` with allowlist tests.
-3. Add read-only `github_repo_info` using REST API.
+1. Add GitHub settings parsing. ✅ Done
+2. Add `GitHubRepoPolicy` with allowlist tests. ✅ Done
+3. Add read-only `github_repo_info` using REST API. ✅ Done
 4. Add read-only `github_list_issues`.
 5. Add `github_create_issue` behind `ENABLE_GITHUB_WRITE_TOOLS=false` initially.
 6. Add `/github` command later for quick status and config summary.

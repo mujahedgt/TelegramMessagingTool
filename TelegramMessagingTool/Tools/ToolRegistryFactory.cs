@@ -1,5 +1,6 @@
 using TelegramMessagingTool.Services;
 using TelegramMessagingTool.Tools.CommandExecution;
+using TelegramMessagingTool.Tools.GitHub;
 
 namespace TelegramMessagingTool.Tools;
 
@@ -17,6 +18,11 @@ public static class ToolRegistryFactory
         if (settings.EnableOnlineSearch)
         {
             tools.Add(new OnlineSearchTool(searchClient));
+        }
+
+        if (settings.GitHub.EnableGitHubTools)
+        {
+            tools.Add(new GitHubRepoInfoTool(searchClient, settings.GitHub));
         }
 
         if (settings.EnableSafeCommandTools)

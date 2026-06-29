@@ -12,7 +12,7 @@ TelegramMessagingTool is a C#/.NET console application that connects a Telegram 
 - Optional chat allowlist via environment variable
 - Long Telegram responses are split into safe chunks
 - Safe agent tool system with bounded multi-step tool calling
-- Built-in tools: `datetime`, `calculator`, `status`, optional `online_search` when `ENABLE_ONLINE_SEARCH=true`, and optional fixed safe command tools when `ENABLE_SAFE_COMMAND_TOOLS=true`
+- Built-in tools: `datetime`, `calculator`, `status`, optional `online_search` when `ENABLE_ONLINE_SEARCH=true`, optional read-only GitHub tools when `ENABLE_GITHUB_TOOLS=true`, and optional fixed safe command tools when `ENABLE_SAFE_COMMAND_TOOLS=true`
 - `/tools` command to show available tools
 - Agent-style startup console panel with commands, model, safety, and tool status
 - Local console chat/command input using the same command router, memory, tools, and agent runner as Telegram
@@ -75,6 +75,11 @@ Configuration is read from environment variables.
 | `SAFE_COMMAND_PROJECT_ROOT` | No | current working directory | Project root used by safe command tools. Commands run with fixed executable/argument lists under this directory. |
 | `ENABLE_PLUGINS` | No | `false` | If true, enables plugin manifest discovery from `PLUGIN_DIRECTORY`. This phase scans manifests only and does not load plugin assemblies. Use `/plugins` for read-only manifest diagnostics. |
 | `PLUGIN_DIRECTORY` | No | `<current working directory>/plugins` | Directory scanned by `/plugins` for plugin folders containing `plugin.json`. Plugin assemblies are trusted OS-level code and should only come from trusted sources before loading is enabled. |
+| `ENABLE_GITHUB_TOOLS` | No | `false` | If true, registers read-only GitHub tools such as `github_repo_info`. Keep false unless you want the model to query GitHub. |
+| `GITHUB_TOKEN` | No | empty | Optional token for GitHub API requests. Never log or paste it into chat. `/status` only reports configured/not configured. |
+| `GITHUB_DEFAULT_OWNER` | No | empty | Default owner used by `github_repo_info` when the tool input is empty. |
+| `GITHUB_DEFAULT_REPO` | No | empty | Default repo used by `github_repo_info` when the tool input is empty. |
+| `GITHUB_ALLOWED_REPOS` | No | default repo if configured | Comma-separated `owner/repo` allowlist for GitHub tools. Repositories outside this list are rejected. |
 | `TELEGRAM_DB_CONNECTION` | No | LocalDB connection | SQL Server connection string |
 | `APPLY_MIGRATIONS` | No | `true` | Apply EF migrations on startup |
 | `LOG_MESSAGE_CONTENT` | No | `false` | Log user messages and assistant responses. Keep disabled for privacy. |
@@ -103,6 +108,10 @@ export ENABLE_SAFE_COMMAND_TOOLS='false'
 export SAFE_COMMAND_PROJECT_ROOT='/c/temp/TelegramMessagingTool'
 export ENABLE_PLUGINS='false'
 export PLUGIN_DIRECTORY='/c/temp/TelegramMessagingTool/plugins'
+export ENABLE_GITHUB_TOOLS='false'
+export GITHUB_DEFAULT_OWNER='mujahedgt'
+export GITHUB_DEFAULT_REPO='TelegramMessagingTool'
+export GITHUB_ALLOWED_REPOS='mujahedgt/TelegramMessagingTool,mujahedgt/IsolationForestServer'
 export LOG_MESSAGE_CONTENT='false'
 export CONVERSATION_MAX_HISTORY='8'
 ```

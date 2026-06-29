@@ -13,6 +13,7 @@ using TelegramMessagingTool.Services;
 using TelegramMessagingTool.Telegram;
 using TelegramMessagingTool.Tools;
 using TelegramMessagingTool.Tools.CommandExecution;
+using TelegramMessagingTool.Tools.GitHub;
 
 static void AssertEqual<T>(T expected, T actual, string name)
 {
@@ -83,6 +84,11 @@ string? previousEnableSafeCommandTools = Environment.GetEnvironmentVariable("ENA
 string? previousSafeCommandProjectRoot = Environment.GetEnvironmentVariable("SAFE_COMMAND_PROJECT_ROOT");
 string? previousEnablePlugins = Environment.GetEnvironmentVariable("ENABLE_PLUGINS");
 string? previousPluginDirectory = Environment.GetEnvironmentVariable("PLUGIN_DIRECTORY");
+string? previousEnableGitHubTools = Environment.GetEnvironmentVariable("ENABLE_GITHUB_TOOLS");
+string? previousGitHubToken = Environment.GetEnvironmentVariable("GITHUB_TOKEN");
+string? previousGitHubDefaultOwner = Environment.GetEnvironmentVariable("GITHUB_DEFAULT_OWNER");
+string? previousGitHubDefaultRepo = Environment.GetEnvironmentVariable("GITHUB_DEFAULT_REPO");
+string? previousGitHubAllowedRepos = Environment.GetEnvironmentVariable("GITHUB_ALLOWED_REPOS");
 try
 {
     Environment.SetEnvironmentVariable("CONVERSATION_MAX_HISTORY", "13");
@@ -121,6 +127,24 @@ try
     BotSettings pluginEnvironmentSettings = BotConfiguration.LoadFromEnvironment();
     AssertTrue(pluginEnvironmentSettings.EnablePlugins, "LoadFromEnvironment parses ENABLE_PLUGINS truthy values");
     AssertEqual(Path.GetFullPath(pluginDirectory), pluginEnvironmentSettings.PluginDirectory, "LoadFromEnvironment reads PLUGIN_DIRECTORY as a full path");
+
+    Environment.SetEnvironmentVariable("ENABLE_GITHUB_TOOLS", null);
+    Environment.SetEnvironmentVariable("GITHUB_TOKEN", null);
+    Environment.SetEnvironmentVariable("GITHUB_DEFAULT_OWNER", null);
+    Environment.SetEnvironmentVariable("GITHUB_DEFAULT_REPO", null);
+    Environment.SetEnvironmentVariable("GITHUB_ALLOWED_REPOS", null);
+    AssertFalse(BotConfiguration.LoadFromEnvironment().GitHub.EnableGitHubTools, "LoadFromEnvironment defaults GitHub tools to disabled");
+
+    Environment.SetEnvironmentVariable("ENABLE_GITHUB_TOOLS", "true");
+    Environment.SetEnvironmentVariable("GITHUB_TOKEN", "secret-token-for-test");
+    Environment.SetEnvironmentVariable("GITHUB_DEFAULT_OWNER", "mujahedgt");
+    Environment.SetEnvironmentVariable("GITHUB_DEFAULT_REPO", "TelegramMessagingTool");
+    Environment.SetEnvironmentVariable("GITHUB_ALLOWED_REPOS", "mujahedgt/TelegramMessagingTool, mujahedgt/IsolationForestServer");
+    BotSettings gitHubEnvironmentSettings = BotConfiguration.LoadFromEnvironment();
+    AssertTrue(gitHubEnvironmentSettings.GitHub.EnableGitHubTools, "LoadFromEnvironment parses ENABLE_GITHUB_TOOLS truthy values");
+    AssertEqual("mujahedgt/TelegramMessagingTool", gitHubEnvironmentSettings.GitHub.DefaultFullName, "LoadFromEnvironment reads GitHub default repo");
+    AssertTrue(gitHubEnvironmentSettings.GitHub.AllowedRepos.Contains("mujahedgt/IsolationForestServer"), "LoadFromEnvironment reads GitHub allowed repos");
+    AssertFalse(gitHubEnvironmentSettings.GitHub.RenderSafeSummary().Contains("secret-token-for-test"), "GitHub settings safe summary does not expose token value");
 }
 finally
 {
@@ -130,6 +154,11 @@ finally
     Environment.SetEnvironmentVariable("SAFE_COMMAND_PROJECT_ROOT", previousSafeCommandProjectRoot);
     Environment.SetEnvironmentVariable("ENABLE_PLUGINS", previousEnablePlugins);
     Environment.SetEnvironmentVariable("PLUGIN_DIRECTORY", previousPluginDirectory);
+    Environment.SetEnvironmentVariable("ENABLE_GITHUB_TOOLS", previousEnableGitHubTools);
+    Environment.SetEnvironmentVariable("GITHUB_TOKEN", previousGitHubToken);
+    Environment.SetEnvironmentVariable("GITHUB_DEFAULT_OWNER", previousGitHubDefaultOwner);
+    Environment.SetEnvironmentVariable("GITHUB_DEFAULT_REPO", previousGitHubDefaultRepo);
+    Environment.SetEnvironmentVariable("GITHUB_ALLOWED_REPOS", previousGitHubAllowedRepos);
 }
 
 AssertTrue(PluginManifest.TryParse("""
@@ -187,6 +216,65 @@ AssertTrue(pluginScanResult.Manifests[0].Manifest.AllowedToolNames.Contains("sam
 AssertTrue(pluginScanResult.Diagnostics.Any(x => x.Contains("duplicated", StringComparison.OrdinalIgnoreCase)), "PluginManifestScanner reports duplicate tool diagnostics");
 AssertTrue(pluginScanResult.RenderSummary().Contains("plugin", StringComparison.OrdinalIgnoreCase), "PluginScanResult summary includes discovered plugin information");
 Directory.Delete(pluginTestRoot, recursive: true);
+
+IReadOnlySet<string> allowedGitHubRepos = GitHubRepoPolicy.ParseAllowedRepos("mujahedgt/TelegramMessagingTool, mujahedgt/IsolationForestServer, badformat");
+AssertTrue(GitHubRepoPolicy.IsAllowed("mujahedgt", "TelegramMessagingTool", allowedGitHubRepos), "GitHubRepoPolicy allows configured repo");
+AssertFalse(GitHubRepoPolicy.IsAllowed("other", "repo", allowedGitHubRepos), "GitHubRepoPolicy rejects repo outside allowlist");
+AssertEqual("mujahedgt/TelegramMessagingTool", GitHubRepoPolicy.NormalizeFullName(" mujahedgt / TelegramMessagingTool "), "GitHubRepoPolicy normalizes owner/repo strings");
+
+var fakeGitHubHandler = new FakeHttpMessageHandler("""
+{
+  "full_name": "mujahedgt/TelegramMessagingTool",
+  "description": "Telegram Ollama bot",
+  "visibility": "public",
+  "default_branch": "master",
+  "stargazers_count": 7,
+  "forks_count": 1,
+  "open_issues_count": 3,
+  "html_url": "https://github.com/mujahedgt/TelegramMessagingTool",
+  "pushed_at": "2026-06-29T00:00:00Z"
+}
+""");
+using var fakeGitHubClient = new HttpClient(fakeGitHubHandler);
+var gitHubSettings = new GitHubSettings(
+    EnableGitHubTools: true,
+    Token: "secret-token-for-test",
+    DefaultOwner: "mujahedgt",
+    DefaultRepo: "TelegramMessagingTool",
+    AllowedRepos: new HashSet<string>(["mujahedgt/TelegramMessagingTool"], StringComparer.OrdinalIgnoreCase));
+var repoInfoTool = new GitHubRepoInfoTool(fakeGitHubClient, gitHubSettings);
+ToolResult repoInfoResult = await repoInfoTool.ExecuteAsync(string.Empty, CancellationToken.None);
+AssertTrue(repoInfoResult.Success, "GitHubRepoInfoTool succeeds for default allowed repo");
+AssertTrue(repoInfoResult.Output.Contains("mujahedgt/TelegramMessagingTool"), "GitHubRepoInfoTool reports full repository name");
+AssertTrue(repoInfoResult.Output.Contains("Default branch: master"), "GitHubRepoInfoTool reports default branch");
+AssertFalse(repoInfoResult.Output.Contains("secret-token-for-test"), "GitHubRepoInfoTool never exposes token value");
+AssertTrue(fakeGitHubHandler.LastRequestAuthorization?.StartsWith("Bearer ") == true, "GitHubRepoInfoTool sends bearer auth when token is configured");
+ToolResult blockedRepoInfoResult = await repoInfoTool.ExecuteAsync("{\"owner\":\"other\",\"repo\":\"repo\"}", CancellationToken.None);
+AssertFalse(blockedRepoInfoResult.Success, "GitHubRepoInfoTool rejects repositories outside allowlist");
+ToolRegistry gitHubToolRegistry = ToolRegistryFactory.Create(new BotSettings(
+    BotToken: "test-token",
+    OllamaUrl: "http://localhost:11434/api/chat",
+    OllamaModel: "qwen3:0.6b",
+    OllamaEmbeddingUrl: "http://localhost:11434/api/embed",
+    OllamaEmbeddingModel: "nomic-embed-text",
+    EnableDocumentEmbeddings: false,
+    EnableOnlineSearch: false,
+    AdminChatId: 123456789,
+    AllowedChatIds: new HashSet<long>(),
+    AllowPublicAccess: false,
+    DatabaseConnectionString: "test",
+    ApplyMigrations: true,
+    LogMessageContent: false,
+    ConversationMaxHistory: 8,
+    SearchRoutingMode: "heuristic",
+    EnableSafeCommandTools: false,
+    SafeCommandProjectRoot: Directory.GetCurrentDirectory(),
+    EnablePlugins: false,
+    PluginDirectory: Path.Combine(Directory.GetCurrentDirectory(), "plugins"))
+{
+    GitHub = gitHubSettings
+}, fakeGitHubClient);
+AssertTrue(gitHubToolRegistry.RenderToolInstructions().Contains("github_repo_info"), "ToolRegistryFactory registers GitHub repo info tool when enabled");
 
 AssertTrue(CommandParser.TryParse("/status", out ParsedCommand parsedStatus), "CommandParser parses bare command");
 AssertEqual("/status", parsedStatus.Command, "CommandParser normalizes bare command token");
@@ -1703,6 +1791,28 @@ sealed class FakeAudioTranscriptionService : IAudioTranscriptionService
     {
         LastAudioId = audioFile.Id;
         return Task.FromResult(new AudioTranscriptionResult(true, _output));
+    }
+}
+
+sealed class FakeHttpMessageHandler : HttpMessageHandler
+{
+    private readonly string _responseBody;
+
+    public FakeHttpMessageHandler(string responseBody)
+    {
+        _responseBody = responseBody;
+    }
+
+    public string? LastRequestAuthorization { get; private set; }
+
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        LastRequestAuthorization = request.Headers.Authorization?.ToString();
+        var response = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+        {
+            Content = new StringContent(_responseBody)
+        };
+        return Task.FromResult(response);
     }
 }
 

@@ -47,6 +47,7 @@ Image vision: {(_settings.EnableImageVision ? "enabled" : "disabled")}
 Audio transcription: {(_settings.EnableAudioTranscription ? "enabled" : "disabled")}
 Safe command tools: {(_settings.EnableSafeCommandTools ? "enabled" : "disabled")}
 Plugins: {(_settings.EnablePlugins ? "enabled" : "disabled")} ({_settings.PluginDirectory})
+{_settings.GitHub.RenderSafeSummary()}
 Message content logging: {(_settings.LogMessageContent ? "enabled" : "disabled")}
 Apply migrations: {_settings.ApplyMigrations}
 """;

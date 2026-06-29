@@ -1,3 +1,5 @@
+using TelegramMessagingTool.Tools.GitHub;
+
 namespace TelegramMessagingTool;
 
 public sealed record BotSettings(
@@ -38,6 +40,8 @@ public sealed record BotSettings(
     public bool EnableImageVision { get; init; }
 
     public bool EnableAudioTranscription { get; init; }
+
+    public GitHubSettings GitHub { get; init; } = GitHubSettings.Disabled;
 }
 
 public static class BotConfiguration
@@ -93,7 +97,8 @@ public static class BotConfiguration
             OllamaImageModel = NormalizeModelRoute(Environment.GetEnvironmentVariable("OLLAMA_MODEL_IMAGE"), ollamaModel),
             OllamaVoiceModel = NormalizeModelRoute(Environment.GetEnvironmentVariable("OLLAMA_MODEL_VOICE"), ollamaModel),
             EnableImageVision = IsEnabled(Environment.GetEnvironmentVariable("ENABLE_IMAGE_VISION"), defaultValue: false),
-            EnableAudioTranscription = IsEnabled(Environment.GetEnvironmentVariable("ENABLE_AUDIO_TRANSCRIPTION"), defaultValue: false)
+            EnableAudioTranscription = IsEnabled(Environment.GetEnvironmentVariable("ENABLE_AUDIO_TRANSCRIPTION"), defaultValue: false),
+            GitHub = GitHubSettings.LoadFromEnvironment()
         };
     }
 
