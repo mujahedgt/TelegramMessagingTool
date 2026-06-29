@@ -73,6 +73,7 @@ var documentEmbeddingService = new DocumentEmbeddingService(ollamaEmbeddingClien
 var documentRetrievalService = new DocumentRetrievalService(retrievalEmbeddingService);
 var documentQuestionAnsweringService = new DocumentQuestionAnsweringService(ollamaClient);
 var documentSummaryService = new DocumentSummaryService(ollamaClient);
+var imageDescriptionService = new OllamaImageDescriptionService(qwenClient, settings);
 var agentRunner = new AgentRunner(ollamaClient, toolRegistry, searchRoutingClassifier: searchRoutingClassifier);
 var conversationService = new ConversationService();
 var commandRouter = new CommandRouter([
@@ -87,7 +88,7 @@ var commandRouter = new CommandRouter([
     new ForgetCommand(),
     new FilesCommand(documentStorage),
     new ImagesCommand(),
-    new DescribeImageCommand(settings),
+    new DescribeImageCommand(settings, documentStorage, imageDescriptionService),
     new ReadFileCommand(documentStorage),
     new CreateFileCommand(documentStorage),
     new ImportFilesCommand(importDirectory, documentStorage, settings),

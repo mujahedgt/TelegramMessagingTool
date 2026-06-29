@@ -25,6 +25,7 @@ Bot runtime status:
 - Document embeddings: {(_settings.EnableDocumentEmbeddings ? "enabled" : "disabled")}
 - Online search: {(_settings.EnableOnlineSearch ? "enabled" : "disabled")}
 - Search routing: {_settings.SearchRoutingMode}
+- Image vision: {(_settings.EnableImageVision ? "enabled" : "disabled")}
 - Safe command tools: {(_settings.EnableSafeCommandTools ? "enabled" : "disabled")}
 - Plugins: {(_settings.EnablePlugins ? "enabled" : "disabled")} ({_settings.PluginDirectory})
 - Message content logging: {(_settings.LogMessageContent ? "enabled" : "disabled")}

@@ -9,15 +9,22 @@ namespace TelegramMessagingTool.Commands;
 public sealed class DescribeImageCommand : IBotCommand
 {
     private readonly BotSettings _settings;
+    private readonly DocumentStorageService _documentStorage;
+    private readonly IImageDescriptionService? _imageDescriptionService;
 
-    public DescribeImageCommand(BotSettings settings)
+    public DescribeImageCommand(
+        BotSettings settings,
+        DocumentStorageService documentStorage,
+        IImageDescriptionService? imageDescriptionService = null)
     {
         _settings = settings;
+        _documentStorage = documentStorage;
+        _imageDescriptionService = imageDescriptionService;
     }
 
     public string Name => "/describeimage";
 
-    public string Description => "Show metadata for a saved image before vision description is implemented.";
+    public string Description => "Show metadata for a saved image and optionally describe it with the image model route.";
 
     public async Task<CommandResult> TryHandleAsync(
         Message message,
@@ -51,7 +58,9 @@ public sealed class DescribeImageCommand : IBotCommand
             return new CommandResult(true, $"File #{file.Id} is not an image. Use /files to list saved files or /images to list saved image files.");
         }
 
-        string diskStatus = File.Exists(file.AbsolutePath) ? "present" : "missing";
+        string absolutePath = Path.GetFullPath(file.AbsolutePath);
+        bool insideSandbox = IsInsideSandbox(absolutePath);
+        string diskStatus = File.Exists(absolutePath) ? "present" : "missing";
         string reply = $"""
 Image #{file.Id}: {file.OriginalFileName}
 
@@ -61,10 +70,35 @@ Metadata:
 - Source: {file.Source}
 - Disk: {diskStatus}
 - Image model route: {_settings.OllamaImageModel}
-
-Image description/OCR is not implemented yet. This command is a safe metadata-only image-agent harness step.
+- Image vision: {(_settings.EnableImageVision ? "enabled" : "disabled")}
 """;
 
-        return new CommandResult(true, reply);
+        if (!insideSandbox)
+        {
+            return new CommandResult(true, reply + "\n\nImage file is outside the current document sandbox. Re-upload or import it again before vision analysis.");
+        }
+
+        if (!_settings.EnableImageVision)
+        {
+            return new CommandResult(true, reply + "\n\nImage vision is disabled. Set ENABLE_IMAGE_VISION=true to allow local Ollama vision descriptions.");
+        }
+
+        if (_imageDescriptionService is null)
+        {
+            return new CommandResult(true, reply + "\n\nImage vision is enabled, but no image description service is configured.");
+        }
+
+        string prompt = "Describe this image clearly and concisely. Mention visible text only if you can read it. Do not invent details you cannot see.";
+        ImageDescriptionResult description = await _imageDescriptionService.DescribeAsync(file, prompt, cancellationToken);
+        string label = description.Success ? "Description" : "Vision analysis failed";
+        return new CommandResult(true, reply + $"\n\n{label}:\n{description.Output}");
+    }
+
+    private bool IsInsideSandbox(string absolutePath)
+    {
+        string root = Path.GetFullPath(_documentStorage.RootDirectory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        return absolutePath.Equals(root, StringComparison.OrdinalIgnoreCase)
+            || absolutePath.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+            || absolutePath.StartsWith(root + Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
     }
 }

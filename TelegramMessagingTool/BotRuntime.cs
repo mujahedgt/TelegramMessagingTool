@@ -34,6 +34,8 @@ public sealed record BotSettings(
     public string OllamaImageModel { get; init; } = OllamaModel;
 
     public string OllamaVoiceModel { get; init; } = OllamaModel;
+
+    public bool EnableImageVision { get; init; }
 }
 
 public static class BotConfiguration
@@ -87,7 +89,8 @@ public static class BotConfiguration
             OllamaDocumentSummaryModel = NormalizeModelRoute(Environment.GetEnvironmentVariable("OLLAMA_MODEL_SUMMARY"), ollamaModel),
             OllamaToolFinalModel = NormalizeModelRoute(Environment.GetEnvironmentVariable("OLLAMA_MODEL_TOOL_FINAL"), ollamaModel),
             OllamaImageModel = NormalizeModelRoute(Environment.GetEnvironmentVariable("OLLAMA_MODEL_IMAGE"), ollamaModel),
-            OllamaVoiceModel = NormalizeModelRoute(Environment.GetEnvironmentVariable("OLLAMA_MODEL_VOICE"), ollamaModel)
+            OllamaVoiceModel = NormalizeModelRoute(Environment.GetEnvironmentVariable("OLLAMA_MODEL_VOICE"), ollamaModel),
+            EnableImageVision = IsEnabled(Environment.GetEnvironmentVariable("ENABLE_IMAGE_VISION"), defaultValue: false)
         };
     }
 

@@ -546,6 +546,7 @@ string? previousEnableOnlineSearch = Environment.GetEnvironmentVariable("ENABLE_
 string? previousOllamaModel = Environment.GetEnvironmentVariable("OLLAMA_MODEL");
 string? previousOllamaModelPlan = Environment.GetEnvironmentVariable("OLLAMA_MODEL_PLAN");
 string? previousOllamaModelDocQa = Environment.GetEnvironmentVariable("OLLAMA_MODEL_DOC_QA");
+string? previousEnableImageVision = Environment.GetEnvironmentVariable("ENABLE_IMAGE_VISION");
 try
 {
     Environment.SetEnvironmentVariable("ALLOW_PUBLIC_ACCESS", null);
@@ -568,10 +569,12 @@ try
 
     Environment.SetEnvironmentVariable("OLLAMA_MODEL_PLAN", "plan-model:test");
     Environment.SetEnvironmentVariable("OLLAMA_MODEL_DOC_QA", "docqa-model:test");
+    Environment.SetEnvironmentVariable("ENABLE_IMAGE_VISION", "true");
     BotSettings routedEnvironmentSettings = BotConfiguration.LoadFromEnvironment();
     AssertEqual("base-model:test", routedEnvironmentSettings.OllamaChatModel, "BotConfiguration keeps chat model on OLLAMA_MODEL when chat override is blank");
     AssertEqual("plan-model:test", routedEnvironmentSettings.OllamaPlanningModel, "BotConfiguration loads OLLAMA_MODEL_PLAN");
     AssertEqual("docqa-model:test", routedEnvironmentSettings.OllamaDocumentQuestionAnsweringModel, "BotConfiguration loads OLLAMA_MODEL_DOC_QA");
+    AssertTrue(routedEnvironmentSettings.EnableImageVision, "BotConfiguration parses ENABLE_IMAGE_VISION truthy values");
 }
 finally
 {
@@ -581,6 +584,7 @@ finally
     Environment.SetEnvironmentVariable("OLLAMA_MODEL", previousOllamaModel);
     Environment.SetEnvironmentVariable("OLLAMA_MODEL_PLAN", previousOllamaModelPlan);
     Environment.SetEnvironmentVariable("OLLAMA_MODEL_DOC_QA", previousOllamaModelDocQa);
+    Environment.SetEnvironmentVariable("ENABLE_IMAGE_VISION", previousEnableImageVision);
 }
 AssertEqual("report.md", DocumentStorageService.SanitizeFileName("..\\..//report.md"), "SanitizeFileName removes path segments");
 AssertTrue(documentStorage.IsAllowedFileName("notes.txt"), "DocumentStorageService allows txt files");
@@ -757,7 +761,7 @@ await using (var dbContext = new TelegramDbContext())
         new ForgetCommand(),
         new FilesCommand(documentStorage),
         new ImagesCommand(),
-        new DescribeImageCommand(adminTestSettings),
+        new DescribeImageCommand(adminTestSettings, documentStorage),
         new ReadFileCommand(documentStorage),
         new CreateFileCommand(documentStorage),
         new ImportFilesCommand(importDirectory, documentStorage, adminTestSettings),
@@ -977,6 +981,7 @@ await using (var dbContext = new TelegramDbContext())
     AssertTrue(statusResult.ReplyText?.Contains("plan=qwen3:4b") == true, "/status reports planning model route");
     AssertTrue(statusResult.ReplyText?.Contains("doc_qa=qwen3:8b") == true, "/status reports document QA model route");
     AssertTrue(statusResult.ReplyText?.Contains("Search routing: heuristic") == true, "/status reports search routing mode");
+    AssertTrue(statusResult.ReplyText?.Contains("Image vision: disabled") == true, "/status reports image vision mode");
     AssertTrue(statusResult.ReplyText?.Contains("Safe command tools: disabled") == true, "/status reports safe command tools mode");
 
     CommandResult statusMentionResult = await commandRouter.TryHandleAsync(TextMessage("/status@red_eye_ghost_bot"), testUser, dbContext, CancellationToken.None);
@@ -1361,7 +1366,18 @@ await using (var dbContext = new TelegramDbContext())
     AssertTrue(describeImageResult.Handled, "/describeimage is handled");
     AssertTrue(describeImageResult.ReplyText?.Contains("sample.png") == true, "/describeimage reports image filename");
     AssertTrue(describeImageResult.ReplyText?.Contains("llama3.2-vision:11b") == true, "/describeimage reports configured image route");
-    AssertTrue(describeImageResult.ReplyText?.Contains("not implemented yet", StringComparison.OrdinalIgnoreCase) == true, "/describeimage stays metadata-only before vision execution");
+    AssertTrue(describeImageResult.ReplyText?.Contains("Image vision is disabled", StringComparison.OrdinalIgnoreCase) == true, "/describeimage stays metadata-only when image vision is disabled");
+
+    var fakeImageDescriptionService = new FakeImageDescriptionService("A small test image fixture.");
+    var visionEnabledDescribeImageCommand = new DescribeImageCommand(
+        adminTestSettings with { EnableImageVision = true },
+        documentStorage,
+        fakeImageDescriptionService);
+    CommandResult visionDescribeImageResult = await visionEnabledDescribeImageCommand.TryHandleAsync(TextMessage($"/describeimage {uploadedImage.Id}"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(visionDescribeImageResult.Handled, "/describeimage is handled when vision is enabled");
+    AssertTrue(visionDescribeImageResult.ReplyText?.Contains("Description:") == true, "/describeimage returns a vision description when enabled");
+    AssertTrue(visionDescribeImageResult.ReplyText?.Contains("A small test image fixture.") == true, "/describeimage includes image service output");
+    AssertEqual(uploadedImage.Id, fakeImageDescriptionService.LastImageId, "/describeimage passes selected image to image service");
     AssertFalse((await commandRouter.TryHandleAsync(TextMessage("/describeimagex 1"), testUser, dbContext, CancellationToken.None)).Handled, "/describeimagex is not treated as /describeimage");
 
     UploadedFile fileBeforeDelete = await dbContext.UploadedFiles.FirstAsync(x => x.Id == uploadedFileId, CancellationToken.None);
@@ -1519,6 +1535,27 @@ sealed class FakeTaskReminderSender : ITaskReminderSender
     {
         SentMessages.Add((chatId, text));
         return Task.CompletedTask;
+    }
+}
+
+sealed class FakeImageDescriptionService : IImageDescriptionService
+{
+    private readonly string _output;
+
+    public FakeImageDescriptionService(string output)
+    {
+        _output = output;
+    }
+
+    public int? LastImageId { get; private set; }
+
+    public Task<ImageDescriptionResult> DescribeAsync(
+        UploadedFile imageFile,
+        string prompt,
+        CancellationToken cancellationToken)
+    {
+        LastImageId = imageFile.Id;
+        return Task.FromResult(ImageDescriptionResult.Ok(_output));
     }
 }
 
