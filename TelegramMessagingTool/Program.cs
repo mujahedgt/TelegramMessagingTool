@@ -13,6 +13,7 @@ using TelegramMessagingTool.Data;
 using TelegramMessagingTool.models;
 using TelegramMessagingTool.Models;
 using TelegramMessagingTool.Services;
+using TelegramMessagingTool.Runtime;
 using TelegramMessagingTool.Telegram;
 using TelegramMessagingTool.Tools;
 
@@ -76,52 +77,20 @@ var documentSummaryService = new DocumentSummaryService(ollamaClient);
 var imageDescriptionService = new OllamaImageDescriptionService(qwenClient, settings);
 var agentRunner = new AgentRunner(ollamaClient, toolRegistry, searchRoutingClassifier: searchRoutingClassifier);
 var conversationService = new ConversationService();
-var commandRouter = new CommandRouter([
-    new HelpCommand(),
-    new SystemInfoCommand(),
-    new DiskStatusCommand(),
-    new ProcessesCommand(),
-    new StatusCommand(settings),
-    new ResetCommand(),
-    new RememberCommand(),
-    new MemoryCommand(),
-    new ForgetCommand(),
-    new FilesCommand(documentStorage),
-    new ImagesCommand(),
-    new DescribeImageCommand(settings, documentStorage, imageDescriptionService),
-    new VoiceFilesCommand(),
-    new TranscribeCommand(settings, documentStorage),
-    new ReadFileCommand(documentStorage),
-    new CreateFileCommand(documentStorage),
-    new ImportFilesCommand(importDirectory, documentStorage, settings),
-    new ImportFileCommand(importDirectory, documentStorage, settings),
-    new DeleteFileCommand(pendingActionService, settings),
-    new IndexFileCommand(documentIndexingService),
-    new IndexDocsCommand(documentIndexingService),
-    new DocChunksCommand(),
-    new AskFileCommand(documentIndexingService, documentRetrievalService, documentQuestionAnsweringService),
-    new AskDocsCommand(documentRetrievalService, documentQuestionAnsweringService),
-    new SummarizeFileCommand(documentIndexingService, documentRetrievalService, documentSummaryService),
-    new SummarizeDocsCommand(documentRetrievalService, documentSummaryService),
-    new EmbedFileCommand(documentIndexingService, documentEmbeddingService),
-    new EmbedDocsCommand(documentIndexingService, documentEmbeddingService),
-    new ToolsCommand(toolRegistry),
-    new HarnessesCommand(settings),
-    new PluginsCommand(settings),
-    new KillProcessCommand(pendingActionService, settings),
-    new ActionCommand(pendingActionService, settings),
-    new PendingCommand(pendingActionService, settings),
-    new ApproveCommand(pendingActionService, pendingActionExecutor, settings),
-    new DenyCommand(pendingActionService, settings),
-    new PlanCommand(agentTaskService),
-    new TasksCommand(agentTaskService),
-    new TaskCommand(agentTaskService),
-    new ScheduleCommand(agentTaskService),
-    new ScheduleListCommand(agentTaskService),
-    new UnscheduleCommand(agentTaskService),
-    new DoneCommand(agentTaskService),
-    new CancelCommand(agentTaskService)
-]);
+var commandRouter = CommandRouterFactory.Create(
+    settings,
+    toolRegistry,
+    documentStorage,
+    importDirectory,
+    pendingActionService,
+    pendingActionExecutor,
+    agentTaskService,
+    documentIndexingService,
+    documentRetrievalService,
+    documentQuestionAnsweringService,
+    documentSummaryService,
+    documentEmbeddingService,
+    imageDescriptionService);
 
 using CancellationTokenSource cts = new();
 Console.CancelKeyPress += (_, eventArgs) =>

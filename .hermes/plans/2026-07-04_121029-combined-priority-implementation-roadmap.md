@@ -264,7 +264,9 @@ These should wait until repo-mode local commit/push and approval audit are matur
 
 `Program.cs` is large. More tools will become painful unless startup/composition is cleaner.
 
-## P3.1 Extract command-router construction
+## P3.1 Extract command-router construction ✅ Done
+
+**Status:** Implemented `Runtime/CommandRouterFactory.cs` to centralize command registration outside `Program.cs`. `Program.cs` now passes already-built runtime dependencies into the factory, and helper tests verify the factory preserves the existing command registration order.
 
 **Files:**
 
@@ -498,10 +500,10 @@ Then restart and verify:
 
 # Immediate Next Task
 
-Start with:
+Continue with:
 
 ```text
-Priority 1.1 — Add repo_commit_changes
+Priority 3.2 — Extract AppServicesBuilder
 ```
 
-This is the most valuable next step because it completes the local repo coding loop after `repo_replace_text` and `run_dotnet_tests`.
+This is the next runtime composition refactor after `CommandRouterFactory`: move service construction out of `Program.cs` while keeping startup behavior unchanged.

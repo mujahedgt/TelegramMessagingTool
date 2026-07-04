@@ -11,6 +11,7 @@ using TelegramMessagingTool.ConsoleUi;
 using TelegramMessagingTool.Data;
 using TelegramMessagingTool.Models;
 using TelegramMessagingTool.Plugins;
+using TelegramMessagingTool.Runtime;
 using TelegramMessagingTool.Services;
 using TelegramMessagingTool.Telegram;
 using TelegramMessagingTool.Tools;
@@ -176,6 +177,42 @@ finally
     Environment.SetEnvironmentVariable("GITHUB_DEFAULT_REPO", previousGitHubDefaultRepo);
     Environment.SetEnvironmentVariable("GITHUB_ALLOWED_REPOS", previousGitHubAllowedRepos);
 }
+
+BotSettings commandFactorySettings = BotConfiguration.LoadFromEnvironment();
+using HttpClient commandFactoryHttpClient = new();
+var commandFactoryOllamaClient = new OllamaChatClient(commandFactoryHttpClient, commandFactorySettings);
+var commandFactoryEmbeddingClient = new OllamaEmbeddingClient(commandFactoryHttpClient, commandFactorySettings);
+var commandFactoryDocumentStorage = new DocumentStorageService(Path.Combine(Path.GetTempPath(), $"TelegramMessagingTool_CommandFactory_{Guid.NewGuid():N}"));
+string commandFactoryImportDirectory = Path.Combine(Path.GetTempPath(), $"TelegramMessagingTool_Import_{Guid.NewGuid():N}");
+var commandFactoryPendingActionService = new PendingActionService();
+var commandFactoryPendingActionExecutor = new PendingActionExecutor(new SystemProcessTerminator(), commandFactoryDocumentStorage);
+var commandFactoryAgentTaskService = new AgentTaskService();
+var commandFactoryDocumentIndexingService = new DocumentIndexingService(commandFactoryDocumentStorage);
+var commandFactoryDocumentRetrievalService = new DocumentRetrievalService();
+var commandFactoryDocumentQuestionAnsweringService = new DocumentQuestionAnsweringService(commandFactoryOllamaClient);
+var commandFactoryDocumentSummaryService = new DocumentSummaryService(commandFactoryOllamaClient);
+var commandFactoryDocumentEmbeddingService = new DocumentEmbeddingService(commandFactoryEmbeddingClient, commandFactorySettings.OllamaEmbeddingModel);
+var commandFactoryToolRegistry = new ToolRegistry([]);
+var commandFactoryImageDescriptionService = new OllamaImageDescriptionService(commandFactoryHttpClient, commandFactorySettings);
+CommandRouter factoryRouter = CommandRouterFactory.Create(
+    commandFactorySettings,
+    commandFactoryToolRegistry,
+    commandFactoryDocumentStorage,
+    commandFactoryImportDirectory,
+    commandFactoryPendingActionService,
+    commandFactoryPendingActionExecutor,
+    commandFactoryAgentTaskService,
+    commandFactoryDocumentIndexingService,
+    commandFactoryDocumentRetrievalService,
+    commandFactoryDocumentQuestionAnsweringService,
+    commandFactoryDocumentSummaryService,
+    commandFactoryDocumentEmbeddingService,
+    commandFactoryImageDescriptionService);
+string commandNames = string.Join(",", factoryRouter.Commands.Select(x => x.Name));
+AssertEqual(
+    "/help,/systeminfo,/diskstatus,/processes,/status,/reset,/remember,/memory,/forget,/files,/images,/describeimage,/voicefiles,/transcribe,/readfile,/createfile,/importfiles,/importfile,/deletefile,/indexfile,/indexdocs,/docchunks,/askfile,/askdocs,/summarizefile,/summarizedocs,/embedfile,/embeddocs,/tools,/harnesses,/plugins,/killprocess,/action,/pending,/approve,/deny,/plan,/tasks,/task,/schedule,/schedulelist,/unschedule,/done,/cancel",
+    commandNames,
+    "CommandRouterFactory preserves Program command registration order");
 
 AssertTrue(PluginManifest.TryParse("""
 {
