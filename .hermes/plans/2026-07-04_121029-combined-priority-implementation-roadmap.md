@@ -206,7 +206,9 @@ Rules:
 - Must use `GITHUB_ALLOWED_REPOS`.
 - Exclude token from output.
 
-## P2.2 Add `github_list_prs`
+## P2.2 Add `github_list_prs` ✅ Done
+
+**Status:** Implemented `GitHubListPullRequestsTool` as read-only `github_list_prs` behind `ENABLE_GITHUB_TOOLS=true`. It uses the configured default repo when owner/repo are omitted, rejects repos outside `GITHUB_ALLOWED_REPOS`, supports `state=open|closed|all`, clamps `limit` to `1..50`, calls `/repos/{owner}/{repo}/pulls`, never renders `GITHUB_TOKEN`, and returns PR number/title/state, author, head/base branches, draft/ready status, timestamps, and URL.
 
 **Objective:** List pull requests for allowed repos.
 

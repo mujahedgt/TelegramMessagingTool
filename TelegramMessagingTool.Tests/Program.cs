@@ -332,6 +332,37 @@ ToolResult blockedIssueDetailResult = await getIssueTool.ExecuteAsync("{\"owner\
 AssertFalse(blockedIssueDetailResult.Success, "GitHubGetIssueTool rejects repositories outside allowlist");
 ToolResult invalidIssueNumberResult = await getIssueTool.ExecuteAsync("{\"number\":0}", CancellationToken.None);
 AssertFalse(invalidIssueNumberResult.Success, "GitHubGetIssueTool rejects invalid issue numbers");
+
+var fakeGitHubPullRequestsHandler = new FakeHttpMessageHandler("""
+[
+  {
+    "number": 12,
+    "title": "Add GitHub PR listing",
+    "state": "open",
+    "html_url": "https://github.com/mujahedgt/TelegramMessagingTool/pull/12",
+    "user": { "login": "mujahedgt" },
+    "created_at": "2026-07-04T17:40:00Z",
+    "updated_at": "2026-07-04T17:45:00Z",
+    "draft": false,
+    "head": { "ref": "feature/github-prs" },
+    "base": { "ref": "master" }
+  }
+]
+""");
+using var fakeGitHubPullRequestsClient = new HttpClient(fakeGitHubPullRequestsHandler);
+var listPullRequestsTool = new GitHubListPullRequestsTool(fakeGitHubPullRequestsClient, gitHubSettings);
+ToolResult pullRequestsResult = await listPullRequestsTool.ExecuteAsync("{\"state\":\"open\",\"limit\":10}", CancellationToken.None);
+AssertTrue(pullRequestsResult.Success, "GitHubListPullRequestsTool succeeds for default allowed repo");
+AssertTrue(pullRequestsResult.Output.Contains("#12 [open] Add GitHub PR listing"), "GitHubListPullRequestsTool renders PR number, state, and title");
+AssertTrue(pullRequestsResult.Output.Contains("feature/github-prs -> master"), "GitHubListPullRequestsTool renders head/base branches");
+AssertFalse(pullRequestsResult.Output.Contains("secret-token-for-test"), "GitHubListPullRequestsTool never exposes token value");
+AssertTrue(fakeGitHubPullRequestsHandler.LastRequestUri?.ToString().Contains("/repos/mujahedgt/TelegramMessagingTool/pulls") == true, "GitHubListPullRequestsTool calls the pulls endpoint for the selected repo");
+AssertTrue(fakeGitHubPullRequestsHandler.LastRequestUri?.ToString().Contains("state=open") == true, "GitHubListPullRequestsTool sends state query parameter");
+AssertTrue(fakeGitHubPullRequestsHandler.LastRequestUri?.ToString().Contains("per_page=10") == true, "GitHubListPullRequestsTool sends bounded per_page query parameter");
+ToolResult blockedPullRequestsResult = await listPullRequestsTool.ExecuteAsync("{\"owner\":\"other\",\"repo\":\"repo\"}", CancellationToken.None);
+AssertFalse(blockedPullRequestsResult.Success, "GitHubListPullRequestsTool rejects repositories outside allowlist");
+ToolResult badPullRequestStateResult = await listPullRequestsTool.ExecuteAsync("{\"state\":\"merged\"}", CancellationToken.None);
+AssertFalse(badPullRequestStateResult.Success, "GitHubListPullRequestsTool rejects unsupported PR states");
 ToolRegistry gitHubToolRegistry = ToolRegistryFactory.Create(new BotSettings(
     BotToken: "test-token",
     OllamaUrl: "http://localhost:11434/api/chat",
@@ -358,6 +389,7 @@ ToolRegistry gitHubToolRegistry = ToolRegistryFactory.Create(new BotSettings(
 AssertTrue(gitHubToolRegistry.RenderToolInstructions().Contains("github_repo_info"), "ToolRegistryFactory registers GitHub repo info tool when enabled");
 AssertTrue(gitHubToolRegistry.RenderToolInstructions().Contains("github_list_issues"), "ToolRegistryFactory registers GitHub list issues tool when enabled");
 AssertTrue(gitHubToolRegistry.RenderToolInstructions().Contains("github_get_issue"), "ToolRegistryFactory registers GitHub get issue tool when enabled");
+AssertTrue(gitHubToolRegistry.RenderToolInstructions().Contains("github_list_prs"), "ToolRegistryFactory registers GitHub list PRs tool when enabled");
 
 AssertTrue(CommandParser.TryParse("/status", out ParsedCommand parsedStatus), "CommandParser parses bare command");
 AssertEqual("/status", parsedStatus.Command, "CommandParser normalizes bare command token");
