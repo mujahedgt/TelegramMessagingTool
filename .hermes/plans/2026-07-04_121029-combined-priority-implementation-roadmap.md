@@ -295,7 +295,9 @@ These should wait until repo-mode local commit/push and approval audit are matur
 - Create: `TelegramMessagingTool/Runtime/TelegramUpdateHandler.cs`
 - Modify: `Program.cs`
 
-## P3.4 Extract console input handling
+## P3.4 Extract console input handling ✅ Done
+
+**Status:** Implemented `Runtime/ConsoleInputHandler.cs` to move the local console loop, closed-stdin handling, `/exit` shutdown handling, local-console user creation, command routing, and console model replies out of `Program.cs`. `AppServicesBuilder` now wires the handler with existing runtime services and a shutdown callback, while `Program.cs` starts it alongside Telegram polling.
 
 **Files:**
 
@@ -507,7 +509,7 @@ Then restart and verify:
 Continue with:
 
 ```text
-Priority 3.4 — Extract ConsoleInputHandler
+Priority 3.5 — Keep Program.cs thin
 ```
 
-This is the next runtime composition refactor after `TelegramUpdateHandler`: move console input handling out of `Program.cs` while keeping console and Telegram runtime behavior unchanged.
+This is the final Priority 3 cleanup check: keep `Program.cs` limited to settings, service build, Telegram polling, loop startup, and shutdown orchestration.

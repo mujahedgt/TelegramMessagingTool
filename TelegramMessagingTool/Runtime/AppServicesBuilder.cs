@@ -12,9 +12,11 @@ public static class AppServicesBuilder
 {
     public static AppServices Build(
         BotSettings settings,
-        Action<string, string, string, ConsoleEventLevel>? writeConsoleEvent = null)
+        Action<string, string, string, ConsoleEventLevel>? writeConsoleEvent = null,
+        Action? requestShutdown = null)
     {
         writeConsoleEvent ??= static (_, _, _, _) => { };
+        requestShutdown ??= static () => { };
         var qwenClient = new HttpClient
         {
             Timeout = TimeSpan.FromMinutes(30)
@@ -89,6 +91,14 @@ public static class AppServicesBuilder
             conversationService,
             commandRouter,
             writeConsoleEvent);
+        var consoleInputHandler = new ConsoleInputHandler(
+            settings,
+            toolRegistry,
+            agentRunner,
+            conversationService,
+            commandRouter,
+            writeConsoleEvent,
+            requestShutdown);
 
         return new AppServices(
             [qwenClient, embeddingClient, searchClient, telegramHttpHandler, telegramHttpClient],
@@ -114,6 +124,7 @@ public static class AppServicesBuilder
             agentRunner,
             conversationService,
             commandRouter,
-            telegramUpdateHandler);
+            telegramUpdateHandler,
+            consoleInputHandler);
     }
 }

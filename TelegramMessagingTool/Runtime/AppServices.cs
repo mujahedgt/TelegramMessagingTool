@@ -35,7 +35,8 @@ public sealed class AppServices : IDisposable
         AgentRunner agentRunner,
         ConversationService conversationService,
         CommandRouter commandRouter,
-        TelegramUpdateHandler telegramUpdateHandler)
+        TelegramUpdateHandler telegramUpdateHandler,
+        ConsoleInputHandler consoleInputHandler)
     {
         _disposables = disposables;
         BotClient = botClient;
@@ -61,6 +62,7 @@ public sealed class AppServices : IDisposable
         ConversationService = conversationService;
         CommandRouter = commandRouter;
         TelegramUpdateHandler = telegramUpdateHandler;
+        ConsoleInputHandler = consoleInputHandler;
     }
 
     public TelegramBotClient BotClient { get; }
@@ -108,6 +110,8 @@ public sealed class AppServices : IDisposable
     public CommandRouter CommandRouter { get; }
 
     public TelegramUpdateHandler TelegramUpdateHandler { get; }
+
+    public ConsoleInputHandler ConsoleInputHandler { get; }
 
     public void Dispose()
     {

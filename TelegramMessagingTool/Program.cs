@@ -26,25 +26,21 @@ if (string.IsNullOrWhiteSpace(settings.BotToken))
     return;
 }
 
-using AppServices appServices = AppServicesBuilder.Build(settings, WriteConsoleEvent);
-
-var botClient = appServices.BotClient;
-var taskReminderService = appServices.TaskReminderService;
-var documentStorage = appServices.DocumentStorage;
-var toolRegistry = appServices.ToolRegistry;
-var pendingActionCallbackService = appServices.PendingActionCallbackService;
-var taskCallbackService = appServices.TaskCallbackService;
-var agentRunner = appServices.AgentRunner;
-var conversationService = appServices.ConversationService;
-var commandRouter = appServices.CommandRouter;
-var telegramUpdateHandler = appServices.TelegramUpdateHandler;
-
 using CancellationTokenSource cts = new();
 Console.CancelKeyPress += (_, eventArgs) =>
 {
     eventArgs.Cancel = true;
     cts.Cancel();
 };
+
+using AppServices appServices = AppServicesBuilder.Build(settings, WriteConsoleEvent, () => cts.Cancel());
+
+var botClient = appServices.BotClient;
+var taskReminderService = appServices.TaskReminderService;
+var toolRegistry = appServices.ToolRegistry;
+var commandRouter = appServices.CommandRouter;
+var telegramUpdateHandler = appServices.TelegramUpdateHandler;
+var consoleInputHandler = appServices.ConsoleInputHandler;
 
 if (settings.ApplyMigrations)
 {
@@ -82,7 +78,7 @@ try
     WriteConsoleEvent("START", me.Username ?? "bot", "long polling is running", ConsoleEventLevel.Success);
     WriteConsoleEvent("CONSOLE", "local", "type a message or command here; use /exit to stop", ConsoleEventLevel.Info);
 
-    _ = RunConsoleInputLoopAsync(cts.Token);
+    _ = consoleInputHandler.RunAsync(cts.Token);
     _ = RunTaskReminderLoopAsync(cts.Token);
     try
     {
@@ -155,141 +151,6 @@ async Task RunTaskReminderLoopAsync(CancellationToken cancellationToken)
             return;
         }
     }
-}
-
-async Task RunConsoleInputLoopAsync(CancellationToken cancellationToken)
-{
-    while (!cancellationToken.IsCancellationRequested)
-    {
-        Console.Write("> ");
-        string? line = await Task.Run(Console.ReadLine, cancellationToken);
-        if (line is null)
-        {
-            // In Windows Startup/background launchers stdin can be closed.
-            // Keep Telegram long polling alive instead of shutting down the bot.
-            WriteConsoleEvent("CONSOLE", "local", "stdin is closed; Telegram bot continues without console input", ConsoleEventLevel.Warning);
-            return;
-        }
-
-        string input = line.Trim();
-        if (input.Length == 0)
-        {
-            continue;
-        }
-
-        if (input.Equals("/exit", StringComparison.OrdinalIgnoreCase)
-            || input.Equals("exit", StringComparison.OrdinalIgnoreCase)
-            || input.Equals("quit", StringComparison.OrdinalIgnoreCase))
-        {
-            cts.Cancel();
-            return;
-        }
-
-        try
-        {
-            string answer = await ProcessConsoleInputAsync(input, cancellationToken);
-            Console.WriteLine();
-            Console.WriteLine(answer);
-            Console.WriteLine();
-        }
-        catch (OperationCanceledException)
-        {
-            return;
-        }
-        catch (Exception ex)
-        {
-            WriteConsoleEvent("ERROR", "console", ex.Message, ConsoleEventLevel.Error);
-        }
-    }
-}
-
-async Task<string> ProcessConsoleInputAsync(string input, CancellationToken cancellationToken)
-{
-    await using TelegramDbContext dbContext = new();
-    ConnectedUser consoleUser = await GetOrCreateConsoleUserAsync(dbContext, cancellationToken);
-
-    var consoleMessage = new Message
-    {
-        Text = input,
-        Chat = new Chat
-        {
-            Id = consoleUser.ChatId,
-            Username = "local_console",
-            FirstName = "Local",
-            LastName = "Console"
-        }
-    };
-
-    CommandResult commandResult = await commandRouter.TryHandleAsync(consoleMessage, consoleUser, dbContext, cancellationToken);
-    if (commandResult.Handled)
-    {
-        WriteConsoleEvent("COMMAND", "console", input.Split(' ', 2)[0], ConsoleEventLevel.Success);
-        return commandResult.ReplyText ?? "Command completed.";
-    }
-
-    dbContext.Messages.Add(new ChatMessage
-    {
-        ConnectedUserId = consoleUser.Id,
-        ChatId = consoleUser.ChatId,
-        Content = input,
-        Role = ChatRoles.User,
-        Timestamp = DateTime.UtcNow
-    });
-    await dbContext.SaveChangesAsync(cancellationToken);
-
-    List<OllamaMessageDto> conversationContext = await conversationService.CreateConversationContextAsync(
-        dbContext,
-        consoleUser.Id,
-        maxHistory: settings.ConversationMaxHistory,
-        cancellationToken: cancellationToken,
-        toolInstructions: toolRegistry.RenderToolInstructions());
-
-    string finalAnswer = await agentRunner.RunAsync(
-        conversationContext,
-        cancellationToken,
-        dbContext,
-        consoleUser);
-    WriteConsoleEvent("MESSAGE", "console", $"answered {finalAnswer.Length} chars", ConsoleEventLevel.Success);
-
-    dbContext.Messages.Add(new ChatMessage
-    {
-        ConnectedUserId = consoleUser.Id,
-        ChatId = consoleUser.ChatId,
-        Content = finalAnswer,
-        Role = ChatRoles.Assistant,
-        Timestamp = DateTime.UtcNow
-    });
-    await dbContext.SaveChangesAsync(cancellationToken);
-
-    return finalAnswer;
-}
-
-async Task<ConnectedUser> GetOrCreateConsoleUserAsync(TelegramDbContext dbContext, CancellationToken cancellationToken)
-{
-    const long consoleChatId = 0;
-    ConnectedUser? user = await dbContext.Users.FirstOrDefaultAsync(x => x.ChatId == consoleChatId, cancellationToken);
-    if (user is not null)
-    {
-        user.Name = "local_console";
-        user.FirstName = "Local";
-        user.LastName = "Console";
-        user.LastSeenAt = DateTime.UtcNow;
-        await dbContext.SaveChangesAsync(cancellationToken);
-        return user;
-    }
-
-    user = new ConnectedUser
-    {
-        ChatId = consoleChatId,
-        Name = "local_console",
-        FirstName = "Local",
-        LastName = "Console",
-        CreatedAt = DateTime.UtcNow,
-        LastSeenAt = DateTime.UtcNow
-    };
-    dbContext.Users.Add(user);
-    await dbContext.SaveChangesAsync(cancellationToken);
-    return user;
 }
 
 void WriteConsoleEvent(string label, string actor, string detail, ConsoleEventLevel level)
