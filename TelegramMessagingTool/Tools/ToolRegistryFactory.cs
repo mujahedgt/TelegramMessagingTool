@@ -44,6 +44,7 @@ public static class ToolRegistryFactory
         {
             tools.Add(new RepoReplaceTextRequestTool(pendingActionService, settings, settings.SafeCommandProjectRoot));
             tools.Add(new RepoCommitChangesRequestTool(pendingActionService, settings, settings.SafeCommandProjectRoot));
+            tools.Add(new RepoPushChangesRequestTool(pendingActionService, settings, settings.SafeCommandProjectRoot));
         }
 
         return new ToolRegistry(tools);

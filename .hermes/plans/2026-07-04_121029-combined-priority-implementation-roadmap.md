@@ -106,7 +106,9 @@ dotnet build TelegramMessagingTool.slnx --configuration Release --nologo
 dotnet list TelegramMessagingTool/TelegramMessagingTool.csproj package --vulnerable --include-transitive
 ```
 
-## P1.2 Add `repo_push_changes`
+## P1.2 Add `repo_push_changes` ✅ Done
+
+**Status:** Implemented with `RepoPushChangesRequestTool` behind `ENABLE_REPO_WRITE_TOOLS=true`. The tool is admin-only and approval-backed, creates a high-risk pending action first, refuses dirty working trees during execution, detects the current named branch, and runs fixed non-interactive `git push origin <current-branch>` only after `/approve`. It does not support force push or user-supplied push arguments.
 
 **Objective:** Allow approved push to GitHub only after a local commit exists.
 

@@ -545,10 +545,13 @@ ToolRegistry repoWriteEnabledRegistry = ToolRegistryFactory.Create(searchDisable
 }, new HttpClient(), new PendingActionService());
 AssertTrue(repoWriteEnabledRegistry.TryGet("repo_replace_text", out IAgentTool? repoReplaceTextTool), "ToolRegistryFactory includes repo_replace_text when repo write tools are enabled");
 AssertTrue(repoWriteEnabledRegistry.TryGet("repo_commit_changes", out IAgentTool? repoCommitChangesTool), "ToolRegistryFactory includes repo_commit_changes when repo write tools are enabled");
+AssertTrue(repoWriteEnabledRegistry.TryGet("repo_push_changes", out IAgentTool? repoPushChangesTool), "ToolRegistryFactory includes repo_push_changes when repo write tools are enabled");
 AssertTrue(repoReplaceTextTool!.RequiresApproval, "repo_replace_text requires approval before editing files");
 AssertTrue(repoCommitChangesTool!.RequiresApproval, "repo_commit_changes requires approval before committing changes");
+AssertTrue(repoPushChangesTool!.RequiresApproval, "repo_push_changes requires approval before pushing changes");
 AssertTrue(repoWriteEnabledRegistry.RenderToolInstructions().Contains("repo_replace_text"), "ToolRegistry instructions document repo_replace_text when enabled");
 AssertTrue(repoWriteEnabledRegistry.RenderToolInstructions().Contains("repo_commit_changes"), "ToolRegistry instructions document repo_commit_changes when enabled");
+AssertTrue(repoWriteEnabledRegistry.RenderToolInstructions().Contains("repo_push_changes"), "ToolRegistry instructions document repo_push_changes when enabled");
 ToolRegistry enabledSearchRegistry = ToolRegistryFactory.Create(searchEnabledSettings, new HttpClient());
 AssertTrue(enabledSearchRegistry.TryGet("online_search", out _), "ToolRegistryFactory includes online_search only when enabled");
 AssertTrue(enabledSearchRegistry.RenderToolInstructions().Contains("online_search"), "Enabled online_search is advertised in model instructions");
@@ -1290,7 +1293,62 @@ await using (var dbContext = new TelegramDbContext())
     PendingActionExecutionResult emptyDiffCommitExecution = await pendingActionExecutor.ExecuteApprovedAsync(dbContext, emptyDiffCommitApproval.Action!, CancellationToken.None);
     AssertTrue(emptyDiffCommitExecution.Executed, "repo_commit_changes empty-diff action is handled by executor");
     AssertFalse(emptyDiffCommitExecution.Success, "repo_commit_changes refuses to commit when there is no diff");
+
+    string repoPushRemote = Path.Combine(Path.GetTempPath(), $"TelegramMessagingTool_RepoPushRemote_{Guid.NewGuid():N}.git");
+    await TestProcessRunner.RunAsync("git", ["init", "--bare", repoPushRemote], Path.GetTempPath(), CancellationToken.None);
+    await TestProcessRunner.RunAsync("git", ["remote", "add", "origin", repoPushRemote], repoCommitRoot, CancellationToken.None);
+    await TestProcessRunner.RunAsync("git", ["push", "-u", "origin", "master"], repoCommitRoot, CancellationToken.None);
+    await File.WriteAllTextAsync(repoCommitFile, "# Pushed update\n", CancellationToken.None);
+    await TestProcessRunner.RunAsync("git", ["add", "TrackedFile.md"], repoCommitRoot, CancellationToken.None);
+    await TestProcessRunner.RunAsync("git", ["commit", "-m", "Prepare push test"], repoCommitRoot, CancellationToken.None);
+
+    var repoPushChatClient = new ScriptedChatClient([
+        "{\"type\":\"tool_call\",\"tool\":\"repo_push_changes\",\"input\":\"{\\\"reason\\\":\\\"push approved commit to origin\\\"}\"}"
+    ]);
+    string repoPushReply = await new AgentRunner(
+        repoPushChatClient,
+        repoCommitRegistry,
+        searchRoutingClassifier: new OffSearchRoutingClassifier()).RunAsync(
+            [new OllamaMessageDto("user", "request a push for the approved repo commit")],
+            CancellationToken.None,
+            dbContext,
+            testUser);
+    AssertTrue(repoPushReply.Contains("Pending action #"), "AgentRunner creates a pending action for repo_push_changes");
+    PendingAction repoPushAction = await dbContext.PendingActions.OrderByDescending(x => x.Id).FirstAsync(x => x.ToolName == "repo_push_changes", CancellationToken.None);
+    AssertEqual(PendingActionStatuses.Pending, repoPushAction.Status, "repo_push_changes request is stored as pending");
+    AssertTrue(repoPushAction.PayloadJson.Contains("push approved commit"), "repo_push_changes request stores the push reason");
+
+    PendingActionDecision repoPushApproval = await pendingActionService.ApproveAsync(dbContext, testUser, repoPushAction.Id, CancellationToken.None);
+    AssertTrue(repoPushApproval.Success, "repo_push_changes pending action can be approved");
+    PendingActionExecutionResult repoPushExecution = await pendingActionExecutor.ExecuteApprovedAsync(dbContext, repoPushApproval.Action!, CancellationToken.None);
+    AssertTrue(repoPushExecution.Executed, "repo_push_changes approval executes automatically");
+    AssertTrue(repoPushExecution.Success, "repo_push_changes execution succeeds for clean repo with local origin");
+    ProcessRunResult remoteLog = await TestProcessRunner.RunAsync("git", ["--git-dir", repoPushRemote, "log", "-1", "--pretty=%s"], Path.GetTempPath(), CancellationToken.None);
+    AssertTrue(remoteLog.Output.Contains("Prepare push test"), "repo_push_changes pushes the current branch to origin");
+
+    var directRepoPushTool = new RepoPushChangesRequestTool(pendingActionService, repoCommitSettings, repoCommitRoot);
+    ToolResult nonAdminRepoPushResult = await directRepoPushTool.CreatePendingActionAsync(
+        "{\"reason\":\"Unauthorized push\"}",
+        dbContext,
+        nonAdminUser,
+        CancellationToken.None);
+    AssertFalse(nonAdminRepoPushResult.Success, "repo_push_changes requires admin before creating pending actions");
+    await File.WriteAllTextAsync(repoCommitFile, "# Dirty working tree\n", CancellationToken.None);
+    PendingAction dirtyRepoPushAction = await pendingActionService.CreateAsync(
+        dbContext,
+        testUser,
+        "repo_push_changes",
+        "Push with dirty tree.",
+        "{\"action\":\"repo_push_changes\",\"projectRoot\":\"" + JsonEncodedText.Encode(repoCommitRoot).ToString() + "\",\"reason\":\"dirty tree push\"}",
+        "high",
+        TimeSpan.FromMinutes(15),
+        CancellationToken.None);
+    PendingActionDecision dirtyRepoPushApproval = await pendingActionService.ApproveAsync(dbContext, testUser, dirtyRepoPushAction.Id, CancellationToken.None);
+    PendingActionExecutionResult dirtyRepoPushExecution = await pendingActionExecutor.ExecuteApprovedAsync(dbContext, dirtyRepoPushApproval.Action!, CancellationToken.None);
+    AssertTrue(dirtyRepoPushExecution.Executed, "repo_push_changes dirty-tree action is handled by executor");
+    AssertFalse(dirtyRepoPushExecution.Success, "repo_push_changes refuses to push when the working tree is dirty");
     TestDirectoryCleanup.DeleteRecursive(repoCommitRoot);
+    TestDirectoryCleanup.DeleteRecursive(repoPushRemote);
 
     AssertTrue(PendingActionCallbackParser.TryParse("act:approve:123", out PendingActionCallback approveCallback), "PendingActionCallbackParser parses approve callback");
     AssertEqual(PendingActionCallbackVerb.Approve, approveCallback.Verb, "PendingActionCallbackParser reads approve verb");

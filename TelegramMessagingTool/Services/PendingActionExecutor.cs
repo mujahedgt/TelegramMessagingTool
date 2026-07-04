@@ -34,6 +34,7 @@ public sealed class PendingActionExecutor
             "delete_file" => await ExecuteDeleteFileAsync(dbContext, action, cancellationToken),
             "repo_replace_text" => await ExecuteRepoReplaceTextAsync(action, cancellationToken),
             "repo_commit_changes" => await ExecuteRepoCommitChangesAsync(action, cancellationToken),
+            "repo_push_changes" => await ExecuteRepoPushChangesAsync(action, cancellationToken),
             _ => PendingActionExecutionResult.Skipped($"No automatic execution is registered for action type '{action.ToolName}'.")
         };
 
@@ -190,6 +191,45 @@ public sealed class PendingActionExecutor
         catch (JsonException ex)
         {
             error = $"Execution failed: invalid repo_commit_changes payload JSON. {ex.Message}";
+            return false;
+        }
+    }
+
+    private static async Task<PendingActionExecutionResult> ExecuteRepoPushChangesAsync(
+        PendingAction action,
+        CancellationToken cancellationToken)
+    {
+        if (!TryReadRepoPushChangesPayload(action.PayloadJson, out RepoPushChangesPayload payload, out string error))
+        {
+            return PendingActionExecutionResult.Failed(error);
+        }
+
+        RepoGitPushResult pushResult = await RepoGitPushExecutor.PushAsync(payload, cancellationToken);
+        return pushResult.Success
+            ? PendingActionExecutionResult.Completed(pushResult.Message)
+            : PendingActionExecutionResult.Failed(pushResult.Message);
+    }
+
+    private static bool TryReadRepoPushChangesPayload(string payloadJson, out RepoPushChangesPayload payload, out string error)
+    {
+        payload = RepoPushChangesPayload.Empty;
+        error = string.Empty;
+
+        try
+        {
+            RepoPushChangesPayload? parsed = JsonSerializer.Deserialize<RepoPushChangesPayload>(payloadJson, JsonOptions);
+            if (parsed is null || string.IsNullOrWhiteSpace(parsed.ProjectRoot))
+            {
+                error = "Execution failed: repo_push_changes payload is missing project_root.";
+                return false;
+            }
+
+            payload = parsed;
+            return true;
+        }
+        catch (JsonException ex)
+        {
+            error = $"Execution failed: invalid repo_push_changes payload JSON. {ex.Message}";
             return false;
         }
     }

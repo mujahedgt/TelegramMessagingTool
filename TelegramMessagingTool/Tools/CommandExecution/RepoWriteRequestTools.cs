@@ -311,6 +311,228 @@ Deny: /deny {pendingAction.Id}
     }
 }
 
+public sealed class RepoPushChangesRequestTool : IApprovalRequestTool
+{
+    private readonly PendingActionService _pendingActionService;
+    private readonly BotSettings _settings;
+    private readonly string _projectRoot;
+
+    public RepoPushChangesRequestTool(PendingActionService pendingActionService, BotSettings settings, string projectRoot)
+    {
+        _pendingActionService = pendingActionService;
+        _settings = settings;
+        _projectRoot = Path.GetFullPath(projectRoot);
+    }
+
+    public string Name => "repo_push_changes";
+
+    public string Description => "Approval-gated repository push: refuses dirty working trees and pushes the current branch to origin with fixed git arguments. Strict JSON only: {\"reason\":\"why push is needed\"}. No force push.";
+
+    public bool RequiresApproval => true;
+
+    public Task<ToolResult> ExecuteAsync(string input, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(ToolResult.Fail(
+            "repo_push_changes requires an authenticated pending-action context. Use it from the Telegram/console agent flow so it can create an approval request."));
+    }
+
+    public async Task<ToolResult> CreatePendingActionAsync(
+        string input,
+        TelegramDbContext dbContext,
+        ConnectedUser user,
+        CancellationToken cancellationToken)
+    {
+        if (!BotAccessPolicy.IsAdmin(user.ChatId, _settings.AdminChatId))
+        {
+            return ToolResult.Fail(BotAccessPolicy.AdminOnlyMessage(_settings.AdminChatId));
+        }
+
+        if (!Directory.Exists(_projectRoot))
+        {
+            return ToolResult.Fail($"Project root does not exist: {_projectRoot}");
+        }
+
+        if (!TryParseInput(input, _projectRoot, out RepoPushChangesPayload payload, out string error))
+        {
+            return ToolResult.Fail(error);
+        }
+
+        PendingAction pendingAction = await _pendingActionService.CreateAsync(
+            dbContext,
+            user,
+            toolName: Name,
+            description: $"Push current branch to origin. Reason: {payload.Reason}",
+            payloadJson: JsonSerializer.Serialize(payload),
+            riskLevel: "high",
+            ttl: TimeSpan.FromMinutes(15),
+            cancellationToken: cancellationToken);
+
+        return ToolResult.Ok($"""
+Approval required.
+
+Pending action #{pendingAction.Id}
+Type: repo_push_changes
+Risk: high
+Project root: {payload.ProjectRoot}
+Reason: {payload.Reason}
+Expires UTC: {pendingAction.ExpiresAt:yyyy-MM-dd HH:mm}
+
+This request only created a pending action. It did not push changes yet.
+Approve: /approve {pendingAction.Id}
+Deny: /deny {pendingAction.Id}
+""");
+    }
+
+    public static bool TryParseInput(string input, string projectRoot, out RepoPushChangesPayload payload, out string error)
+    {
+        payload = RepoPushChangesPayload.Empty;
+        error = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            error = "repo_push_changes input must be strict JSON with an optional reason.";
+            return false;
+        }
+
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(input);
+            JsonElement root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                error = "repo_push_changes input must be a JSON object.";
+                return false;
+            }
+
+            string reason = ReadString(root, "reason").Trim();
+            if (string.IsNullOrWhiteSpace(reason))
+            {
+                reason = "requested by agent";
+            }
+
+            if (reason.Length > 300)
+            {
+                reason = reason[..300];
+            }
+
+            payload = new RepoPushChangesPayload(
+                Action: "repo_push_changes",
+                ProjectRoot: Path.GetFullPath(projectRoot),
+                Reason: reason,
+                RequestedAtUtc: DateTime.UtcNow);
+            return true;
+        }
+        catch (JsonException)
+        {
+            error = "repo_push_changes input must be valid JSON, for example {\"reason\":\"Push approved local commit\"}.";
+            return false;
+        }
+    }
+
+    private static string ReadString(JsonElement root, string propertyName)
+    {
+        return root.TryGetProperty(propertyName, out JsonElement element) && element.ValueKind == JsonValueKind.String
+            ? element.GetString() ?? string.Empty
+            : string.Empty;
+    }
+}
+
+public static class RepoGitPushExecutor
+{
+    private const int TimeoutMilliseconds = 120_000;
+
+    public static async Task<RepoGitPushResult> PushAsync(RepoPushChangesPayload payload, CancellationToken cancellationToken)
+    {
+        string projectRoot = Path.GetFullPath(payload.ProjectRoot);
+        if (!Directory.Exists(projectRoot))
+        {
+            return RepoGitPushResult.Fail($"Execution failed: project root does not exist: {projectRoot}");
+        }
+
+        ProcessCommandResult gitRoot = await RunGitAsync(projectRoot, ["rev-parse", "--show-toplevel"], cancellationToken);
+        if (!gitRoot.Success)
+        {
+            return RepoGitPushResult.Fail("Execution failed: project root is not a git repository. " + gitRoot.RenderForMessage());
+        }
+
+        string repoRoot = Path.GetFullPath(gitRoot.Output.Trim());
+        if (!string.Equals(repoRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), projectRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), StringComparison.OrdinalIgnoreCase))
+        {
+            return RepoGitPushResult.Fail("Execution refused: SAFE_COMMAND_PROJECT_ROOT must be the git repository root for repo_push_changes.");
+        }
+
+        ProcessCommandResult status = await RunGitAsync(projectRoot, ["status", "--porcelain"], cancellationToken);
+        if (!status.Success)
+        {
+            return RepoGitPushResult.Fail("Execution failed: could not read git status. " + status.RenderForMessage());
+        }
+
+        if (!string.IsNullOrWhiteSpace(status.Output))
+        {
+            return RepoGitPushResult.Fail("Execution refused: working tree has uncommitted changes. Commit or discard changes before pushing.");
+        }
+
+        ProcessCommandResult branch = await RunGitAsync(projectRoot, ["branch", "--show-current"], cancellationToken);
+        if (!branch.Success)
+        {
+            return RepoGitPushResult.Fail("Execution failed: could not detect current branch. " + branch.RenderForMessage());
+        }
+
+        string branchName = branch.Output.Trim();
+        if (string.IsNullOrWhiteSpace(branchName))
+        {
+            return RepoGitPushResult.Fail("Execution refused: repository is in detached HEAD state; repo_push_changes only pushes a named current branch.");
+        }
+
+        ProcessCommandResult push = await RunGitAsync(projectRoot, ["push", "origin", branchName], cancellationToken);
+        if (!push.Success)
+        {
+            return RepoGitPushResult.Fail("Execution failed: git push origin <current-branch> failed. " + push.RenderForMessage());
+        }
+
+        return RepoGitPushResult.Ok($"Pushed current branch '{branchName}' to origin. {push.RenderForMessage()}");
+    }
+
+    private static async Task<ProcessCommandResult> RunGitAsync(string projectRoot, IReadOnlyList<string> arguments, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "git",
+                WorkingDirectory = projectRoot,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            startInfo.Environment["GIT_TERMINAL_PROMPT"] = "0";
+            startInfo.Environment["GCM_INTERACTIVE"] = "Never";
+
+            foreach (string argument in arguments)
+            {
+                startInfo.ArgumentList.Add(argument);
+            }
+
+            using Process process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start git.");
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TimeoutMilliseconds);
+            string output = await process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
+            string error = await process.StandardError.ReadToEndAsync(timeoutCts.Token);
+            await process.WaitForExitAsync(timeoutCts.Token);
+            return new ProcessCommandResult(process.ExitCode, output, error);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return new ProcessCommandResult(-1, string.Empty, "git command timed out.");
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            return new ProcessCommandResult(-1, string.Empty, ex.Message);
+        }
+    }
+}
+
 public static class RepoGitCommitExecutor
 {
     private const int TimeoutMilliseconds = 120_000;
@@ -550,11 +772,31 @@ public sealed record RepoCommitChangesPayload(
         DateTime.MinValue);
 }
 
+public sealed record RepoPushChangesPayload(
+    string Action,
+    string ProjectRoot,
+    string Reason,
+    DateTime RequestedAtUtc)
+{
+    public static RepoPushChangesPayload Empty { get; } = new(
+        string.Empty,
+        string.Empty,
+        string.Empty,
+        DateTime.MinValue);
+}
+
 public sealed record RepoGitCommitResult(bool Success, string Message)
 {
     public static RepoGitCommitResult Ok(string message) => new(true, message);
 
     public static RepoGitCommitResult Fail(string message) => new(false, message);
+}
+
+public sealed record RepoGitPushResult(bool Success, string Message)
+{
+    public static RepoGitPushResult Ok(string message) => new(true, message);
+
+    public static RepoGitPushResult Fail(string message) => new(false, message);
 }
 
 public sealed record ProcessCommandResult(int ExitCode, string Output, string Error)
