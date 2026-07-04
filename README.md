@@ -176,7 +176,7 @@ Available tools:
 | `git_log_recent` | No | Optional. Registered only when `ENABLE_SAFE_COMMAND_TOOLS=true`. Read-only `git log --oneline -5` for `SAFE_COMMAND_PROJECT_ROOT` |
 | `run_dotnet_tests` | No | Optional. Registered only when `ENABLE_SAFE_COMMAND_TOOLS=true`. Fixed helper test command only; input must be `{"target":"helper-tests"}` |
 | `publish_release` | Yes | Optional. Registered only when `ENABLE_SAFE_COMMAND_TOOLS=true` and an approval context is available. Publishes a timestamped release and updates `.latest-release` after `/approve`; does not restart |
-| `restart_latest_bot` | Yes | Optional. Registered only when `ENABLE_SAFE_COMMAND_TOOLS=true` and an approval context is available. Creates a pending action only |
+| `restart_latest_bot` | Yes | Optional. Registered only when `ENABLE_SAFE_COMMAND_TOOLS=true` and an approval context is available. Schedules a safe restart from `.latest-release` after `/approve` using environment handoff |
 | `repo_replace_text` | Yes | Optional. Registered only when `ENABLE_REPO_WRITE_TOOLS=true` and an approval context is available. Replaces one exact text block in an allowed project text file after `/approve` |
 | `repo_commit_changes` | Yes | Optional. Registered only when `ENABLE_REPO_WRITE_TOOLS=true` and an approval context is available. Runs safe Git checks and commits current allowed project changes after `/approve`; does not push |
 | `repo_push_changes` | Yes | Optional. Registered only when `ENABLE_REPO_WRITE_TOOLS=true` and an approval context is available. Refuses dirty working trees and pushes the current branch to `origin` after `/approve`; no force push |
@@ -210,6 +210,7 @@ Safe command tool notes:
 - The first safe command tools are read-only Git inspection tools only: `git_status`, `git_diff`, and `git_log_recent`.
 - `run_dotnet_tests` is a fixed helper-test runner only; it does not accept arbitrary projects, filters, commands, or arguments.
 - `publish_release` is admin-only and approval-backed. It runs fixed `dotnet publish` for `TelegramMessagingTool/TelegramMessagingTool.csproj`, writes a timestamped folder under `release/`, updates `.latest-release` only after success, records the release path, and does not restart the bot.
+- `restart_latest_bot` is admin-only and approval-backed. It validates `.latest-release`, creates a fixed restart script under `release/`, hands off runtime environment variables including `ENABLE_REPO_WRITE_TOOLS`, stops old `TelegramMessagingTool` processes from that script, and starts the latest release with the project root as working directory.
 - `ENABLE_REPO_WRITE_TOOLS=false` by default.
 - `repo_replace_text` is the first repo-write tool. It is admin-only, approval-backed, restricted to source/docs/config text files under `SAFE_COMMAND_PROJECT_ROOT`, rejects path traversal/generated/runtime folders, and replaces exactly one matching text block only after `/approve`.
 - `repo_commit_changes` is admin-only and approval-backed. It runs `git diff --check`, refuses empty diffs, validates changed paths against the repo-write allowlist, commits with a strict JSON message/body, and never pushes.

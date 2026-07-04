@@ -11,11 +11,16 @@ public sealed class PendingActionExecutor
 {
     private readonly IProcessTerminator _processTerminator;
     private readonly DocumentStorageService _documentStorage;
+    private readonly ILatestReleaseRestarter _latestReleaseRestarter;
 
-    public PendingActionExecutor(IProcessTerminator processTerminator, DocumentStorageService documentStorage)
+    public PendingActionExecutor(
+        IProcessTerminator processTerminator,
+        DocumentStorageService documentStorage,
+        ILatestReleaseRestarter? latestReleaseRestarter = null)
     {
         _processTerminator = processTerminator;
         _documentStorage = documentStorage;
+        _latestReleaseRestarter = latestReleaseRestarter ?? new SystemLatestReleaseRestarter();
     }
 
     public async Task<PendingActionExecutionResult> ExecuteApprovedAsync(
@@ -33,6 +38,7 @@ public sealed class PendingActionExecutor
             "kill_process" => ExecuteKillProcess(action),
             "delete_file" => await ExecuteDeleteFileAsync(dbContext, action, cancellationToken),
             "publish_release" => await ExecutePublishReleaseAsync(action, cancellationToken),
+            "restart_latest_bot" => await ExecuteRestartLatestBotAsync(action, cancellationToken),
             "repo_replace_text" => await ExecuteRepoReplaceTextAsync(action, cancellationToken),
             "repo_commit_changes" => await ExecuteRepoCommitChangesAsync(action, cancellationToken),
             "repo_push_changes" => await ExecuteRepoPushChangesAsync(action, cancellationToken),
@@ -131,6 +137,54 @@ public sealed class PendingActionExecutor
         catch (JsonException ex)
         {
             error = $"Execution failed: invalid publish_release payload JSON. {ex.Message}";
+            return false;
+        }
+    }
+
+    private async Task<PendingActionExecutionResult> ExecuteRestartLatestBotAsync(
+        PendingAction action,
+        CancellationToken cancellationToken)
+    {
+        if (!TryReadRestartLatestBotPayload(action.PayloadJson, out RestartLatestBotPayload payload, out string error))
+        {
+            return PendingActionExecutionResult.Failed(error);
+        }
+
+        LatestReleaseRestartResult restartResult = await _latestReleaseRestarter.RestartAsync(payload, cancellationToken);
+        return restartResult.Success
+            ? PendingActionExecutionResult.Completed(restartResult.Message)
+            : PendingActionExecutionResult.Failed(restartResult.Message);
+    }
+
+    private static bool TryReadRestartLatestBotPayload(string payloadJson, out RestartLatestBotPayload payload, out string error)
+    {
+        payload = RestartLatestBotPayload.Empty;
+        error = string.Empty;
+
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(payloadJson);
+            JsonElement root = document.RootElement;
+            string action = ReadPayloadString(root, "action");
+            string projectRoot = ReadPayloadString(root, "project_root");
+            if (string.IsNullOrWhiteSpace(projectRoot))
+            {
+                projectRoot = ReadPayloadString(root, "projectRoot");
+            }
+
+            string reason = ReadPayloadString(root, "reason");
+            if (string.IsNullOrWhiteSpace(projectRoot))
+            {
+                error = "Execution failed: restart_latest_bot payload is missing project_root.";
+                return false;
+            }
+
+            payload = new RestartLatestBotPayload(action, projectRoot, reason, DateTime.UtcNow);
+            return true;
+        }
+        catch (JsonException ex)
+        {
+            error = $"Execution failed: invalid restart_latest_bot payload JSON. {ex.Message}";
             return false;
         }
     }

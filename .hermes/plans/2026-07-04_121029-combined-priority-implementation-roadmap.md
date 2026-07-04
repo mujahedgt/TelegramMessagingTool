@@ -140,7 +140,9 @@ dotnet list TelegramMessagingTool/TelegramMessagingTool.csproj package --vulnera
 - Do not restart in same action.
 - Record release path in `DecisionNote`.
 
-## P1.4 Execute `restart_latest_bot` after approval
+## P1.4 Execute `restart_latest_bot` after approval ✅ Done
+
+**Status:** Implemented approved execution for `restart_latest_bot`. It validates `.latest-release`, writes a fixed restart script under `release/`, hands off runtime environment variables including `ENABLE_REPO_WRITE_TOOLS`, stops old `TelegramMessagingTool` processes from the detached script, and starts the latest release with the project root as working directory.
 
 **Objective:** Make existing `restart_latest_bot` pending action safely restart the newest `.latest-release`.
 

@@ -893,7 +893,8 @@ await using (var dbContext = new TelegramDbContext())
 
     var pendingActionService = new PendingActionService();
     var fakeProcessTerminator = new FakeProcessTerminator();
-    var pendingActionExecutor = new PendingActionExecutor(fakeProcessTerminator, documentStorage);
+    var fakeLatestReleaseRestarter = new FakeLatestReleaseRestarter();
+    var pendingActionExecutor = new PendingActionExecutor(fakeProcessTerminator, documentStorage, fakeLatestReleaseRestarter);
     var agentTaskService = new AgentTaskService();
     var documentIndexingService = new DocumentIndexingService(documentStorage);
     var documentRetrievalService = new DocumentRetrievalService(testEmbeddingService);
@@ -1193,6 +1194,31 @@ await using (var dbContext = new TelegramDbContext())
     AssertTrue(latestReleasePath.Contains("release", StringComparison.OrdinalIgnoreCase), "publish_release stores a release folder path");
     AssertTrue(Directory.Exists(Path.Combine(publishTestRoot, latestReleasePath)), "publish_release creates the timestamped release directory");
     AssertTrue(publishExecution.Message.Contains(latestReleasePath, StringComparison.OrdinalIgnoreCase), "publish_release execution records the release path in the result");
+
+    var restartRequestChatClient = new ScriptedChatClient([
+        "{\"type\":\"tool_call\",\"tool\":\"restart_latest_bot\",\"input\":\"{\\\"reason\\\":\\\"verify restarted latest release\\\"}\"}"
+    ]);
+    string restartRequestReply = await new AgentRunner(
+        restartRequestChatClient,
+        approvalToolRegistry,
+        searchRoutingClassifier: new OffSearchRoutingClassifier()).RunAsync(
+            [new OllamaMessageDto("user", "request a restart latest bot approval")],
+            CancellationToken.None,
+            dbContext,
+            testUser);
+    AssertTrue(restartRequestReply.Contains("Pending action #"), "AgentRunner creates a pending action for restart_latest_bot");
+    PendingAction restartLatestAction = await dbContext.PendingActions.OrderByDescending(x => x.Id).FirstAsync(x => x.ToolName == "restart_latest_bot", CancellationToken.None);
+    AssertEqual(PendingActionStatuses.Pending, restartLatestAction.Status, "restart_latest_bot request is stored as pending");
+    AssertTrue(restartLatestAction.PayloadJson.Contains("verify restarted latest release"), "restart_latest_bot request stores the reason in payload JSON");
+
+    PendingActionDecision restartApproval = await pendingActionService.ApproveAsync(dbContext, testUser, restartLatestAction.Id, CancellationToken.None);
+    AssertTrue(restartApproval.Success, "restart_latest_bot pending action can be approved");
+    PendingActionExecutionResult restartExecution = await pendingActionExecutor.ExecuteApprovedAsync(dbContext, restartApproval.Action!, CancellationToken.None);
+    AssertTrue(restartExecution.Executed, "restart_latest_bot approval executes automatically");
+    AssertTrue(restartExecution.Success, "restart_latest_bot approval schedules a restart successfully");
+    AssertEqual(publishTestRoot, fakeLatestReleaseRestarter.LastProjectRoot, "restart_latest_bot passes the project root to the restarter");
+    AssertEqual(1, fakeLatestReleaseRestarter.RestartCallCount, "restart_latest_bot calls the latest-release restarter once");
+    AssertTrue((await dbContext.PendingActions.FindAsync([restartLatestAction.Id], CancellationToken.None))!.DecisionNote.Contains("restart", StringComparison.OrdinalIgnoreCase), "restart_latest_bot records execution result in DecisionNote");
     TestDirectoryCleanup.DeleteRecursive(publishTestRoot);
 
     string repoWriteRoot = Path.Combine(Path.GetTempPath(), $"TelegramMessagingTool_RepoWrite_{Guid.NewGuid():N}");
@@ -2055,6 +2081,20 @@ sealed class FakeProcessTerminator : IProcessTerminator
         LastRequestedPid = processId;
         KillCallCount++;
         return ProcessTerminationResult.Ok($"Process PID {processId} was terminated successfully.");
+    }
+}
+
+sealed class FakeLatestReleaseRestarter : ILatestReleaseRestarter
+{
+    public string? LastProjectRoot { get; private set; }
+
+    public int RestartCallCount { get; private set; }
+
+    public Task<LatestReleaseRestartResult> RestartAsync(RestartLatestBotPayload payload, CancellationToken cancellationToken)
+    {
+        LastProjectRoot = payload.ProjectRoot;
+        RestartCallCount++;
+        return Task.FromResult(LatestReleaseRestartResult.Ok($"Scheduled restart from latest release under {payload.ProjectRoot}."));
     }
 }
 

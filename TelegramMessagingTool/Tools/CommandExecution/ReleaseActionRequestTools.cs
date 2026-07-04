@@ -221,6 +221,94 @@ public sealed record PublishReleasePayload(string Action, string ProjectRoot, st
     public static PublishReleasePayload Empty { get; } = new(string.Empty, string.Empty, string.Empty, DateTime.MinValue);
 }
 
+public sealed record RestartLatestBotPayload(string Action, string ProjectRoot, string Reason, DateTime RequestedAtUtc)
+{
+    public static RestartLatestBotPayload Empty { get; } = new(string.Empty, string.Empty, string.Empty, DateTime.MinValue);
+}
+
+public interface ILatestReleaseRestarter
+{
+    Task<LatestReleaseRestartResult> RestartAsync(RestartLatestBotPayload payload, CancellationToken cancellationToken);
+}
+
+public sealed class SystemLatestReleaseRestarter : ILatestReleaseRestarter
+{
+    public Task<LatestReleaseRestartResult> RestartAsync(RestartLatestBotPayload payload, CancellationToken cancellationToken)
+    {
+        string projectRoot = Path.GetFullPath(payload.ProjectRoot);
+        if (!Directory.Exists(projectRoot))
+        {
+            return Task.FromResult(LatestReleaseRestartResult.Fail($"Execution failed: project root does not exist: {projectRoot}"));
+        }
+
+        string latestReleaseFile = Path.Combine(projectRoot, ".latest-release");
+        if (!File.Exists(latestReleaseFile))
+        {
+            return Task.FromResult(LatestReleaseRestartResult.Fail("Execution failed: .latest-release does not exist. Publish a release first."));
+        }
+
+        string latestRelease = File.ReadAllText(latestReleaseFile).Trim();
+        if (string.IsNullOrWhiteSpace(latestRelease))
+        {
+            return Task.FromResult(LatestReleaseRestartResult.Fail("Execution failed: .latest-release is empty."));
+        }
+
+        string latestExe = Path.GetFullPath(Path.Combine(projectRoot, latestRelease, "TelegramMessagingTool.exe"));
+        string rootWithSeparator = projectRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        if (!latestExe.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase) || !File.Exists(latestExe))
+        {
+            return Task.FromResult(LatestReleaseRestartResult.Fail($"Execution failed: latest release executable was not found under project root: {latestRelease}"));
+        }
+
+        string scriptPath = Path.Combine(projectRoot, "release", $"restart-latest-{DateTime.UtcNow:yyyyMMdd-HHmmss}.ps1");
+        Directory.CreateDirectory(Path.GetDirectoryName(scriptPath)!);
+        string script = $$"""
+$ErrorActionPreference = 'Stop'
+Start-Sleep -Seconds 2
+$projectRoot = {{ToPowerShellString(projectRoot)}}
+$latestExe = {{ToPowerShellString(latestExe)}}
+$envNames = @('TELEGRAM_BOT_TOKEN','ADMIN_CHAT_ID','ALLOWED_CHAT_IDS','ALLOW_PUBLIC_ACCESS','OLLAMA_URL','OLLAMA_MODEL','OLLAMA_MODEL_CHAT','OLLAMA_MODEL_PLAN','OLLAMA_MODEL_DOC_QA','OLLAMA_MODEL_SUMMARY','OLLAMA_MODEL_TOOL_FINAL','OLLAMA_MODEL_IMAGE','OLLAMA_MODEL_VOICE','OLLAMA_EMBEDDING_URL','OLLAMA_EMBEDDING_MODEL','ENABLE_DOCUMENT_EMBEDDINGS','ENABLE_ONLINE_SEARCH','SEARCH_ROUTING_MODE','ENABLE_IMAGE_VISION','ENABLE_AUDIO_TRANSCRIPTION','ENABLE_SAFE_COMMAND_TOOLS','SAFE_COMMAND_PROJECT_ROOT','ENABLE_REPO_WRITE_TOOLS','ENABLE_PLUGINS','PLUGIN_DIRECTORY','ENABLE_GITHUB_TOOLS','GITHUB_TOKEN','GITHUB_DEFAULT_OWNER','GITHUB_DEFAULT_REPO','GITHUB_ALLOWED_REPOS','TELEGRAM_DB_CONNECTION','APPLY_MIGRATIONS','LOG_MESSAGE_CONTENT','CONVERSATION_MAX_HISTORY')
+foreach ($name in $envNames) {
+    if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name, 'Process'))) {
+        $userValue = [Environment]::GetEnvironmentVariable($name, 'User')
+        if (-not [string]::IsNullOrWhiteSpace($userValue)) { [Environment]::SetEnvironmentVariable($name, $userValue, 'Process') }
+    }
+}
+[Environment]::SetEnvironmentVariable('SAFE_COMMAND_PROJECT_ROOT', $projectRoot, 'Process')
+[Environment]::SetEnvironmentVariable('ENABLE_REPO_WRITE_TOOLS', [Environment]::GetEnvironmentVariable('ENABLE_REPO_WRITE_TOOLS', 'Process'), 'Process')
+Get-Process TelegramMessagingTool -ErrorAction SilentlyContinue | Where-Object { $_.Id -ne $PID } | Stop-Process -Force -ErrorAction SilentlyContinue
+Start-Process -FilePath $latestExe -WorkingDirectory $projectRoot -WindowStyle Hidden
+""";
+        File.WriteAllText(scriptPath, script);
+
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "powershell.exe",
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        startInfo.ArgumentList.Add("-NoProfile");
+        startInfo.ArgumentList.Add("-ExecutionPolicy");
+        startInfo.ArgumentList.Add("Bypass");
+        startInfo.ArgumentList.Add("-File");
+        startInfo.ArgumentList.Add(scriptPath);
+        Process.Start(startInfo);
+        return Task.FromResult(LatestReleaseRestartResult.Ok($"Scheduled restart from {latestRelease}. Script: {Path.GetFileName(scriptPath)}"));
+    }
+
+    private static string ToPowerShellString(string value)
+    {
+        return "'" + value.Replace("'", "''", StringComparison.Ordinal) + "'";
+    }
+}
+
+public sealed record LatestReleaseRestartResult(bool Success, string Message)
+{
+    public static LatestReleaseRestartResult Ok(string message) => new(true, message);
+
+    public static LatestReleaseRestartResult Fail(string message) => new(false, message);
+}
+
 public sealed record ReleasePublishResult(bool Success, string Message)
 {
     public static ReleasePublishResult Ok(string message) => new(true, message);
