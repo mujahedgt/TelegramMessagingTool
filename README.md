@@ -16,7 +16,7 @@ TelegramMessagingTool is a C#/.NET console application that connects a Telegram 
 - `/tools` command to show available tools
 - Agent-style startup console panel with commands, model, safety, and tool status
 - Local console chat/command input using the same command router, memory, tools, and agent runner as Telegram
-- Runtime composition now builds command registration through `Runtime/CommandRouterFactory.cs`, keeping `Program.cs` thinner while preserving command order
+- Runtime composition now builds runtime services through `Runtime/AppServicesBuilder.cs` and command registration through `Runtime/CommandRouterFactory.cs`, keeping `Program.cs` thinner while preserving command order
 - Live console event lines for startup, commands, messages, denied users, shutdown, and errors
 - Sandboxed document/file support for `.txt`, `.md`, `.json`, `.csv`, `.pdf`, `.docx`, `.xlsx`, `.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`, `.mp3`, `.wav`, `.m4a`, `.ogg`, `.oga`, `.opus`, and `.flac`
 - File commands: `/files`, `/images`, `/describeimage <id>`, `/voicefiles`, `/transcribe <id>`, `/readfile <id>`, `/createfile <filename> <content>`, admin-only local import via `/importfiles` and `/importfile <filename>`, and admin-approved `/deletefile <id>`

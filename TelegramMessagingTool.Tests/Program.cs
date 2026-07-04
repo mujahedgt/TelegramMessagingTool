@@ -214,6 +214,24 @@ AssertEqual(
     commandNames,
     "CommandRouterFactory preserves Program command registration order");
 
+BotSettings appServicesSettings = commandFactorySettings with
+{
+    BotToken = "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi",
+    EnableRepoWriteTools = false
+};
+using AppServices appServices = AppServicesBuilder.Build(appServicesSettings);
+AssertTrue(appServices.BotClient is not null, "AppServicesBuilder creates Telegram bot client");
+AssertTrue(appServices.CommandRouter.Commands.Any(x => x.Name == "/help"), "AppServicesBuilder creates command router");
+AssertTrue(appServices.ToolRegistry.Tools.Any(x => x.Name == "datetime"), "AppServicesBuilder creates tool registry");
+AssertEqual(
+    Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, "UserFiles")),
+    appServices.DocumentStorage.RootDirectory,
+    "AppServicesBuilder uses project-root UserFiles storage");
+AssertEqual(
+    Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, "ImportInbox")),
+    appServices.ImportDirectory,
+    "AppServicesBuilder uses project-root ImportInbox storage");
+
 AssertTrue(PluginManifest.TryParse("""
 {
   "id": "sample-plugin",

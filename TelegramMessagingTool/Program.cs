@@ -26,71 +26,17 @@ if (string.IsNullOrWhiteSpace(settings.BotToken))
     return;
 }
 
-using HttpClient qwenClient = new()
-{
-    Timeout = TimeSpan.FromMinutes(30)
-};
+using AppServices appServices = AppServicesBuilder.Build(settings);
 
-using HttpClient embeddingClient = new()
-{
-    Timeout = TimeSpan.FromMinutes(10)
-};
-
-using HttpClient searchClient = new()
-{
-    Timeout = TimeSpan.FromSeconds(20)
-};
-
-using SocketsHttpHandler telegramHttpHandler = new()
-{
-    AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
-    PooledConnectionLifetime = TimeSpan.FromMinutes(10),
-    PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2),
-    ConnectTimeout = TimeSpan.FromSeconds(30)
-};
-
-using HttpClient telegramHttpClient = new(telegramHttpHandler)
-{
-    Timeout = TimeSpan.FromSeconds(90)
-};
-
-var botClient = new TelegramBotClient(settings.BotToken, telegramHttpClient, CancellationToken.None);
-var taskReminderService = new TaskReminderService(new TelegramTaskReminderSender(botClient));
-var ollamaClient = new OllamaChatClient(qwenClient, settings);
-var ollamaEmbeddingClient = new OllamaEmbeddingClient(embeddingClient, settings);
-ITextEmbeddingService? retrievalEmbeddingService = settings.EnableDocumentEmbeddings ? ollamaEmbeddingClient : null;
-var documentStorage = new DocumentStorageService(Path.Combine(Environment.CurrentDirectory, "UserFiles"));
-string importDirectory = Path.Combine(Environment.CurrentDirectory, "ImportInbox");
-var pendingActionService = new PendingActionService();
-var toolRegistry = ToolRegistryFactory.Create(settings, searchClient, pendingActionService);
-ISearchRoutingClassifier searchRoutingClassifier = SearchRoutingClassifierFactory.Create(settings.SearchRoutingMode, ollamaClient);
-var pendingActionExecutor = new PendingActionExecutor(new SystemProcessTerminator(), documentStorage);
-var pendingActionCallbackService = new PendingActionCallbackService(pendingActionService, pendingActionExecutor, settings);
-
-var agentTaskService = new AgentTaskService();
-var taskCallbackService = new TaskCallbackService(agentTaskService);
-var documentIndexingService = new DocumentIndexingService(documentStorage);
-var documentEmbeddingService = new DocumentEmbeddingService(ollamaEmbeddingClient, settings.OllamaEmbeddingModel);
-var documentRetrievalService = new DocumentRetrievalService(retrievalEmbeddingService);
-var documentQuestionAnsweringService = new DocumentQuestionAnsweringService(ollamaClient);
-var documentSummaryService = new DocumentSummaryService(ollamaClient);
-var imageDescriptionService = new OllamaImageDescriptionService(qwenClient, settings);
-var agentRunner = new AgentRunner(ollamaClient, toolRegistry, searchRoutingClassifier: searchRoutingClassifier);
-var conversationService = new ConversationService();
-var commandRouter = CommandRouterFactory.Create(
-    settings,
-    toolRegistry,
-    documentStorage,
-    importDirectory,
-    pendingActionService,
-    pendingActionExecutor,
-    agentTaskService,
-    documentIndexingService,
-    documentRetrievalService,
-    documentQuestionAnsweringService,
-    documentSummaryService,
-    documentEmbeddingService,
-    imageDescriptionService);
+var botClient = appServices.BotClient;
+var taskReminderService = appServices.TaskReminderService;
+var documentStorage = appServices.DocumentStorage;
+var toolRegistry = appServices.ToolRegistry;
+var pendingActionCallbackService = appServices.PendingActionCallbackService;
+var taskCallbackService = appServices.TaskCallbackService;
+var agentRunner = appServices.AgentRunner;
+var conversationService = appServices.ConversationService;
+var commandRouter = appServices.CommandRouter;
 
 using CancellationTokenSource cts = new();
 Console.CancelKeyPress += (_, eventArgs) =>

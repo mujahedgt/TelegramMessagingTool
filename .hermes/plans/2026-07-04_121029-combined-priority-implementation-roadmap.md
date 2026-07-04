@@ -276,7 +276,9 @@ These should wait until repo-mode local commit/push and approval audit are matur
 
 **Goal:** Move command construction out of `Program.cs` while keeping behavior unchanged.
 
-## P3.2 Extract tool-registry/runtime services construction
+## P3.2 Extract tool-registry/runtime services construction ✅ Done
+
+**Status:** Implemented `Runtime/AppServices.cs` and `Runtime/AppServicesBuilder.cs` to centralize runtime service construction outside `Program.cs`. The builder creates the Telegram client, HTTP clients, document storage/import paths, tool registry, pending-action services, task/document services, agent runner, and command router while preserving project-root `UserFiles`/`ImportInbox` behavior. Helper tests verify the builder creates the expected runtime graph.
 
 **Files:**
 
@@ -503,7 +505,7 @@ Then restart and verify:
 Continue with:
 
 ```text
-Priority 3.2 — Extract AppServicesBuilder
+Priority 3.3 — Extract TelegramUpdateHandler
 ```
 
-This is the next runtime composition refactor after `CommandRouterFactory`: move service construction out of `Program.cs` while keeping startup behavior unchanged.
+This is the next runtime composition refactor after `AppServicesBuilder`: move Telegram update/message handling out of `Program.cs` while keeping runtime behavior unchanged.
