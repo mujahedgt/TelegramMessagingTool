@@ -297,6 +297,41 @@ ToolResult blockedIssuesResult = await listIssuesTool.ExecuteAsync("{\"owner\":\
 AssertFalse(blockedIssuesResult.Success, "GitHubListIssuesTool rejects repositories outside allowlist");
 ToolResult badIssueStateResult = await listIssuesTool.ExecuteAsync("{\"state\":\"deleted\"}", CancellationToken.None);
 AssertFalse(badIssueStateResult.Success, "GitHubListIssuesTool rejects unsupported issue states");
+
+var fakeGitHubIssueDetailHandler = new FakeHttpMessageHandler("""
+{
+  "number": 41,
+  "title": "Document GitHub tools",
+  "state": "open",
+  "html_url": "https://github.com/mujahedgt/TelegramMessagingTool/issues/41",
+  "user": { "login": "mujahedgt" },
+  "created_at": "2026-06-29T00:30:00Z",
+  "updated_at": "2026-06-29T02:00:00Z",
+  "comments": 2,
+  "body": "Add README notes for the GitHub tools.",
+  "labels": [
+    { "name": "documentation" },
+    { "name": "agent-tools" }
+  ],
+  "assignees": [
+    { "login": "mujahedgt" }
+  ]
+}
+""");
+using var fakeGitHubIssueDetailClient = new HttpClient(fakeGitHubIssueDetailHandler);
+var getIssueTool = new GitHubGetIssueTool(fakeGitHubIssueDetailClient, gitHubSettings);
+ToolResult issueDetailResult = await getIssueTool.ExecuteAsync("{\"number\":41}", CancellationToken.None);
+AssertTrue(issueDetailResult.Success, "GitHubGetIssueTool succeeds for default allowed repo");
+AssertTrue(issueDetailResult.Output.Contains("#41 [open] Document GitHub tools"), "GitHubGetIssueTool renders issue number, state, and title");
+AssertTrue(issueDetailResult.Output.Contains("documentation"), "GitHubGetIssueTool renders labels");
+AssertTrue(issueDetailResult.Output.Contains("Comments: 2"), "GitHubGetIssueTool renders comment count");
+AssertTrue(issueDetailResult.Output.Contains("Add README notes"), "GitHubGetIssueTool renders body excerpt");
+AssertFalse(issueDetailResult.Output.Contains("secret-token-for-test"), "GitHubGetIssueTool never exposes token value");
+AssertTrue(fakeGitHubIssueDetailHandler.LastRequestUri?.ToString().Contains("/repos/mujahedgt/TelegramMessagingTool/issues/41") == true, "GitHubGetIssueTool calls the issue detail endpoint");
+ToolResult blockedIssueDetailResult = await getIssueTool.ExecuteAsync("{\"owner\":\"other\",\"repo\":\"repo\",\"number\":41}", CancellationToken.None);
+AssertFalse(blockedIssueDetailResult.Success, "GitHubGetIssueTool rejects repositories outside allowlist");
+ToolResult invalidIssueNumberResult = await getIssueTool.ExecuteAsync("{\"number\":0}", CancellationToken.None);
+AssertFalse(invalidIssueNumberResult.Success, "GitHubGetIssueTool rejects invalid issue numbers");
 ToolRegistry gitHubToolRegistry = ToolRegistryFactory.Create(new BotSettings(
     BotToken: "test-token",
     OllamaUrl: "http://localhost:11434/api/chat",
@@ -322,6 +357,7 @@ ToolRegistry gitHubToolRegistry = ToolRegistryFactory.Create(new BotSettings(
 }, fakeGitHubClient);
 AssertTrue(gitHubToolRegistry.RenderToolInstructions().Contains("github_repo_info"), "ToolRegistryFactory registers GitHub repo info tool when enabled");
 AssertTrue(gitHubToolRegistry.RenderToolInstructions().Contains("github_list_issues"), "ToolRegistryFactory registers GitHub list issues tool when enabled");
+AssertTrue(gitHubToolRegistry.RenderToolInstructions().Contains("github_get_issue"), "ToolRegistryFactory registers GitHub get issue tool when enabled");
 
 AssertTrue(CommandParser.TryParse("/status", out ParsedCommand parsedStatus), "CommandParser parses bare command");
 AssertEqual("/status", parsedStatus.Command, "CommandParser normalizes bare command token");

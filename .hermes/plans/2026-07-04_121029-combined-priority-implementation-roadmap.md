@@ -182,7 +182,9 @@ Rules:
 
 GitHub tools are useful for workflow and portfolio, but local repo safety should come first because GitHub write tools affect remote state.
 
-## P2.1 Add `github_get_issue`
+## P2.1 Add `github_get_issue` ✅ Done
+
+**Status:** Implemented `GitHubGetIssueTool` behind `ENABLE_GITHUB_TOOLS=true`. It is read-only, uses the default repo when owner/repo are omitted, rejects repositories outside `GITHUB_ALLOWED_REPOS`, requires a positive issue number, rejects pull-request JSON as not an issue, sends optional bearer auth without rendering the token, and returns issue number/title/state, author, labels, assignees, timestamps, URL, and a bounded body excerpt.
 
 **Objective:** Read a single issue with comments count/basic metadata.
 
