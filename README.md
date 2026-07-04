@@ -167,6 +167,8 @@ Available tools:
 | `calculator` | No | Safe arithmetic expressions only |
 | `status` | No | Runtime configuration summary |
 | `online_search` | No | Optional. Registered only when `ENABLE_ONLINE_SEARCH=true`. Public web search through DuckDuckGo Lite, Startpage, and Mojeek fallbacks; uses clean query variants and expands vehicle searches with price/spec terms |
+| `github_repo_info` | No | Optional. Registered only when `ENABLE_GITHUB_TOOLS=true`. Read-only metadata for a repo in `GITHUB_ALLOWED_REPOS` |
+| `github_list_issues` | No | Optional. Registered only when `ENABLE_GITHUB_TOOLS=true`. Lists issues for a repo in `GITHUB_ALLOWED_REPOS`; pull requests are excluded |
 | `git_status` | No | Optional. Registered only when `ENABLE_SAFE_COMMAND_TOOLS=true`. Read-only `git status --short --branch` for `SAFE_COMMAND_PROJECT_ROOT` |
 | `git_diff` | No | Optional. Registered only when `ENABLE_SAFE_COMMAND_TOOLS=true`. Read-only `git diff -- .` for `SAFE_COMMAND_PROJECT_ROOT` |
 | `git_log_recent` | No | Optional. Registered only when `ENABLE_SAFE_COMMAND_TOOLS=true`. Read-only `git log --oneline -5` for `SAFE_COMMAND_PROJECT_ROOT` |
@@ -180,6 +182,13 @@ Search behavior notes:
 - The bot now hides raw `tool_call` JSON from the final answer after the tool runs.
 - The search tool preserves the user's original query after whitespace cleanup. It no longer applies hardcoded domain-specific typo corrections; the model should correct obvious spelling only when the intended term is clear from context.
 - Final search answers should summarize only what the returned search results support and include useful source links.
+
+GitHub tool notes:
+
+- `ENABLE_GITHUB_TOOLS=false` by default.
+- `github_repo_info` and `github_list_issues` are read-only and reject repositories outside `GITHUB_ALLOWED_REPOS`.
+- `github_list_issues` accepts optional JSON like `{ "owner": "mujahedgt", "repo": "TelegramMessagingTool", "state": "open", "limit": 10 }`; state must be `open`, `closed`, or `all`, and limit is clamped to `1..50`.
+- `GITHUB_TOKEN` is optional for read-only requests and is never rendered in tool output, `/status`, or docs examples.
 
 Multi-step tool loop notes:
 

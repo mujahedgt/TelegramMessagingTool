@@ -251,6 +251,42 @@ AssertFalse(repoInfoResult.Output.Contains("secret-token-for-test"), "GitHubRepo
 AssertTrue(fakeGitHubHandler.LastRequestAuthorization?.StartsWith("Bearer ") == true, "GitHubRepoInfoTool sends bearer auth when token is configured");
 ToolResult blockedRepoInfoResult = await repoInfoTool.ExecuteAsync("{\"owner\":\"other\",\"repo\":\"repo\"}", CancellationToken.None);
 AssertFalse(blockedRepoInfoResult.Success, "GitHubRepoInfoTool rejects repositories outside allowlist");
+
+var fakeGitHubIssuesHandler = new FakeHttpMessageHandler("""
+[
+  {
+    "number": 42,
+    "title": "Add GitHub issue listing",
+    "state": "open",
+    "html_url": "https://github.com/mujahedgt/TelegramMessagingTool/issues/42",
+    "user": { "login": "mujahedgt" },
+    "created_at": "2026-06-29T01:00:00Z",
+    "pull_request": { "url": "https://api.github.com/repos/mujahedgt/TelegramMessagingTool/pulls/42" }
+  },
+  {
+    "number": 41,
+    "title": "Document GitHub tools",
+    "state": "open",
+    "html_url": "https://github.com/mujahedgt/TelegramMessagingTool/issues/41",
+    "user": { "login": "mujahedgt" },
+    "created_at": "2026-06-29T00:30:00Z"
+  }
+]
+""");
+using var fakeGitHubIssuesClient = new HttpClient(fakeGitHubIssuesHandler);
+var listIssuesTool = new GitHubListIssuesTool(fakeGitHubIssuesClient, gitHubSettings);
+ToolResult issuesResult = await listIssuesTool.ExecuteAsync("{\"state\":\"open\",\"limit\":10}", CancellationToken.None);
+AssertTrue(issuesResult.Success, "GitHubListIssuesTool succeeds for default allowed repo");
+AssertTrue(issuesResult.Output.Contains("#41"), "GitHubListIssuesTool includes normal issues");
+AssertFalse(issuesResult.Output.Contains("#42"), "GitHubListIssuesTool excludes pull requests from issue output");
+AssertFalse(issuesResult.Output.Contains("secret-token-for-test"), "GitHubListIssuesTool never exposes token value");
+AssertTrue(fakeGitHubIssuesHandler.LastRequestUri?.ToString().Contains("/repos/mujahedgt/TelegramMessagingTool/issues") == true, "GitHubListIssuesTool calls the issues endpoint for the selected repo");
+AssertTrue(fakeGitHubIssuesHandler.LastRequestUri?.ToString().Contains("state=open") == true, "GitHubListIssuesTool sends state query parameter");
+AssertTrue(fakeGitHubIssuesHandler.LastRequestUri?.ToString().Contains("per_page=10") == true, "GitHubListIssuesTool sends bounded per_page query parameter");
+ToolResult blockedIssuesResult = await listIssuesTool.ExecuteAsync("{\"owner\":\"other\",\"repo\":\"repo\"}", CancellationToken.None);
+AssertFalse(blockedIssuesResult.Success, "GitHubListIssuesTool rejects repositories outside allowlist");
+ToolResult badIssueStateResult = await listIssuesTool.ExecuteAsync("{\"state\":\"deleted\"}", CancellationToken.None);
+AssertFalse(badIssueStateResult.Success, "GitHubListIssuesTool rejects unsupported issue states");
 ToolRegistry gitHubToolRegistry = ToolRegistryFactory.Create(new BotSettings(
     BotToken: "test-token",
     OllamaUrl: "http://localhost:11434/api/chat",
@@ -275,6 +311,7 @@ ToolRegistry gitHubToolRegistry = ToolRegistryFactory.Create(new BotSettings(
     GitHub = gitHubSettings
 }, fakeGitHubClient);
 AssertTrue(gitHubToolRegistry.RenderToolInstructions().Contains("github_repo_info"), "ToolRegistryFactory registers GitHub repo info tool when enabled");
+AssertTrue(gitHubToolRegistry.RenderToolInstructions().Contains("github_list_issues"), "ToolRegistryFactory registers GitHub list issues tool when enabled");
 
 AssertTrue(CommandParser.TryParse("/status", out ParsedCommand parsedStatus), "CommandParser parses bare command");
 AssertEqual("/status", parsedStatus.Command, "CommandParser normalizes bare command token");
@@ -1805,9 +1842,12 @@ sealed class FakeHttpMessageHandler : HttpMessageHandler
 
     public string? LastRequestAuthorization { get; private set; }
 
+    public Uri? LastRequestUri { get; private set; }
+
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         LastRequestAuthorization = request.Headers.Authorization?.ToString();
+        LastRequestUri = request.RequestUri;
         var response = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
         {
             Content = new StringContent(_responseBody)
