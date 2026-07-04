@@ -77,6 +77,7 @@ Configuration is read from environment variables.
 | `ENABLE_PLUGINS` | No | `false` | If true, enables plugin manifest discovery from `PLUGIN_DIRECTORY`. This phase scans manifests only and does not load plugin assemblies. Use `/plugins` for read-only manifest diagnostics. |
 | `PLUGIN_DIRECTORY` | No | `<current working directory>/plugins` | Directory scanned by `/plugins` for plugin folders containing `plugin.json`. Plugin assemblies are trusted OS-level code and should only come from trusted sources before loading is enabled. |
 | `ENABLE_GITHUB_TOOLS` | No | `false` | If true, registers read-only GitHub tools such as `github_repo_info`. Keep false unless you want the model to query GitHub. |
+| `ENABLE_GITHUB_WRITE_TOOLS` | No | `false` | If true, registers approval-backed GitHub write tools such as `github_create_issue` when a pending-action context is available. Requires `GITHUB_TOKEN`; keep false unless intentional. |
 | `GITHUB_TOKEN` | No | empty | Optional token for GitHub API requests. Never log or paste it into chat. `/status` only reports configured/not configured. |
 | `GITHUB_DEFAULT_OWNER` | No | empty | Default owner used by `github_repo_info` when the tool input is empty. |
 | `GITHUB_DEFAULT_REPO` | No | empty | Default repo used by `github_repo_info` when the tool input is empty. |
@@ -111,6 +112,7 @@ export ENABLE_REPO_WRITE_TOOLS='false'
 export ENABLE_PLUGINS='false'
 export PLUGIN_DIRECTORY='/c/temp/TelegramMessagingTool/plugins'
 export ENABLE_GITHUB_TOOLS='false'
+export ENABLE_GITHUB_WRITE_TOOLS='false'
 export GITHUB_DEFAULT_OWNER='mujahedgt'
 export GITHUB_DEFAULT_REPO='TelegramMessagingTool'
 export GITHUB_ALLOWED_REPOS='mujahedgt/TelegramMessagingTool,mujahedgt/IsolationForestServer'
@@ -174,6 +176,7 @@ Available tools:
 | `github_get_issue` | No | Optional. Registered only when `ENABLE_GITHUB_TOOLS=true`. Shows one issue's title, state, labels, assignees, timestamps, body excerpt, and URL for a repo in `GITHUB_ALLOWED_REPOS`; pull requests are rejected |
 | `github_list_prs` | No | Optional. Registered only when `ENABLE_GITHUB_TOOLS=true`. Lists pull requests for a repo in `GITHUB_ALLOWED_REPOS` with state, author, branches, draft/ready status, timestamps, and URL |
 | `github_get_pr_status` | No | Optional. Registered only when `ENABLE_GITHUB_TOOLS=true`. Shows one pull request's mergeability, draft/merged state, branch refs, change counts, comments/review comments, requested reviewers, timestamps, and URL |
+| `github_create_issue` | Yes | Optional. Registered only when `ENABLE_GITHUB_WRITE_TOOLS=true` and an approval context is available. Creates a pending action for issue creation in a repo from `GITHUB_ALLOWED_REPOS`; GitHub is called only after `/approve` |
 | `git_status` | No | Optional. Registered only when `ENABLE_SAFE_COMMAND_TOOLS=true`. Read-only `git status --short --branch` for `SAFE_COMMAND_PROJECT_ROOT` |
 | `git_diff` | No | Optional. Registered only when `ENABLE_SAFE_COMMAND_TOOLS=true`. Read-only `git diff -- .` for `SAFE_COMMAND_PROJECT_ROOT` |
 | `git_log_recent` | No | Optional. Registered only when `ENABLE_SAFE_COMMAND_TOOLS=true`. Read-only `git log --oneline -5` for `SAFE_COMMAND_PROJECT_ROOT` |
@@ -204,6 +207,7 @@ GitHub tool notes:
 - `github_list_prs` accepts optional JSON like `{ "owner": "mujahedgt", "repo": "TelegramMessagingTool", "state": "open", "limit": 10 }`; state must be `open`, `closed`, or `all`, and limit is clamped to `1..50`.
 - `github_get_pr_status` accepts JSON like `{ "owner": "mujahedgt", "repo": "TelegramMessagingTool", "number": 123 }`; owner/repo can be omitted to use the configured default repo. It reads PR metadata from GitHub's pull request detail endpoint.
 - `GITHUB_TOKEN` is optional for read-only requests and is never rendered in tool output, `/status`, or docs examples.
+- `ENABLE_GITHUB_WRITE_TOOLS=false` by default. `github_create_issue` is admin-only and approval-backed: it validates `GITHUB_ALLOWED_REPOS`, stores a pending action without the token, and calls GitHub only after `/approve <id>` using `GITHUB_TOKEN` from the runtime environment.
 
 Multi-step tool loop notes:
 

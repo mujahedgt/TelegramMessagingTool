@@ -29,6 +29,11 @@ public static class ToolRegistryFactory
             tools.Add(new GitHubGetPullRequestStatusTool(searchClient, settings.GitHub));
         }
 
+        if (settings.GitHub.EnableGitHubWriteTools && pendingActionService is not null)
+        {
+            tools.Add(new GitHubCreateIssueRequestTool(pendingActionService, settings));
+        }
+
         if (settings.EnableSafeCommandTools)
         {
             tools.Add(new GitStatusTool(settings.SafeCommandProjectRoot));

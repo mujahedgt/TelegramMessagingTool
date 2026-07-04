@@ -2,6 +2,7 @@ namespace TelegramMessagingTool.Tools.GitHub;
 
 public sealed record GitHubSettings(
     bool EnableGitHubTools,
+    bool EnableGitHubWriteTools,
     string Token,
     string DefaultOwner,
     string DefaultRepo,
@@ -9,6 +10,7 @@ public sealed record GitHubSettings(
 {
     public static GitHubSettings Disabled { get; } = new(
         EnableGitHubTools: false,
+        EnableGitHubWriteTools: false,
         Token: string.Empty,
         DefaultOwner: string.Empty,
         DefaultRepo: string.Empty,
@@ -21,6 +23,7 @@ public sealed record GitHubSettings(
     public static GitHubSettings LoadFromEnvironment()
     {
         bool enableGitHubTools = BotConfiguration.IsEnabled(Environment.GetEnvironmentVariable("ENABLE_GITHUB_TOOLS"), defaultValue: false);
+        bool enableGitHubWriteTools = BotConfiguration.IsEnabled(Environment.GetEnvironmentVariable("ENABLE_GITHUB_WRITE_TOOLS"), defaultValue: false);
         string token = Environment.GetEnvironmentVariable("GITHUB_TOKEN")?.Trim() ?? string.Empty;
         string defaultOwner = Environment.GetEnvironmentVariable("GITHUB_DEFAULT_OWNER")?.Trim() ?? string.Empty;
         string defaultRepo = Environment.GetEnvironmentVariable("GITHUB_DEFAULT_REPO")?.Trim() ?? string.Empty;
@@ -31,7 +34,7 @@ public sealed record GitHubSettings(
             allowedRepos = new HashSet<string>([$"{defaultOwner}/{defaultRepo}"], StringComparer.OrdinalIgnoreCase);
         }
 
-        return new GitHubSettings(enableGitHubTools, token, defaultOwner, defaultRepo, allowedRepos);
+        return new GitHubSettings(enableGitHubTools, enableGitHubWriteTools, token, defaultOwner, defaultRepo, allowedRepos);
     }
 
     public string RenderSafeSummary()
@@ -39,6 +42,6 @@ public sealed record GitHubSettings(
         string defaultRepoText = string.IsNullOrWhiteSpace(DefaultFullName) ? "not configured" : DefaultFullName;
         string tokenStatus = string.IsNullOrWhiteSpace(Token) ? "not configured" : "configured";
         string allowedRepoText = AllowedRepos.Count == 0 ? "none" : string.Join(", ", AllowedRepos.OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
-        return $"GitHub tools: {(EnableGitHubTools ? "enabled" : "disabled")}; default repo: {defaultRepoText}; allowed repos: {allowedRepoText}; token: {tokenStatus}";
+        return $"GitHub tools: {(EnableGitHubTools ? "enabled" : "disabled")}; GitHub write tools: {(EnableGitHubWriteTools ? "enabled" : "disabled")}; default repo: {defaultRepoText}; allowed repos: {allowedRepoText}; token: {tokenStatus}";
     }
 }

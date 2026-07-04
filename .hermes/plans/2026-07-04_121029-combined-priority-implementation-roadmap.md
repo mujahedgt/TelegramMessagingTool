@@ -224,7 +224,9 @@ Input:
 
 **Objective:** Read PR checks/review/status summary.
 
-## P2.4 Add `github_create_issue`
+## P2.4 Add `github_create_issue` ✅ Done
+
+**Status:** Implemented `GitHubCreateIssueRequestTool` as admin-only, approval-backed `github_create_issue` behind `ENABLE_GITHUB_WRITE_TOOLS=true`. It validates strict JSON title/body/labels plus default or explicit owner/repo, rejects repos outside `GITHUB_ALLOWED_REPOS`, stores a pending action without persisting `GITHUB_TOKEN`, and calls GitHub only after `/approve` through `PendingActionExecutor` using the runtime token.
 
 **Objective:** Let the bot request issue creation safely.
 

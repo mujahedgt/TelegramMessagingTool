@@ -88,6 +88,7 @@ string? previousEnableRepoWriteTools = Environment.GetEnvironmentVariable("ENABL
 string? previousEnablePlugins = Environment.GetEnvironmentVariable("ENABLE_PLUGINS");
 string? previousPluginDirectory = Environment.GetEnvironmentVariable("PLUGIN_DIRECTORY");
 string? previousEnableGitHubTools = Environment.GetEnvironmentVariable("ENABLE_GITHUB_TOOLS");
+string? previousEnableGitHubWriteTools = Environment.GetEnvironmentVariable("ENABLE_GITHUB_WRITE_TOOLS");
 string? previousGitHubToken = Environment.GetEnvironmentVariable("GITHUB_TOKEN");
 string? previousGitHubDefaultOwner = Environment.GetEnvironmentVariable("GITHUB_DEFAULT_OWNER");
 string? previousGitHubDefaultRepo = Environment.GetEnvironmentVariable("GITHUB_DEFAULT_REPO");
@@ -138,19 +139,23 @@ try
     AssertEqual(Path.GetFullPath(pluginDirectory), pluginEnvironmentSettings.PluginDirectory, "LoadFromEnvironment reads PLUGIN_DIRECTORY as a full path");
 
     Environment.SetEnvironmentVariable("ENABLE_GITHUB_TOOLS", null);
+    Environment.SetEnvironmentVariable("ENABLE_GITHUB_WRITE_TOOLS", null);
     Environment.SetEnvironmentVariable("GITHUB_TOKEN", null);
     Environment.SetEnvironmentVariable("GITHUB_DEFAULT_OWNER", null);
     Environment.SetEnvironmentVariable("GITHUB_DEFAULT_REPO", null);
     Environment.SetEnvironmentVariable("GITHUB_ALLOWED_REPOS", null);
     AssertFalse(BotConfiguration.LoadFromEnvironment().GitHub.EnableGitHubTools, "LoadFromEnvironment defaults GitHub tools to disabled");
+    AssertFalse(BotConfiguration.LoadFromEnvironment().GitHub.EnableGitHubWriteTools, "LoadFromEnvironment defaults GitHub write tools to disabled");
 
     Environment.SetEnvironmentVariable("ENABLE_GITHUB_TOOLS", "true");
+    Environment.SetEnvironmentVariable("ENABLE_GITHUB_WRITE_TOOLS", "yes");
     Environment.SetEnvironmentVariable("GITHUB_TOKEN", "secret-token-for-test");
     Environment.SetEnvironmentVariable("GITHUB_DEFAULT_OWNER", "mujahedgt");
     Environment.SetEnvironmentVariable("GITHUB_DEFAULT_REPO", "TelegramMessagingTool");
     Environment.SetEnvironmentVariable("GITHUB_ALLOWED_REPOS", "mujahedgt/TelegramMessagingTool, mujahedgt/IsolationForestServer");
     BotSettings gitHubEnvironmentSettings = BotConfiguration.LoadFromEnvironment();
     AssertTrue(gitHubEnvironmentSettings.GitHub.EnableGitHubTools, "LoadFromEnvironment parses ENABLE_GITHUB_TOOLS truthy values");
+    AssertTrue(gitHubEnvironmentSettings.GitHub.EnableGitHubWriteTools, "LoadFromEnvironment parses ENABLE_GITHUB_WRITE_TOOLS truthy values");
     AssertEqual("mujahedgt/TelegramMessagingTool", gitHubEnvironmentSettings.GitHub.DefaultFullName, "LoadFromEnvironment reads GitHub default repo");
     AssertTrue(gitHubEnvironmentSettings.GitHub.AllowedRepos.Contains("mujahedgt/IsolationForestServer"), "LoadFromEnvironment reads GitHub allowed repos");
     AssertFalse(gitHubEnvironmentSettings.GitHub.RenderSafeSummary().Contains("secret-token-for-test"), "GitHub settings safe summary does not expose token value");
@@ -165,6 +170,7 @@ finally
     Environment.SetEnvironmentVariable("ENABLE_PLUGINS", previousEnablePlugins);
     Environment.SetEnvironmentVariable("PLUGIN_DIRECTORY", previousPluginDirectory);
     Environment.SetEnvironmentVariable("ENABLE_GITHUB_TOOLS", previousEnableGitHubTools);
+    Environment.SetEnvironmentVariable("ENABLE_GITHUB_WRITE_TOOLS", previousEnableGitHubWriteTools);
     Environment.SetEnvironmentVariable("GITHUB_TOKEN", previousGitHubToken);
     Environment.SetEnvironmentVariable("GITHUB_DEFAULT_OWNER", previousGitHubDefaultOwner);
     Environment.SetEnvironmentVariable("GITHUB_DEFAULT_REPO", previousGitHubDefaultRepo);
@@ -248,6 +254,7 @@ var fakeGitHubHandler = new FakeHttpMessageHandler("""
 using var fakeGitHubClient = new HttpClient(fakeGitHubHandler);
 var gitHubSettings = new GitHubSettings(
     EnableGitHubTools: true,
+    EnableGitHubWriteTools: false,
     Token: "secret-token-for-test",
     DefaultOwner: "mujahedgt",
     DefaultRepo: "TelegramMessagingTool",
@@ -432,7 +439,7 @@ AssertTrue(gitHubToolRegistry.RenderToolInstructions().Contains("github_list_iss
 AssertTrue(gitHubToolRegistry.RenderToolInstructions().Contains("github_get_issue"), "ToolRegistryFactory registers GitHub get issue tool when enabled");
 AssertTrue(gitHubToolRegistry.RenderToolInstructions().Contains("github_list_prs"), "ToolRegistryFactory registers GitHub list PRs tool when enabled");
 AssertTrue(gitHubToolRegistry.RenderToolInstructions().Contains("github_get_pr_status"), "ToolRegistryFactory registers GitHub get PR status tool when enabled");
-
+AssertFalse(gitHubToolRegistry.RenderToolInstructions().Contains("github_create_issue"), "ToolRegistryFactory excludes GitHub write tools unless write flag and pending service are enabled");
 AssertTrue(CommandParser.TryParse("/status", out ParsedCommand parsedStatus), "CommandParser parses bare command");
 AssertEqual("/status", parsedStatus.Command, "CommandParser normalizes bare command token");
 AssertEqual(string.Empty, parsedStatus.Arguments, "CommandParser returns empty arguments for bare command");
@@ -1004,7 +1011,51 @@ await using (var dbContext = new TelegramDbContext())
     var pendingActionService = new PendingActionService();
     var fakeProcessTerminator = new FakeProcessTerminator();
     var fakeLatestReleaseRestarter = new FakeLatestReleaseRestarter();
-    var pendingActionExecutor = new PendingActionExecutor(fakeProcessTerminator, documentStorage, fakeLatestReleaseRestarter);
+    var fakeGitHubIssueCreator = new FakeGitHubIssueCreator();
+    var pendingActionExecutor = new PendingActionExecutor(fakeProcessTerminator, documentStorage, fakeLatestReleaseRestarter, fakeGitHubIssueCreator);
+    var gitHubWriteSettings = adminTestSettings with
+    {
+        GitHub = gitHubSettings with { EnableGitHubWriteTools = true }
+    };
+    ToolRegistry gitHubWriteApprovalRegistry = ToolRegistryFactory.Create(gitHubWriteSettings, new HttpClient(), pendingActionService);
+    AssertTrue(gitHubWriteApprovalRegistry.TryGet("github_create_issue", out IAgentTool? gitHubCreateIssueTool), "ToolRegistryFactory includes github_create_issue when GitHub write tools and pending service are enabled");
+    AssertTrue(gitHubCreateIssueTool!.RequiresApproval, "github_create_issue requires approval");
+    var createIssueRequestChatClient = new ScriptedChatClient([
+        "{\"type\":\"tool_call\",\"tool\":\"github_create_issue\",\"input\":\"{\\\"title\\\":\\\"Test issue from approval flow\\\",\\\"body\\\":\\\"Created only after approval.\\\",\\\"labels\\\":[\\\"agent-tools\\\"]}\"}"
+    ]);
+    string createIssueRequestReply = await new AgentRunner(
+        createIssueRequestChatClient,
+        gitHubWriteApprovalRegistry,
+        searchRoutingClassifier: new OffSearchRoutingClassifier()).RunAsync(
+            [new OllamaMessageDto("user", "request a GitHub issue creation approval")],
+            CancellationToken.None,
+            dbContext,
+            testUser);
+    AssertTrue(createIssueRequestReply.Contains("Pending action #"), "AgentRunner creates a pending action for github_create_issue");
+    PendingAction createIssueAction = await dbContext.PendingActions.OrderByDescending(x => x.Id).FirstAsync(x => x.ToolName == "github_create_issue", CancellationToken.None);
+    AssertEqual(PendingActionStatuses.Pending, createIssueAction.Status, "github_create_issue request is stored as pending");
+    AssertTrue(createIssueAction.PayloadJson.Contains("Test issue from approval flow"), "github_create_issue pending action stores the title");
+    AssertEqual(0, fakeGitHubIssueCreator.CreateCallCount, "github_create_issue request does not call GitHub before approval");
+    PendingActionDecision createIssueApproval = await pendingActionService.ApproveAsync(dbContext, testUser, createIssueAction.Id, CancellationToken.None);
+    PendingActionExecutionResult createIssueExecution = await pendingActionExecutor.ExecuteApprovedAsync(dbContext, createIssueApproval.Action!, CancellationToken.None);
+    AssertTrue(createIssueExecution.Executed, "github_create_issue approval executes automatically");
+    AssertTrue(createIssueExecution.Success, "github_create_issue execution succeeds through injected creator");
+    AssertEqual(1, fakeGitHubIssueCreator.CreateCallCount, "github_create_issue calls GitHub creator once after approval");
+    AssertEqual("Test issue from approval flow", fakeGitHubIssueCreator.LastPayload?.Title, "github_create_issue passes title to creator");
+    AssertTrue((await dbContext.PendingActions.FindAsync([createIssueAction.Id], CancellationToken.None))!.DecisionNote.Contains("https://github.com/mujahedgt/TelegramMessagingTool/issues/777"), "github_create_issue records created issue URL in DecisionNote");
+    var directCreateIssueTool = new GitHubCreateIssueRequestTool(pendingActionService, gitHubWriteSettings);
+    ToolResult nonAdminCreateIssueResult = await directCreateIssueTool.CreatePendingActionAsync(
+        "{\"title\":\"Unauthorized issue\",\"body\":\"Nope\"}",
+        dbContext,
+        nonAdminUser,
+        CancellationToken.None);
+    AssertFalse(nonAdminCreateIssueResult.Success, "github_create_issue requires admin before creating pending actions");
+    ToolResult invalidCreateIssueResult = await directCreateIssueTool.CreatePendingActionAsync(
+        "{\"title\":\"\"}",
+        dbContext,
+        testUser,
+        CancellationToken.None);
+    AssertFalse(invalidCreateIssueResult.Success, "github_create_issue rejects empty issue titles");
     var agentTaskService = new AgentTaskService();
     var documentIndexingService = new DocumentIndexingService(documentStorage);
     var documentRetrievalService = new DocumentRetrievalService(testEmbeddingService);
@@ -2258,6 +2309,23 @@ sealed class FakeLatestReleaseRestarter : ILatestReleaseRestarter
         LastProjectRoot = payload.ProjectRoot;
         RestartCallCount++;
         return Task.FromResult(LatestReleaseRestartResult.Ok($"Scheduled restart from latest release under {payload.ProjectRoot}."));
+    }
+}
+
+sealed class FakeGitHubIssueCreator : IGitHubIssueCreator
+{
+    public int CreateCallCount { get; private set; }
+
+    public GitHubCreateIssuePayload? LastPayload { get; private set; }
+
+    public Task<GitHubIssueCreateResult> CreateIssueAsync(GitHubCreateIssuePayload payload, CancellationToken cancellationToken)
+    {
+        CreateCallCount++;
+        LastPayload = payload;
+        return Task.FromResult(GitHubIssueCreateResult.Ok(
+            777,
+            "https://github.com/mujahedgt/TelegramMessagingTool/issues/777",
+            "Created GitHub issue #777: https://github.com/mujahedgt/TelegramMessagingTool/issues/777"));
     }
 }
 
