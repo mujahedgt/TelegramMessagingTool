@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using System.Diagnostics;
 using System.Net.Sockets;
+using System.Text.Json;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.ReplyMarkups;
 using TelegramMessagingTool;
@@ -542,8 +544,11 @@ ToolRegistry repoWriteEnabledRegistry = ToolRegistryFactory.Create(searchDisable
     SafeCommandProjectRoot = Directory.GetCurrentDirectory()
 }, new HttpClient(), new PendingActionService());
 AssertTrue(repoWriteEnabledRegistry.TryGet("repo_replace_text", out IAgentTool? repoReplaceTextTool), "ToolRegistryFactory includes repo_replace_text when repo write tools are enabled");
+AssertTrue(repoWriteEnabledRegistry.TryGet("repo_commit_changes", out IAgentTool? repoCommitChangesTool), "ToolRegistryFactory includes repo_commit_changes when repo write tools are enabled");
 AssertTrue(repoReplaceTextTool!.RequiresApproval, "repo_replace_text requires approval before editing files");
+AssertTrue(repoCommitChangesTool!.RequiresApproval, "repo_commit_changes requires approval before committing changes");
 AssertTrue(repoWriteEnabledRegistry.RenderToolInstructions().Contains("repo_replace_text"), "ToolRegistry instructions document repo_replace_text when enabled");
+AssertTrue(repoWriteEnabledRegistry.RenderToolInstructions().Contains("repo_commit_changes"), "ToolRegistry instructions document repo_commit_changes when enabled");
 ToolRegistry enabledSearchRegistry = ToolRegistryFactory.Create(searchEnabledSettings, new HttpClient());
 AssertTrue(enabledSearchRegistry.TryGet("online_search", out _), "ToolRegistryFactory includes online_search only when enabled");
 AssertTrue(enabledSearchRegistry.RenderToolInstructions().Contains("online_search"), "Enabled online_search is advertised in model instructions");
@@ -1217,6 +1222,76 @@ await using (var dbContext = new TelegramDbContext())
     AssertFalse(nonAdminRepoReplaceResult.Success, "repo_replace_text requires admin before creating pending actions");
     Directory.Delete(repoWriteRoot, recursive: true);
 
+    string repoCommitRoot = Path.Combine(Path.GetTempPath(), $"TelegramMessagingTool_RepoCommit_{Guid.NewGuid():N}");
+    Directory.CreateDirectory(repoCommitRoot);
+    await TestProcessRunner.RunAsync("git", ["init"], repoCommitRoot, CancellationToken.None);
+    await TestProcessRunner.RunAsync("git", ["config", "user.email", "test@example.local"], repoCommitRoot, CancellationToken.None);
+    await TestProcessRunner.RunAsync("git", ["config", "user.name", "TelegramMessagingTool Tests"], repoCommitRoot, CancellationToken.None);
+    string repoCommitFile = Path.Combine(repoCommitRoot, "TrackedFile.md");
+    await File.WriteAllTextAsync(repoCommitFile, "# Initial\n", CancellationToken.None);
+    await TestProcessRunner.RunAsync("git", ["add", "TrackedFile.md"], repoCommitRoot, CancellationToken.None);
+    await TestProcessRunner.RunAsync("git", ["commit", "-m", "Initial commit"], repoCommitRoot, CancellationToken.None);
+    await File.WriteAllTextAsync(repoCommitFile, "# Updated\n", CancellationToken.None);
+    BotSettings repoCommitSettings = adminTestSettings with
+    {
+        EnableRepoWriteTools = true,
+        SafeCommandProjectRoot = repoCommitRoot
+    };
+    ToolRegistry repoCommitRegistry = ToolRegistryFactory.Create(repoCommitSettings, new HttpClient(), pendingActionService);
+    var repoCommitChatClient = new ScriptedChatClient([
+        "{\"type\":\"tool_call\",\"tool\":\"repo_commit_changes\",\"input\":\"{\\\"message\\\":\\\"Update tracked file\\\",\\\"body\\\":\\\"Commits approved repo edit.\\\"}\"}"
+    ]);
+    string repoCommitReply = await new AgentRunner(
+        repoCommitChatClient,
+        repoCommitRegistry,
+        searchRoutingClassifier: new OffSearchRoutingClassifier()).RunAsync(
+            [new OllamaMessageDto("user", "request a commit for the approved repo edit")],
+            CancellationToken.None,
+            dbContext,
+            testUser);
+    AssertTrue(repoCommitReply.Contains("Pending action #"), "AgentRunner creates a pending action for repo_commit_changes");
+    PendingAction repoCommitAction = await dbContext.PendingActions.OrderByDescending(x => x.Id).FirstAsync(x => x.ToolName == "repo_commit_changes", CancellationToken.None);
+    AssertEqual(PendingActionStatuses.Pending, repoCommitAction.Status, "repo_commit_changes request is stored as pending");
+    AssertTrue(repoCommitAction.PayloadJson.Contains("Update tracked file"), "repo_commit_changes request stores the commit message");
+
+    PendingActionDecision repoCommitApproval = await pendingActionService.ApproveAsync(dbContext, testUser, repoCommitAction.Id, CancellationToken.None);
+    AssertTrue(repoCommitApproval.Success, "repo_commit_changes pending action can be approved");
+    PendingActionExecutionResult repoCommitExecution = await pendingActionExecutor.ExecuteApprovedAsync(dbContext, repoCommitApproval.Action!, CancellationToken.None);
+    AssertTrue(repoCommitExecution.Executed, "repo_commit_changes approval executes automatically");
+    AssertTrue(repoCommitExecution.Success, "repo_commit_changes execution succeeds when there is a diff");
+    ProcessRunResult commitLog = await TestProcessRunner.RunAsync("git", ["log", "-1", "--pretty=%s"], repoCommitRoot, CancellationToken.None);
+    AssertTrue(commitLog.Output.Contains("Update tracked file"), "repo_commit_changes creates a commit with the requested message");
+    ProcessRunResult commitStatus = await TestProcessRunner.RunAsync("git", ["status", "--short"], repoCommitRoot, CancellationToken.None);
+    AssertEqual(string.Empty, commitStatus.Output.Trim(), "repo_commit_changes leaves the temp repo clean after commit");
+
+    var directRepoCommitTool = new RepoCommitChangesRequestTool(pendingActionService, repoCommitSettings, repoCommitRoot);
+    ToolResult invalidRepoCommitMessageResult = await directRepoCommitTool.CreatePendingActionAsync(
+        "{\"message\":\"\"}",
+        dbContext,
+        testUser,
+        CancellationToken.None);
+    AssertFalse(invalidRepoCommitMessageResult.Success, "repo_commit_changes rejects empty commit messages");
+    ToolResult nonAdminRepoCommitResult = await directRepoCommitTool.CreatePendingActionAsync(
+        "{\"message\":\"Unauthorized commit\"}",
+        dbContext,
+        nonAdminUser,
+        CancellationToken.None);
+    AssertFalse(nonAdminRepoCommitResult.Success, "repo_commit_changes requires admin before creating pending actions");
+    PendingAction emptyDiffCommitAction = await pendingActionService.CreateAsync(
+        dbContext,
+        testUser,
+        "repo_commit_changes",
+        "Commit with no diff.",
+        "{\"action\":\"repo_commit_changes\",\"projectRoot\":\"" + JsonEncodedText.Encode(repoCommitRoot).ToString() + "\",\"message\":\"No diff commit\",\"body\":\"\"}",
+        "high",
+        TimeSpan.FromMinutes(15),
+        CancellationToken.None);
+    PendingActionDecision emptyDiffCommitApproval = await pendingActionService.ApproveAsync(dbContext, testUser, emptyDiffCommitAction.Id, CancellationToken.None);
+    PendingActionExecutionResult emptyDiffCommitExecution = await pendingActionExecutor.ExecuteApprovedAsync(dbContext, emptyDiffCommitApproval.Action!, CancellationToken.None);
+    AssertTrue(emptyDiffCommitExecution.Executed, "repo_commit_changes empty-diff action is handled by executor");
+    AssertFalse(emptyDiffCommitExecution.Success, "repo_commit_changes refuses to commit when there is no diff");
+    TestDirectoryCleanup.DeleteRecursive(repoCommitRoot);
+
     AssertTrue(PendingActionCallbackParser.TryParse("act:approve:123", out PendingActionCallback approveCallback), "PendingActionCallbackParser parses approve callback");
     AssertEqual(PendingActionCallbackVerb.Approve, approveCallback.Verb, "PendingActionCallbackParser reads approve verb");
     AssertEqual(123, approveCallback.ActionId, "PendingActionCallbackParser reads approve action id");
@@ -1831,6 +1906,62 @@ sealed class DeterministicEmbeddingService : ITextEmbeddingService
         }
 
         return Task.FromResult<IReadOnlyList<float>>([1.0f, 0.0f]);
+    }
+}
+
+sealed record ProcessRunResult(int ExitCode, string Output, string Error);
+
+static class TestDirectoryCleanup
+{
+    public static void DeleteRecursive(string path)
+    {
+        if (!Directory.Exists(path))
+        {
+            return;
+        }
+
+        foreach (string file in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
+        {
+            File.SetAttributes(file, FileAttributes.Normal);
+        }
+
+        Directory.Delete(path, recursive: true);
+    }
+}
+
+static class TestProcessRunner
+{
+    public static async Task<ProcessRunResult> RunAsync(
+        string executable,
+        IReadOnlyList<string> arguments,
+        string workingDirectory,
+        CancellationToken cancellationToken)
+    {
+        var processStartInfo = new ProcessStartInfo
+        {
+            FileName = executable,
+            WorkingDirectory = workingDirectory,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        foreach (string argument in arguments)
+        {
+            processStartInfo.ArgumentList.Add(argument);
+        }
+
+        using var process = Process.Start(processStartInfo) ?? throw new InvalidOperationException($"Failed to start {executable}.");
+        string output = await process.StandardOutput.ReadToEndAsync(cancellationToken);
+        string error = await process.StandardError.ReadToEndAsync(cancellationToken);
+        await process.WaitForExitAsync(cancellationToken);
+        if (process.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"Process {executable} failed with exit code {process.ExitCode}.\nSTDOUT:\n{output}\nSTDERR:\n{error}");
+        }
+
+        return new ProcessRunResult(process.ExitCode, output, error);
     }
 }
 

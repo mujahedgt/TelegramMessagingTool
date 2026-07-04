@@ -33,6 +33,7 @@ public sealed class PendingActionExecutor
             "kill_process" => ExecuteKillProcess(action),
             "delete_file" => await ExecuteDeleteFileAsync(dbContext, action, cancellationToken),
             "repo_replace_text" => await ExecuteRepoReplaceTextAsync(action, cancellationToken),
+            "repo_commit_changes" => await ExecuteRepoCommitChangesAsync(action, cancellationToken),
             _ => PendingActionExecutionResult.Skipped($"No automatic execution is registered for action type '{action.ToolName}'.")
         };
 
@@ -132,7 +133,7 @@ public sealed class PendingActionExecutor
 
         try
         {
-            RepoReplaceTextPayload? parsed = JsonSerializer.Deserialize<RepoReplaceTextPayload>(payloadJson);
+            RepoReplaceTextPayload? parsed = JsonSerializer.Deserialize<RepoReplaceTextPayload>(payloadJson, JsonOptions);
             if (parsed is null
                 || string.IsNullOrWhiteSpace(parsed.ProjectRoot)
                 || string.IsNullOrWhiteSpace(parsed.Path)
@@ -151,6 +152,52 @@ public sealed class PendingActionExecutor
             return false;
         }
     }
+
+    private static async Task<PendingActionExecutionResult> ExecuteRepoCommitChangesAsync(
+        PendingAction action,
+        CancellationToken cancellationToken)
+    {
+        if (!TryReadRepoCommitChangesPayload(action.PayloadJson, out RepoCommitChangesPayload payload, out string error))
+        {
+            return PendingActionExecutionResult.Failed(error);
+        }
+
+        RepoGitCommitResult commitResult = await RepoGitCommitExecutor.CommitAsync(payload, cancellationToken);
+        return commitResult.Success
+            ? PendingActionExecutionResult.Completed(commitResult.Message)
+            : PendingActionExecutionResult.Failed(commitResult.Message);
+    }
+
+    private static bool TryReadRepoCommitChangesPayload(string payloadJson, out RepoCommitChangesPayload payload, out string error)
+    {
+        payload = RepoCommitChangesPayload.Empty;
+        error = string.Empty;
+
+        try
+        {
+            RepoCommitChangesPayload? parsed = JsonSerializer.Deserialize<RepoCommitChangesPayload>(payloadJson, JsonOptions);
+            if (parsed is null
+                || string.IsNullOrWhiteSpace(parsed.ProjectRoot)
+                || string.IsNullOrWhiteSpace(parsed.Message))
+            {
+                error = "Execution failed: repo_commit_changes payload is missing project_root or message.";
+                return false;
+            }
+
+            payload = parsed;
+            return true;
+        }
+        catch (JsonException ex)
+        {
+            error = $"Execution failed: invalid repo_commit_changes payload JSON. {ex.Message}";
+            return false;
+        }
+    }
+
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
 
     private static bool TryReadFileId(string payloadJson, out int fileId, out string error)
     {

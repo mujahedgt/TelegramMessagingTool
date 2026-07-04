@@ -178,6 +178,7 @@ Available tools:
 | `publish_release` | Yes | Optional. Registered only when `ENABLE_SAFE_COMMAND_TOOLS=true` and an approval context is available. Creates a pending action only |
 | `restart_latest_bot` | Yes | Optional. Registered only when `ENABLE_SAFE_COMMAND_TOOLS=true` and an approval context is available. Creates a pending action only |
 | `repo_replace_text` | Yes | Optional. Registered only when `ENABLE_REPO_WRITE_TOOLS=true` and an approval context is available. Replaces one exact text block in an allowed project text file after `/approve` |
+| `repo_commit_changes` | Yes | Optional. Registered only when `ENABLE_REPO_WRITE_TOOLS=true` and an approval context is available. Runs safe Git checks and commits current allowed project changes after `/approve`; does not push |
 
 Search behavior notes:
 
@@ -210,7 +211,8 @@ Safe command tool notes:
 - Release/restart request tools create pending actions only and do not execute directly.
 - `ENABLE_REPO_WRITE_TOOLS=false` by default.
 - `repo_replace_text` is the first repo-write tool. It is admin-only, approval-backed, restricted to source/docs/config text files under `SAFE_COMMAND_PROJECT_ROOT`, rejects path traversal/generated/runtime folders, and replaces exactly one matching text block only after `/approve`.
-- The first repo-write version does not commit or push automatically. Run tests and review `git diff` before committing.
+- `repo_commit_changes` is admin-only and approval-backed. It runs `git diff --check`, refuses empty diffs, validates changed paths against the repo-write allowlist, commits with a strict JSON message/body, and never pushes.
+- The first repo-write version does not push automatically. Review `git diff`/history before adding remote push support.
 
 Risky tools such as arbitrary shell, broad file write/delete, database mutation, outbound messaging, direct commit/push, or unrestricted process control are intentionally not exposed as model tools. Use the approval flow before adding dangerous tools.
 
