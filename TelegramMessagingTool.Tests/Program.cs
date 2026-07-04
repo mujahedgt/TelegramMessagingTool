@@ -224,6 +224,7 @@ AssertTrue(appServices.BotClient is not null, "AppServicesBuilder creates Telegr
 AssertTrue(appServices.CommandRouter.Commands.Any(x => x.Name == "/help"), "AppServicesBuilder creates command router");
 AssertTrue(appServices.TelegramUpdateHandler is not null, "AppServicesBuilder creates Telegram update handler");
 AssertTrue(appServices.ConsoleInputHandler is not null, "AppServicesBuilder creates console input handler");
+AssertTrue(appServices.TaskReminderLoop is not null, "AppServicesBuilder creates task reminder loop");
 AssertTrue(appServices.ToolRegistry.Tools.Any(x => x.Name == "datetime"), "AppServicesBuilder creates tool registry");
 AssertEqual(
     Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, "UserFiles")),

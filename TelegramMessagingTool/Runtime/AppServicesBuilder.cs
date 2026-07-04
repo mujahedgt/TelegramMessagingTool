@@ -99,6 +99,7 @@ public static class AppServicesBuilder
             commandRouter,
             writeConsoleEvent,
             requestShutdown);
+        var taskReminderLoop = new TaskReminderLoop(taskReminderService, writeConsoleEvent);
 
         return new AppServices(
             [qwenClient, embeddingClient, searchClient, telegramHttpHandler, telegramHttpClient],
@@ -125,6 +126,7 @@ public static class AppServicesBuilder
             conversationService,
             commandRouter,
             telegramUpdateHandler,
-            consoleInputHandler);
+            consoleInputHandler,
+            taskReminderLoop);
     }
 }

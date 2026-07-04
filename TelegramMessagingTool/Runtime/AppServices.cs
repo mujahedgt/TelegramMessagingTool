@@ -36,7 +36,8 @@ public sealed class AppServices : IDisposable
         ConversationService conversationService,
         CommandRouter commandRouter,
         TelegramUpdateHandler telegramUpdateHandler,
-        ConsoleInputHandler consoleInputHandler)
+        ConsoleInputHandler consoleInputHandler,
+        TaskReminderLoop taskReminderLoop)
     {
         _disposables = disposables;
         BotClient = botClient;
@@ -63,6 +64,7 @@ public sealed class AppServices : IDisposable
         CommandRouter = commandRouter;
         TelegramUpdateHandler = telegramUpdateHandler;
         ConsoleInputHandler = consoleInputHandler;
+        TaskReminderLoop = taskReminderLoop;
     }
 
     public TelegramBotClient BotClient { get; }
@@ -112,6 +114,8 @@ public sealed class AppServices : IDisposable
     public TelegramUpdateHandler TelegramUpdateHandler { get; }
 
     public ConsoleInputHandler ConsoleInputHandler { get; }
+
+    public TaskReminderLoop TaskReminderLoop { get; }
 
     public void Dispose()
     {

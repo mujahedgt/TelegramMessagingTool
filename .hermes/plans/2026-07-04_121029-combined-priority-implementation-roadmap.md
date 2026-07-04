@@ -304,7 +304,9 @@ These should wait until repo-mode local commit/push and approval audit are matur
 - Create: `TelegramMessagingTool/Runtime/ConsoleInputHandler.cs`
 - Modify: `Program.cs`
 
-## P3.5 Keep `Program.cs` thin
+## P3.5 Keep `Program.cs` thin ✅ Done
+
+**Status:** Extracted reminder polling into `Runtime/TaskReminderLoop.cs` and console event rendering into `Runtime/ConsoleEventWriter.cs`. `Program.cs` is now limited to settings load, cancellation/shutdown wiring, service build, optional migrations, startup panel, Telegram polling startup, background loop startup, and top-level error handling.
 
 Target responsibilities:
 
@@ -509,7 +511,7 @@ Then restart and verify:
 Continue with:
 
 ```text
-Priority 3.5 — Keep Program.cs thin
+Priority 4.1 — Create plugin abstraction package
 ```
 
-This is the final Priority 3 cleanup check: keep `Program.cs` limited to settings, service build, Telegram polling, loop startup, and shutdown orchestration.
+This starts Priority 4 plugin loading groundwork: create/share a safe abstraction package before any trusted plugin assembly loading.

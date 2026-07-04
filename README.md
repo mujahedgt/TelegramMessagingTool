@@ -16,7 +16,7 @@ TelegramMessagingTool is a C#/.NET console application that connects a Telegram 
 - `/tools` command to show available tools
 - Agent-style startup console panel with commands, model, safety, and tool status
 - Local console chat/command input using the same command router, memory, tools, and agent runner as Telegram
-- Runtime composition now builds runtime services through `Runtime/AppServicesBuilder.cs`, command registration through `Runtime/CommandRouterFactory.cs`, Telegram update handling through `Runtime/TelegramUpdateHandler.cs`, and local console input through `Runtime/ConsoleInputHandler.cs`, keeping `Program.cs` thinner while preserving behavior
+- Runtime composition now builds runtime services through `Runtime/AppServicesBuilder.cs`, command registration through `Runtime/CommandRouterFactory.cs`, Telegram update handling through `Runtime/TelegramUpdateHandler.cs`, local console input through `Runtime/ConsoleInputHandler.cs`, and reminder polling through `Runtime/TaskReminderLoop.cs`, keeping `Program.cs` thin while preserving behavior
 - Live console event lines for startup, commands, messages, denied users, shutdown, and errors
 - Sandboxed document/file support for `.txt`, `.md`, `.json`, `.csv`, `.pdf`, `.docx`, `.xlsx`, `.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`, `.mp3`, `.wav`, `.m4a`, `.ogg`, `.oga`, `.opus`, and `.flac`
 - File commands: `/files`, `/images`, `/describeimage <id>`, `/voicefiles`, `/transcribe <id>`, `/readfile <id>`, `/createfile <filename> <content>`, admin-only local import via `/importfiles` and `/importfile <filename>`, and admin-approved `/deletefile <id>`

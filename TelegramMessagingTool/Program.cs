@@ -1,21 +1,15 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using System.Net;
 using Telegram.Bot;
 using Telegram.Bot.Exceptions;
 using Telegram.Bot.Polling;
-using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using TelegramMessagingTool;
-using TelegramMessagingTool.Agent;
-using TelegramMessagingTool.Commands;
 using TelegramMessagingTool.ConsoleUi;
 using TelegramMessagingTool.Data;
 using TelegramMessagingTool.models;
 using TelegramMessagingTool.Models;
-using TelegramMessagingTool.Services;
 using TelegramMessagingTool.Runtime;
 using TelegramMessagingTool.Telegram;
-using TelegramMessagingTool.Tools;
 
 BotSettings settings = BotConfiguration.LoadFromEnvironment();
 
@@ -33,14 +27,7 @@ Console.CancelKeyPress += (_, eventArgs) =>
     cts.Cancel();
 };
 
-using AppServices appServices = AppServicesBuilder.Build(settings, WriteConsoleEvent, () => cts.Cancel());
-
-var botClient = appServices.BotClient;
-var taskReminderService = appServices.TaskReminderService;
-var toolRegistry = appServices.ToolRegistry;
-var commandRouter = appServices.CommandRouter;
-var telegramUpdateHandler = appServices.TelegramUpdateHandler;
-var consoleInputHandler = appServices.ConsoleInputHandler;
+using AppServices appServices = AppServicesBuilder.Build(settings, ConsoleEventWriter.Write, () => cts.Cancel());
 
 if (settings.ApplyMigrations)
 {
@@ -55,7 +42,7 @@ ReceiverOptions receiverOptions = new()
 
 try
 {
-    var me = await botClient.GetMe(cts.Token);
+    var me = await appServices.BotClient.GetMe(cts.Token);
     Console.WriteLine(AgentConsoleRenderer.RenderStartupPanel(new AgentConsoleSnapshot(
         BotUsername: me.Username ?? "unknown",
         OllamaUrl: settings.OllamaUrl,
@@ -65,21 +52,22 @@ try
         MessageContentLoggingEnabled: settings.LogMessageContent,
         OnlineSearchEnabled: settings.EnableOnlineSearch,
         ApplyMigrations: settings.ApplyMigrations,
-        Commands: commandRouter.Commands.Select(x => x.Name).ToList(),
-        Tools: toolRegistry.Tools.Select(x => x.Name).ToList())));
+        Commands: appServices.CommandRouter.Commands.Select(x => x.Name).ToList(),
+        Tools: appServices.ToolRegistry.Tools.Select(x => x.Name).ToList())));
 
-    botClient.StartReceiving(
-        updateHandler: telegramUpdateHandler.HandleUpdateAsync,
-        errorHandler: telegramUpdateHandler.HandleErrorAsync,
+    appServices.BotClient.StartReceiving(
+        updateHandler: appServices.TelegramUpdateHandler.HandleUpdateAsync,
+        errorHandler: appServices.TelegramUpdateHandler.HandleErrorAsync,
         receiverOptions: receiverOptions,
         cancellationToken: cts.Token
     );
 
-    WriteConsoleEvent("START", me.Username ?? "bot", "long polling is running", ConsoleEventLevel.Success);
-    WriteConsoleEvent("CONSOLE", "local", "type a message or command here; use /exit to stop", ConsoleEventLevel.Info);
+    ConsoleEventWriter.Write("START", me.Username ?? "bot", "long polling is running", ConsoleEventLevel.Success);
+    ConsoleEventWriter.Write("CONSOLE", "local", "type a message or command here; use /exit to stop", ConsoleEventLevel.Info);
 
-    _ = consoleInputHandler.RunAsync(cts.Token);
-    _ = RunTaskReminderLoopAsync(cts.Token);
+    _ = appServices.ConsoleInputHandler.RunAsync(cts.Token);
+    _ = appServices.TaskReminderLoop.RunAsync(cts.Token);
+
     try
     {
         await Task.Delay(Timeout.InfiniteTimeSpan, cts.Token);
@@ -89,7 +77,7 @@ try
         // Graceful shutdown requested from console, Ctrl+C, or host termination.
     }
 
-    WriteConsoleEvent("STOP", "system", "shutdown requested", ConsoleEventLevel.Warning);
+    ConsoleEventWriter.Write("STOP", "system", "shutdown requested", ConsoleEventLevel.Warning);
     cts.Cancel();
 }
 catch (ApiRequestException apiEx)
@@ -113,57 +101,4 @@ catch (Exception ex)
         LogType.Error);
 
     Console.WriteLine($"Unexpected Error: {ex.Message}");
-}
-
-async Task RunTaskReminderLoopAsync(CancellationToken cancellationToken)
-{
-    TimeSpan interval = TimeSpan.FromSeconds(60);
-    while (!cancellationToken.IsCancellationRequested)
-    {
-        try
-        {
-            await using TelegramDbContext dbContext = new();
-            ReminderScanResult result = await taskReminderService.SendDueRemindersAsync(dbContext, cancellationToken);
-            if (result.SentCount > 0 || result.FailedCount > 0)
-            {
-                WriteConsoleEvent(
-                    "REMINDER",
-                    "tasks",
-                    $"due={result.DueCount} sent={result.SentCount} failed={result.FailedCount}",
-                    result.FailedCount > 0 ? ConsoleEventLevel.Warning : ConsoleEventLevel.Success);
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            return;
-        }
-        catch (Exception ex)
-        {
-            WriteConsoleEvent("REMINDER", "tasks", ex.Message, ConsoleEventLevel.Error);
-        }
-
-        try
-        {
-            await Task.Delay(interval, cancellationToken);
-        }
-        catch (OperationCanceledException)
-        {
-            return;
-        }
-    }
-}
-
-void WriteConsoleEvent(string label, string actor, string detail, ConsoleEventLevel level)
-{
-    ConsoleColor originalColor = Console.ForegroundColor;
-    Console.ForegroundColor = level switch
-    {
-        ConsoleEventLevel.Success => ConsoleColor.Green,
-        ConsoleEventLevel.Warning => ConsoleColor.Yellow,
-        ConsoleEventLevel.Error => ConsoleColor.Red,
-        _ => ConsoleColor.Cyan
-    };
-
-    Console.WriteLine(AgentConsoleRenderer.RenderEvent(label, actor, detail, level));
-    Console.ForegroundColor = originalColor;
 }
