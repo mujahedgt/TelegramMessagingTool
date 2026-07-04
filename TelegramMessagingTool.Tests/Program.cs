@@ -222,6 +222,7 @@ BotSettings appServicesSettings = commandFactorySettings with
 using AppServices appServices = AppServicesBuilder.Build(appServicesSettings);
 AssertTrue(appServices.BotClient is not null, "AppServicesBuilder creates Telegram bot client");
 AssertTrue(appServices.CommandRouter.Commands.Any(x => x.Name == "/help"), "AppServicesBuilder creates command router");
+AssertTrue(appServices.TelegramUpdateHandler is not null, "AppServicesBuilder creates Telegram update handler");
 AssertTrue(appServices.ToolRegistry.Tools.Any(x => x.Name == "datetime"), "AppServicesBuilder creates tool registry");
 AssertEqual(
     Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, "UserFiles")),

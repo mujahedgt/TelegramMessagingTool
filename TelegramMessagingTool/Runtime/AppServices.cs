@@ -34,7 +34,8 @@ public sealed class AppServices : IDisposable
         IImageDescriptionService imageDescriptionService,
         AgentRunner agentRunner,
         ConversationService conversationService,
-        CommandRouter commandRouter)
+        CommandRouter commandRouter,
+        TelegramUpdateHandler telegramUpdateHandler)
     {
         _disposables = disposables;
         BotClient = botClient;
@@ -59,6 +60,7 @@ public sealed class AppServices : IDisposable
         AgentRunner = agentRunner;
         ConversationService = conversationService;
         CommandRouter = commandRouter;
+        TelegramUpdateHandler = telegramUpdateHandler;
     }
 
     public TelegramBotClient BotClient { get; }
@@ -104,6 +106,8 @@ public sealed class AppServices : IDisposable
     public ConversationService ConversationService { get; }
 
     public CommandRouter CommandRouter { get; }
+
+    public TelegramUpdateHandler TelegramUpdateHandler { get; }
 
     public void Dispose()
     {

@@ -1,6 +1,7 @@
 using System.Net;
 using Telegram.Bot;
 using TelegramMessagingTool.Agent;
+using TelegramMessagingTool.ConsoleUi;
 using TelegramMessagingTool.Services;
 using TelegramMessagingTool.Telegram;
 using TelegramMessagingTool.Tools;
@@ -9,8 +10,11 @@ namespace TelegramMessagingTool.Runtime;
 
 public static class AppServicesBuilder
 {
-    public static AppServices Build(BotSettings settings)
+    public static AppServices Build(
+        BotSettings settings,
+        Action<string, string, string, ConsoleEventLevel>? writeConsoleEvent = null)
     {
+        writeConsoleEvent ??= static (_, _, _, _) => { };
         var qwenClient = new HttpClient
         {
             Timeout = TimeSpan.FromMinutes(30)
@@ -75,6 +79,16 @@ public static class AppServicesBuilder
             documentSummaryService,
             documentEmbeddingService,
             imageDescriptionService);
+        var telegramUpdateHandler = new TelegramUpdateHandler(
+            settings,
+            documentStorage,
+            toolRegistry,
+            pendingActionCallbackService,
+            taskCallbackService,
+            agentRunner,
+            conversationService,
+            commandRouter,
+            writeConsoleEvent);
 
         return new AppServices(
             [qwenClient, embeddingClient, searchClient, telegramHttpHandler, telegramHttpClient],
@@ -99,6 +113,7 @@ public static class AppServicesBuilder
             imageDescriptionService,
             agentRunner,
             conversationService,
-            commandRouter);
+            commandRouter,
+            telegramUpdateHandler);
     }
 }

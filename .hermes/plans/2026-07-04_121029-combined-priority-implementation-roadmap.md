@@ -286,7 +286,9 @@ These should wait until repo-mode local commit/push and approval audit are matur
 - Create: `TelegramMessagingTool/Runtime/AppServicesBuilder.cs`
 - Modify: `Program.cs`
 
-## P3.3 Extract Telegram message/update handling
+## P3.3 Extract Telegram message/update handling ✅ Done
+
+**Status:** Implemented `Runtime/TelegramUpdateHandler.cs` to move Telegram update, callback-query, document upload, and receiver-error handling out of `Program.cs`. `AppServicesBuilder` now wires the handler with existing runtime services and console event logging, and `Program.cs` delegates `StartReceiving` to the handler while keeping behavior unchanged.
 
 **Files:**
 
@@ -505,7 +507,7 @@ Then restart and verify:
 Continue with:
 
 ```text
-Priority 3.3 — Extract TelegramUpdateHandler
+Priority 3.4 — Extract ConsoleInputHandler
 ```
 
-This is the next runtime composition refactor after `AppServicesBuilder`: move Telegram update/message handling out of `Program.cs` while keeping runtime behavior unchanged.
+This is the next runtime composition refactor after `TelegramUpdateHandler`: move console input handling out of `Program.cs` while keeping console and Telegram runtime behavior unchanged.
