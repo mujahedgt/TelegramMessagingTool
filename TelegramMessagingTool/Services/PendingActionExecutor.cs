@@ -40,6 +40,7 @@ public sealed class PendingActionExecutor
             "publish_release" => await ExecutePublishReleaseAsync(action, cancellationToken),
             "restart_latest_bot" => await ExecuteRestartLatestBotAsync(action, cancellationToken),
             "repo_replace_text" => await ExecuteRepoReplaceTextAsync(action, cancellationToken),
+            "repo_apply_patch" => await ExecuteRepoApplyPatchAsync(action, cancellationToken),
             "repo_commit_changes" => await ExecuteRepoCommitChangesAsync(action, cancellationToken),
             "repo_push_changes" => await ExecuteRepoPushChangesAsync(action, cancellationToken),
             _ => PendingActionExecutionResult.Skipped($"No automatic execution is registered for action type '{action.ToolName}'.")
@@ -260,6 +261,49 @@ public sealed class PendingActionExecutor
         catch (JsonException ex)
         {
             error = $"Execution failed: invalid repo_replace_text payload JSON. {ex.Message}";
+            return false;
+        }
+    }
+
+    private static async Task<PendingActionExecutionResult> ExecuteRepoApplyPatchAsync(
+        PendingAction action,
+        CancellationToken cancellationToken)
+    {
+        if (!TryReadRepoApplyPatchPayload(action.PayloadJson, out RepoApplyPatchPayload payload, out string error))
+        {
+            return PendingActionExecutionResult.Failed(error);
+        }
+
+        RepoPatchApplyResult applyResult = await RepoPatchApplyExecutor.ApplyAsync(payload, cancellationToken);
+        return applyResult.Success
+            ? PendingActionExecutionResult.Completed(applyResult.Message)
+            : PendingActionExecutionResult.Failed(applyResult.Message);
+    }
+
+    private static bool TryReadRepoApplyPatchPayload(string payloadJson, out RepoApplyPatchPayload payload, out string error)
+    {
+        payload = RepoApplyPatchPayload.Empty;
+        error = string.Empty;
+
+        try
+        {
+            RepoApplyPatchPayload? parsed = JsonSerializer.Deserialize<RepoApplyPatchPayload>(payloadJson, JsonOptions);
+            if (parsed is null
+                || string.IsNullOrWhiteSpace(parsed.ProjectRoot)
+                || string.IsNullOrWhiteSpace(parsed.Patch)
+                || parsed.AffectedPaths is null
+                || parsed.AffectedPaths.Count == 0)
+            {
+                error = "Execution failed: repo_apply_patch payload is missing project_root, patch, or affected_paths.";
+                return false;
+            }
+
+            payload = parsed;
+            return true;
+        }
+        catch (JsonException ex)
+        {
+            error = $"Execution failed: invalid repo_apply_patch payload JSON. {ex.Message}";
             return false;
         }
     }

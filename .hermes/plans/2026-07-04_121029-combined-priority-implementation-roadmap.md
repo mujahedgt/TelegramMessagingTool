@@ -154,7 +154,9 @@ dotnet list TelegramMessagingTool/TelegramMessagingTool.csproj package --vulnera
 - Verify process path and long-polling startup.
 - Keep Telegram API send test as separate verification when token/admin chat are available.
 
-## P1.5 Add safer patch capability later
+## P1.5 Add safer patch capability later ✅ Done
+
+**Status:** Implemented `repo_apply_patch` as an admin-only, approval-backed unified-diff tool. It creates a pending action first, extracts affected paths from diff headers, rejects binary/generated/runtime/out-of-root paths, runs `git apply --check`, and only applies the patch after `/approve`.
 
 **Objective:** Move beyond exact text replacement without exposing arbitrary filesystem writes.
 

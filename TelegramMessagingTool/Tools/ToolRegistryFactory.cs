@@ -43,6 +43,7 @@ public static class ToolRegistryFactory
         if (settings.EnableRepoWriteTools && pendingActionService is not null)
         {
             tools.Add(new RepoReplaceTextRequestTool(pendingActionService, settings, settings.SafeCommandProjectRoot));
+            tools.Add(new RepoApplyPatchRequestTool(pendingActionService, settings, settings.SafeCommandProjectRoot));
             tools.Add(new RepoCommitChangesRequestTool(pendingActionService, settings, settings.SafeCommandProjectRoot));
             tools.Add(new RepoPushChangesRequestTool(pendingActionService, settings, settings.SafeCommandProjectRoot));
         }

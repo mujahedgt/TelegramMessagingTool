@@ -170,6 +170,170 @@ Deny: /deny {pendingAction.Id}
     }
 }
 
+public sealed class RepoApplyPatchRequestTool : IApprovalRequestTool
+{
+    private const int MaxPatchLength = 8_000;
+
+    private readonly PendingActionService _pendingActionService;
+    private readonly BotSettings _settings;
+    private readonly string _projectRoot;
+
+    public RepoApplyPatchRequestTool(PendingActionService pendingActionService, BotSettings settings, string projectRoot)
+    {
+        _pendingActionService = pendingActionService;
+        _settings = settings;
+        _projectRoot = Path.GetFullPath(projectRoot);
+    }
+
+    public string Name => "repo_apply_patch";
+
+    public string Description => "Approval-gated repository edit: apply one safe unified diff under SAFE_COMMAND_PROJECT_ROOT. Strict JSON only: {\"patch\":\"unified diff\",\"reason\":\"why\"}. Rejects binary, generated/runtime folders, and paths outside the project root.";
+
+    public bool RequiresApproval => true;
+
+    public Task<ToolResult> ExecuteAsync(string input, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(ToolResult.Fail(
+            "repo_apply_patch requires an authenticated pending-action context. Use it from the Telegram/console agent flow so it can create an approval request."));
+    }
+
+    public async Task<ToolResult> CreatePendingActionAsync(
+        string input,
+        TelegramDbContext dbContext,
+        ConnectedUser user,
+        CancellationToken cancellationToken)
+    {
+        if (!BotAccessPolicy.IsAdmin(user.ChatId, _settings.AdminChatId))
+        {
+            return ToolResult.Fail(BotAccessPolicy.AdminOnlyMessage(_settings.AdminChatId));
+        }
+
+        if (!Directory.Exists(_projectRoot))
+        {
+            return ToolResult.Fail($"Project root does not exist: {_projectRoot}");
+        }
+
+        if (!TryParseInput(input, _projectRoot, out RepoApplyPatchPayload payload, out string error))
+        {
+            return ToolResult.Fail(error);
+        }
+
+        PendingAction pendingAction = await _pendingActionService.CreateAsync(
+            dbContext,
+            user,
+            toolName: Name,
+            description: $"Apply patch to {payload.AffectedPaths.Count} file(s): {string.Join(", ", payload.AffectedPaths)}. Reason: {payload.Reason}",
+            payloadJson: JsonSerializer.Serialize(payload),
+            riskLevel: "high",
+            ttl: TimeSpan.FromMinutes(15),
+            cancellationToken: cancellationToken);
+
+        return ToolResult.Ok($"""
+Approval required.
+
+Pending action #{pendingAction.Id}
+Type: repo_apply_patch
+Risk: high
+Files: {string.Join(", ", payload.AffectedPaths)}
+Reason: {payload.Reason}
+Expires UTC: {pendingAction.ExpiresAt:yyyy-MM-dd HH:mm}
+
+This request only created a pending action and preview. It did not edit files, run tests, or commit changes yet.
+Approve: /approve {pendingAction.Id}
+Deny: /deny {pendingAction.Id}
+""");
+    }
+
+    public static bool TryParseInput(string input, string projectRoot, out RepoApplyPatchPayload payload, out string error)
+    {
+        payload = RepoApplyPatchPayload.Empty;
+        error = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            error = "repo_apply_patch input must be strict JSON with patch and optional reason.";
+            return false;
+        }
+
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(input);
+            JsonElement root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                error = "repo_apply_patch input must be a JSON object.";
+                return false;
+            }
+
+            string patch = ReadString(root, "patch");
+            string reason = ReadString(root, "reason").Trim();
+            if (string.IsNullOrWhiteSpace(reason))
+            {
+                reason = "requested by agent";
+            }
+
+            if (string.IsNullOrWhiteSpace(patch))
+            {
+                error = "repo_apply_patch requires a non-empty unified diff patch.";
+                return false;
+            }
+
+            if (patch.Length > MaxPatchLength)
+            {
+                error = $"repo_apply_patch patch must be {MaxPatchLength} characters or less.";
+                return false;
+            }
+
+            if (patch.Contains('\0') || patch.Contains("GIT binary patch", StringComparison.OrdinalIgnoreCase) || patch.Contains("Binary files ", StringComparison.OrdinalIgnoreCase))
+            {
+                error = "repo_apply_patch rejects binary patches.";
+                return false;
+            }
+
+            if (reason.Length > 300)
+            {
+                reason = reason[..300];
+            }
+
+            IReadOnlyList<string> affectedPaths = RepoPatchPathParser.ExtractAffectedPaths(patch);
+            if (affectedPaths.Count == 0)
+            {
+                error = "repo_apply_patch requires a unified diff with file headers.";
+                return false;
+            }
+
+            foreach (string affectedPath in affectedPaths)
+            {
+                if (!RepoWritePathPolicy.TryResolveProjectFile(projectRoot, affectedPath, out _, out error))
+                {
+                    return false;
+                }
+            }
+
+            payload = new RepoApplyPatchPayload(
+                Action: "repo_apply_patch",
+                ProjectRoot: Path.GetFullPath(projectRoot),
+                Patch: patch,
+                AffectedPaths: affectedPaths,
+                Reason: reason,
+                RequestedAtUtc: DateTime.UtcNow);
+            return true;
+        }
+        catch (JsonException)
+        {
+            error = "repo_apply_patch input must be valid JSON, for example {\"patch\":\"diff --git ...\",\"reason\":\"why\"}.";
+            return false;
+        }
+    }
+
+    private static string ReadString(JsonElement root, string propertyName)
+    {
+        return root.TryGetProperty(propertyName, out JsonElement element) && element.ValueKind == JsonValueKind.String
+            ? element.GetString() ?? string.Empty
+            : string.Empty;
+    }
+}
+
 public sealed class RepoCommitChangesRequestTool : IApprovalRequestTool
 {
     private readonly PendingActionService _pendingActionService;
@@ -674,6 +838,153 @@ public static class RepoGitCommitExecutor
     }
 }
 
+public static class RepoPatchApplyExecutor
+{
+    private const int TimeoutMilliseconds = 120_000;
+
+    public static async Task<RepoPatchApplyResult> ApplyAsync(RepoApplyPatchPayload payload, CancellationToken cancellationToken)
+    {
+        string projectRoot = Path.GetFullPath(payload.ProjectRoot);
+        if (!Directory.Exists(projectRoot))
+        {
+            return RepoPatchApplyResult.Fail($"Execution failed: project root does not exist: {projectRoot}");
+        }
+
+        IReadOnlyList<string> affectedPaths = payload.AffectedPaths.Count > 0
+            ? payload.AffectedPaths
+            : RepoPatchPathParser.ExtractAffectedPaths(payload.Patch);
+        if (affectedPaths.Count == 0)
+        {
+            return RepoPatchApplyResult.Fail("Execution failed: repo_apply_patch payload does not contain affected paths.");
+        }
+
+        foreach (string affectedPath in affectedPaths)
+        {
+            if (!RepoWritePathPolicy.TryResolveProjectFile(projectRoot, affectedPath, out _, out string error))
+            {
+                return RepoPatchApplyResult.Fail($"Execution refused: affected path '{affectedPath}' is not allowed. {error}");
+            }
+        }
+
+        string patchFile = Path.Combine(Path.GetTempPath(), $"TelegramMessagingTool_RepoPatch_{Guid.NewGuid():N}.patch");
+        string normalizedPatch = payload.Patch.EndsWith('\n') ? payload.Patch : payload.Patch + Environment.NewLine;
+        await File.WriteAllTextAsync(patchFile, normalizedPatch, cancellationToken);
+        try
+        {
+            ProcessCommandResult check = await RunGitAsync(projectRoot, ["apply", "--check", patchFile], cancellationToken);
+            if (!check.Success)
+            {
+                return RepoPatchApplyResult.Fail("Execution refused: git apply --check failed. " + check.RenderForMessage());
+            }
+
+            ProcessCommandResult apply = await RunGitAsync(projectRoot, ["apply", patchFile], cancellationToken);
+            if (!apply.Success)
+            {
+                return RepoPatchApplyResult.Fail("Execution failed: git apply failed. " + apply.RenderForMessage());
+            }
+
+            return RepoPatchApplyResult.Ok($"Applied patch to {affectedPaths.Count} file(s): {string.Join(", ", affectedPaths)}. Run tests before committing.");
+        }
+        finally
+        {
+            try
+            {
+                File.Delete(patchFile);
+            }
+            catch (IOException)
+            {
+            }
+        }
+    }
+
+    private static async Task<ProcessCommandResult> RunGitAsync(string projectRoot, IReadOnlyList<string> arguments, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "git",
+                WorkingDirectory = projectRoot,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            foreach (string argument in arguments)
+            {
+                startInfo.ArgumentList.Add(argument);
+            }
+
+            using Process process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start git.");
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TimeoutMilliseconds);
+            string output = await process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
+            string error = await process.StandardError.ReadToEndAsync(timeoutCts.Token);
+            await process.WaitForExitAsync(timeoutCts.Token);
+            return new ProcessCommandResult(process.ExitCode, output, error);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return new ProcessCommandResult(-1, string.Empty, "git command timed out.");
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            return new ProcessCommandResult(-1, string.Empty, ex.Message);
+        }
+    }
+}
+
+public static class RepoPatchPathParser
+{
+    public static IReadOnlyList<string> ExtractAffectedPaths(string patch)
+    {
+        var paths = new List<string>();
+        foreach (string rawLine in patch.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            string line = rawLine.TrimEnd();
+            if (line.StartsWith("diff --git ", StringComparison.Ordinal))
+            {
+                string[] parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length >= 4)
+                {
+                    AddPath(paths, StripDiffPrefix(parts[2]));
+                    AddPath(paths, StripDiffPrefix(parts[3]));
+                }
+            }
+            else if (line.StartsWith("--- ", StringComparison.Ordinal) || line.StartsWith("+++ ", StringComparison.Ordinal))
+            {
+                string pathPart = line[4..].Split('\t')[0].Trim();
+                AddPath(paths, StripDiffPrefix(pathPart));
+            }
+        }
+
+        return paths
+            .Where(path => !string.IsNullOrWhiteSpace(path) && !string.Equals(path, "/dev/null", StringComparison.Ordinal))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static string StripDiffPrefix(string path)
+    {
+        string trimmed = path.Trim().Trim('"');
+        if (trimmed.StartsWith("a/", StringComparison.Ordinal) || trimmed.StartsWith("b/", StringComparison.Ordinal))
+        {
+            return trimmed[2..];
+        }
+
+        return trimmed;
+    }
+
+    private static void AddPath(List<string> paths, string path)
+    {
+        if (!string.IsNullOrWhiteSpace(path) && !string.Equals(path, "/dev/null", StringComparison.Ordinal))
+        {
+            paths.Add(path.Replace('\\', '/'));
+        }
+    }
+}
+
 public static class RepoWritePathPolicy
 {
     private static readonly HashSet<string> AllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
@@ -757,6 +1068,23 @@ public sealed record RepoReplaceTextPayload(
         DateTime.MinValue);
 }
 
+public sealed record RepoApplyPatchPayload(
+    string Action,
+    string ProjectRoot,
+    string Patch,
+    IReadOnlyList<string> AffectedPaths,
+    string Reason,
+    DateTime RequestedAtUtc)
+{
+    public static RepoApplyPatchPayload Empty { get; } = new(
+        string.Empty,
+        string.Empty,
+        string.Empty,
+        [],
+        string.Empty,
+        DateTime.MinValue);
+}
+
 public sealed record RepoCommitChangesPayload(
     string Action,
     string ProjectRoot,
@@ -783,6 +1111,13 @@ public sealed record RepoPushChangesPayload(
         string.Empty,
         string.Empty,
         DateTime.MinValue);
+}
+
+public sealed record RepoPatchApplyResult(bool Success, string Message)
+{
+    public static RepoPatchApplyResult Ok(string message) => new(true, message);
+
+    public static RepoPatchApplyResult Fail(string message) => new(false, message);
 }
 
 public sealed record RepoGitCommitResult(bool Success, string Message)

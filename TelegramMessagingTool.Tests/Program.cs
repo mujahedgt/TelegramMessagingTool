@@ -1223,8 +1223,9 @@ await using (var dbContext = new TelegramDbContext())
 
     string repoWriteRoot = Path.Combine(Path.GetTempPath(), $"TelegramMessagingTool_RepoWrite_{Guid.NewGuid():N}");
     Directory.CreateDirectory(repoWriteRoot);
+    await TestProcessRunner.RunAsync("git", ["init"], repoWriteRoot, CancellationToken.None);
     string repoWriteFile = Path.Combine(repoWriteRoot, "SampleFeature.cs");
-    await File.WriteAllTextAsync(repoWriteFile, "public class SampleFeature { public string Name => \"Old\"; }", CancellationToken.None);
+    await File.WriteAllTextAsync(repoWriteFile, "public class SampleFeature { public string Name => \"Old\"; }\n", CancellationToken.None);
     BotSettings repoWriteSettings = adminTestSettings with
     {
         EnableRepoWriteTools = true,
@@ -1270,6 +1271,58 @@ await using (var dbContext = new TelegramDbContext())
         nonAdminUser,
         CancellationToken.None);
     AssertFalse(nonAdminRepoReplaceResult.Success, "repo_replace_text requires admin before creating pending actions");
+
+    AssertTrue(repoApprovalRegistry.TryGet("repo_apply_patch", out IAgentTool? repoApplyPatchTool), "ToolRegistryFactory includes repo_apply_patch when repo write tools are enabled");
+    AssertTrue(repoApplyPatchTool!.RequiresApproval, "repo_apply_patch requires approval");
+    string safePatch = """
+diff --git a/SampleFeature.cs b/SampleFeature.cs
+--- a/SampleFeature.cs
++++ b/SampleFeature.cs
+@@ -1 +1 @@
+-public class SampleFeature { public string Name => "New"; }
++public class SampleFeature { public string Name => "Patched"; }
+""";
+    var directRepoApplyPatchTool = new RepoApplyPatchRequestTool(pendingActionService, repoWriteSettings, repoWriteRoot);
+    ToolResult repoApplyPatchRequest = await directRepoApplyPatchTool.CreatePendingActionAsync(
+        JsonSerializer.Serialize(new { patch = safePatch, reason = "apply safe source patch" }),
+        dbContext,
+        testUser,
+        CancellationToken.None);
+    AssertTrue(repoApplyPatchRequest.Success, "repo_apply_patch creates a pending action for a safe unified diff");
+    PendingAction repoApplyPatchAction = await dbContext.PendingActions.OrderByDescending(x => x.Id).FirstAsync(x => x.ToolName == "repo_apply_patch", CancellationToken.None);
+    AssertEqual(PendingActionStatuses.Pending, repoApplyPatchAction.Status, "repo_apply_patch request is stored as pending");
+    AssertTrue(repoApplyPatchAction.PayloadJson.Contains("SampleFeature.cs"), "repo_apply_patch request stores affected paths in payload JSON");
+    AssertTrue((await File.ReadAllTextAsync(repoWriteFile, CancellationToken.None)).Contains("New"), "repo_apply_patch request does not edit before approval");
+
+    PendingActionDecision repoApplyPatchApproval = await pendingActionService.ApproveAsync(dbContext, testUser, repoApplyPatchAction.Id, CancellationToken.None);
+    AssertTrue(repoApplyPatchApproval.Success, "repo_apply_patch pending action can be approved");
+    PendingActionExecutionResult repoApplyPatchExecution = await pendingActionExecutor.ExecuteApprovedAsync(dbContext, repoApplyPatchApproval.Action!, CancellationToken.None);
+    AssertTrue(repoApplyPatchExecution.Executed, "repo_apply_patch approval executes automatically");
+    AssertTrue(repoApplyPatchExecution.Success, $"repo_apply_patch execution succeeds for a valid unified diff: {repoApplyPatchExecution.Message}");
+    string patchedRepoWriteFile = await File.ReadAllTextAsync(repoWriteFile, CancellationToken.None);
+    AssertTrue(patchedRepoWriteFile.Contains("Patched"), "repo_apply_patch applies the approved diff after approval");
+    AssertFalse(patchedRepoWriteFile.Contains("New"), "repo_apply_patch removes the old text after approval");
+
+    string traversalPatch = """
+diff --git a/../outside.cs b/../outside.cs
+--- a/../outside.cs
++++ b/../outside.cs
+@@ -1 +1 @@
+-old
++new
+""";
+    ToolResult traversalRepoApplyPatchResult = await directRepoApplyPatchTool.CreatePendingActionAsync(
+        JsonSerializer.Serialize(new { patch = traversalPatch, reason = "try traversal" }),
+        dbContext,
+        testUser,
+        CancellationToken.None);
+    AssertFalse(traversalRepoApplyPatchResult.Success, "repo_apply_patch rejects path traversal before creating pending actions");
+    ToolResult nonAdminRepoApplyPatchResult = await directRepoApplyPatchTool.CreatePendingActionAsync(
+        JsonSerializer.Serialize(new { patch = safePatch, reason = "unauthorized patch" }),
+        dbContext,
+        nonAdminUser,
+        CancellationToken.None);
+    AssertFalse(nonAdminRepoApplyPatchResult.Success, "repo_apply_patch requires admin before creating pending actions");
     Directory.Delete(repoWriteRoot, recursive: true);
 
     string repoCommitRoot = Path.Combine(Path.GetTempPath(), $"TelegramMessagingTool_RepoCommit_{Guid.NewGuid():N}");
