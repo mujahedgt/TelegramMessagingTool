@@ -26,6 +26,7 @@ public static class ToolRegistryFactory
             tools.Add(new GitHubListIssuesTool(searchClient, settings.GitHub));
             tools.Add(new GitHubGetIssueTool(searchClient, settings.GitHub));
             tools.Add(new GitHubListPullRequestsTool(searchClient, settings.GitHub));
+            tools.Add(new GitHubGetPullRequestStatusTool(searchClient, settings.GitHub));
         }
 
         if (settings.EnableSafeCommandTools)

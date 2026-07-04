@@ -363,6 +363,47 @@ ToolResult blockedPullRequestsResult = await listPullRequestsTool.ExecuteAsync("
 AssertFalse(blockedPullRequestsResult.Success, "GitHubListPullRequestsTool rejects repositories outside allowlist");
 ToolResult badPullRequestStateResult = await listPullRequestsTool.ExecuteAsync("{\"state\":\"merged\"}", CancellationToken.None);
 AssertFalse(badPullRequestStateResult.Success, "GitHubListPullRequestsTool rejects unsupported PR states");
+
+var fakeGitHubPullRequestStatusHandler = new FakeHttpMessageHandler("""
+{
+  "number": 12,
+  "title": "Add GitHub PR listing",
+  "state": "open",
+  "html_url": "https://github.com/mujahedgt/TelegramMessagingTool/pull/12",
+  "user": { "login": "mujahedgt" },
+  "created_at": "2026-07-04T17:40:00Z",
+  "updated_at": "2026-07-04T17:45:00Z",
+  "draft": false,
+  "mergeable": true,
+  "mergeable_state": "clean",
+  "merged": false,
+  "comments": 1,
+  "review_comments": 2,
+  "commits": 3,
+  "additions": 44,
+  "deletions": 3,
+  "changed_files": 6,
+  "head": { "ref": "feature/github-prs", "sha": "abcdef1234567890" },
+  "base": { "ref": "master" },
+  "requested_reviewers": [
+    { "login": "reviewer1" }
+  ]
+}
+""");
+using var fakeGitHubPullRequestStatusClient = new HttpClient(fakeGitHubPullRequestStatusHandler);
+var getPullRequestStatusTool = new GitHubGetPullRequestStatusTool(fakeGitHubPullRequestStatusClient, gitHubSettings);
+ToolResult pullRequestStatusResult = await getPullRequestStatusTool.ExecuteAsync("{\"number\":12}", CancellationToken.None);
+AssertTrue(pullRequestStatusResult.Success, "GitHubGetPullRequestStatusTool succeeds for default allowed repo");
+AssertTrue(pullRequestStatusResult.Output.Contains("#12 [open] Add GitHub PR listing"), "GitHubGetPullRequestStatusTool renders PR number, state, and title");
+AssertTrue(pullRequestStatusResult.Output.Contains("Mergeable: true (clean)"), "GitHubGetPullRequestStatusTool renders mergeable status");
+AssertTrue(pullRequestStatusResult.Output.Contains("Changes: +44 -3 across 6 files"), "GitHubGetPullRequestStatusTool renders change summary");
+AssertTrue(pullRequestStatusResult.Output.Contains("Requested reviewers: reviewer1"), "GitHubGetPullRequestStatusTool renders requested reviewers");
+AssertFalse(pullRequestStatusResult.Output.Contains("secret-token-for-test"), "GitHubGetPullRequestStatusTool never exposes token value");
+AssertTrue(fakeGitHubPullRequestStatusHandler.LastRequestUri?.ToString().Contains("/repos/mujahedgt/TelegramMessagingTool/pulls/12") == true, "GitHubGetPullRequestStatusTool calls the PR detail endpoint");
+ToolResult blockedPullRequestStatusResult = await getPullRequestStatusTool.ExecuteAsync("{\"owner\":\"other\",\"repo\":\"repo\",\"number\":12}", CancellationToken.None);
+AssertFalse(blockedPullRequestStatusResult.Success, "GitHubGetPullRequestStatusTool rejects repositories outside allowlist");
+ToolResult invalidPullRequestNumberResult = await getPullRequestStatusTool.ExecuteAsync("{\"number\":0}", CancellationToken.None);
+AssertFalse(invalidPullRequestNumberResult.Success, "GitHubGetPullRequestStatusTool rejects invalid PR numbers");
 ToolRegistry gitHubToolRegistry = ToolRegistryFactory.Create(new BotSettings(
     BotToken: "test-token",
     OllamaUrl: "http://localhost:11434/api/chat",
@@ -390,6 +431,7 @@ AssertTrue(gitHubToolRegistry.RenderToolInstructions().Contains("github_repo_inf
 AssertTrue(gitHubToolRegistry.RenderToolInstructions().Contains("github_list_issues"), "ToolRegistryFactory registers GitHub list issues tool when enabled");
 AssertTrue(gitHubToolRegistry.RenderToolInstructions().Contains("github_get_issue"), "ToolRegistryFactory registers GitHub get issue tool when enabled");
 AssertTrue(gitHubToolRegistry.RenderToolInstructions().Contains("github_list_prs"), "ToolRegistryFactory registers GitHub list PRs tool when enabled");
+AssertTrue(gitHubToolRegistry.RenderToolInstructions().Contains("github_get_pr_status"), "ToolRegistryFactory registers GitHub get PR status tool when enabled");
 
 AssertTrue(CommandParser.TryParse("/status", out ParsedCommand parsedStatus), "CommandParser parses bare command");
 AssertEqual("/status", parsedStatus.Command, "CommandParser normalizes bare command token");

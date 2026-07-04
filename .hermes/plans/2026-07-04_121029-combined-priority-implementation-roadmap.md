@@ -218,7 +218,9 @@ Input:
 {"owner":"mujahedgt","repo":"TelegramMessagingTool","state":"open","limit":10}
 ```
 
-## P2.3 Add `github_get_pr_status`
+## P2.3 Add `github_get_pr_status` ✅ Done
+
+**Status:** Implemented `GitHubGetPullRequestStatusTool` as read-only `github_get_pr_status` behind `ENABLE_GITHUB_TOOLS=true`. It uses the configured default repo when owner/repo are omitted, rejects repos outside `GITHUB_ALLOWED_REPOS`, requires a positive PR number, calls `/repos/{owner}/{repo}/pulls/{number}`, never renders `GITHUB_TOKEN`, and returns PR number/title/state, author, branch refs, head SHA, draft/merged/mergeable state, commits, change counts, comment counts, requested reviewers, timestamps, and URL.
 
 **Objective:** Read PR checks/review/status summary.
 
