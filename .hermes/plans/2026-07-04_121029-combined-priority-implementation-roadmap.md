@@ -239,7 +239,9 @@ Rules:
 - Create pending action first.
 - On approval, call GitHub API.
 
-## P2.5 Add `github_comment_issue`
+## P2.5 Add `github_comment_issue` ✅ Done
+
+**Status:** Implemented `GitHubCommentIssueRequestTool` as admin-only, approval-backed `github_comment_issue` behind `ENABLE_GITHUB_WRITE_TOOLS=true`. It validates strict JSON owner/repo/number/body with default repo fallback, rejects repos outside `GITHUB_ALLOWED_REPOS`, stores a pending action without persisting `GITHUB_TOKEN`, and calls GitHub `POST /repos/{owner}/{repo}/issues/{number}/comments` only after `/approve` through `PendingActionExecutor` using the runtime token.
 
 **Objective:** Approval-backed issue comment tool.
 
@@ -452,18 +454,19 @@ Use this exact order unless the user changes priorities:
 6. `github_list_prs`
 7. `github_get_pr_status`
 8. `github_create_issue`
-9. extract `CommandRouterFactory`
-10. extract `AppServicesBuilder`
-11. extract `TelegramUpdateHandler`
-12. extract `ConsoleInputHandler`
-13. plugin abstraction package
-14. trusted plugin loading
-15. structured tool risk metadata
-16. richer pending action previews
-17. secret/danger diff scanning
-18. image OCR/vision improvements
-19. voice transcription provider
-20. observability/evals/docs polish
+9. `github_comment_issue`
+10. extract `CommandRouterFactory`
+11. extract `AppServicesBuilder`
+12. extract `TelegramUpdateHandler`
+13. extract `ConsoleInputHandler`
+14. plugin abstraction package
+15. trusted plugin loading
+16. structured tool risk metadata
+17. richer pending action previews
+18. secret/danger diff scanning
+19. image OCR/vision improvements
+20. voice transcription provider
+21. observability/evals/docs polish
 
 ---
 

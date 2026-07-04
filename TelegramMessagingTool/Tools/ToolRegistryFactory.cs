@@ -32,6 +32,7 @@ public static class ToolRegistryFactory
         if (settings.GitHub.EnableGitHubWriteTools && pendingActionService is not null)
         {
             tools.Add(new GitHubCreateIssueRequestTool(pendingActionService, settings));
+            tools.Add(new GitHubCommentIssueRequestTool(pendingActionService, settings));
         }
 
         if (settings.EnableSafeCommandTools)

@@ -177,6 +177,7 @@ Available tools:
 | `github_list_prs` | No | Optional. Registered only when `ENABLE_GITHUB_TOOLS=true`. Lists pull requests for a repo in `GITHUB_ALLOWED_REPOS` with state, author, branches, draft/ready status, timestamps, and URL |
 | `github_get_pr_status` | No | Optional. Registered only when `ENABLE_GITHUB_TOOLS=true`. Shows one pull request's mergeability, draft/merged state, branch refs, change counts, comments/review comments, requested reviewers, timestamps, and URL |
 | `github_create_issue` | Yes | Optional. Registered only when `ENABLE_GITHUB_WRITE_TOOLS=true` and an approval context is available. Creates a pending action for issue creation in a repo from `GITHUB_ALLOWED_REPOS`; GitHub is called only after `/approve` |
+| `github_comment_issue` | Yes | Optional. Registered only when `ENABLE_GITHUB_WRITE_TOOLS=true` and an approval context is available. Creates a pending action to comment on an issue in a repo from `GITHUB_ALLOWED_REPOS`; GitHub is called only after `/approve` |
 | `git_status` | No | Optional. Registered only when `ENABLE_SAFE_COMMAND_TOOLS=true`. Read-only `git status --short --branch` for `SAFE_COMMAND_PROJECT_ROOT` |
 | `git_diff` | No | Optional. Registered only when `ENABLE_SAFE_COMMAND_TOOLS=true`. Read-only `git diff -- .` for `SAFE_COMMAND_PROJECT_ROOT` |
 | `git_log_recent` | No | Optional. Registered only when `ENABLE_SAFE_COMMAND_TOOLS=true`. Read-only `git log --oneline -5` for `SAFE_COMMAND_PROJECT_ROOT` |
@@ -207,7 +208,9 @@ GitHub tool notes:
 - `github_list_prs` accepts optional JSON like `{ "owner": "mujahedgt", "repo": "TelegramMessagingTool", "state": "open", "limit": 10 }`; state must be `open`, `closed`, or `all`, and limit is clamped to `1..50`.
 - `github_get_pr_status` accepts JSON like `{ "owner": "mujahedgt", "repo": "TelegramMessagingTool", "number": 123 }`; owner/repo can be omitted to use the configured default repo. It reads PR metadata from GitHub's pull request detail endpoint.
 - `GITHUB_TOKEN` is optional for read-only requests and is never rendered in tool output, `/status`, or docs examples.
-- `ENABLE_GITHUB_WRITE_TOOLS=false` by default. `github_create_issue` is admin-only and approval-backed: it validates `GITHUB_ALLOWED_REPOS`, stores a pending action without the token, and calls GitHub only after `/approve <id>` using `GITHUB_TOKEN` from the runtime environment.
+- `ENABLE_GITHUB_WRITE_TOOLS=false` by default. `github_create_issue` and `github_comment_issue` are admin-only and approval-backed: they validate `GITHUB_ALLOWED_REPOS`, store pending actions without the token, and call GitHub only after `/approve <id>` using `GITHUB_TOKEN` from the runtime environment.
+- `github_create_issue` accepts JSON like `{ "owner": "mujahedgt", "repo": "TelegramMessagingTool", "title": "Bug title", "body": "Details", "labels": ["bug"] }`; owner/repo can be omitted to use the configured default repo.
+- `github_comment_issue` accepts JSON like `{ "owner": "mujahedgt", "repo": "TelegramMessagingTool", "number": 123, "body": "Comment text" }`; owner/repo can be omitted to use the configured default repo.
 
 Multi-step tool loop notes:
 

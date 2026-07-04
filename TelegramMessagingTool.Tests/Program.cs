@@ -1012,7 +1012,8 @@ await using (var dbContext = new TelegramDbContext())
     var fakeProcessTerminator = new FakeProcessTerminator();
     var fakeLatestReleaseRestarter = new FakeLatestReleaseRestarter();
     var fakeGitHubIssueCreator = new FakeGitHubIssueCreator();
-    var pendingActionExecutor = new PendingActionExecutor(fakeProcessTerminator, documentStorage, fakeLatestReleaseRestarter, fakeGitHubIssueCreator);
+    var fakeGitHubIssueCommenter = new FakeGitHubIssueCommenter();
+    var pendingActionExecutor = new PendingActionExecutor(fakeProcessTerminator, documentStorage, fakeLatestReleaseRestarter, fakeGitHubIssueCreator, fakeGitHubIssueCommenter);
     var gitHubWriteSettings = adminTestSettings with
     {
         GitHub = gitHubSettings with { EnableGitHubWriteTools = true }
@@ -1020,6 +1021,8 @@ await using (var dbContext = new TelegramDbContext())
     ToolRegistry gitHubWriteApprovalRegistry = ToolRegistryFactory.Create(gitHubWriteSettings, new HttpClient(), pendingActionService);
     AssertTrue(gitHubWriteApprovalRegistry.TryGet("github_create_issue", out IAgentTool? gitHubCreateIssueTool), "ToolRegistryFactory includes github_create_issue when GitHub write tools and pending service are enabled");
     AssertTrue(gitHubCreateIssueTool!.RequiresApproval, "github_create_issue requires approval");
+    AssertTrue(gitHubWriteApprovalRegistry.TryGet("github_comment_issue", out IAgentTool? gitHubCommentIssueTool), "ToolRegistryFactory includes github_comment_issue when GitHub write tools and pending service are enabled");
+    AssertTrue(gitHubCommentIssueTool!.RequiresApproval, "github_comment_issue requires approval");
     var createIssueRequestChatClient = new ScriptedChatClient([
         "{\"type\":\"tool_call\",\"tool\":\"github_create_issue\",\"input\":\"{\\\"title\\\":\\\"Test issue from approval flow\\\",\\\"body\\\":\\\"Created only after approval.\\\",\\\"labels\\\":[\\\"agent-tools\\\"]}\"}"
     ]);
@@ -1056,6 +1059,48 @@ await using (var dbContext = new TelegramDbContext())
         testUser,
         CancellationToken.None);
     AssertFalse(invalidCreateIssueResult.Success, "github_create_issue rejects empty issue titles");
+    var commentIssueRequestChatClient = new ScriptedChatClient([
+        "{\"type\":\"tool_call\",\"tool\":\"github_comment_issue\",\"input\":\"{\\\"number\\\":777,\\\"body\\\":\\\"Approved comment from agent flow.\\\"}\"}"
+    ]);
+    string commentIssueRequestReply = await new AgentRunner(
+        commentIssueRequestChatClient,
+        gitHubWriteApprovalRegistry,
+        searchRoutingClassifier: new OffSearchRoutingClassifier()).RunAsync(
+            [new OllamaMessageDto("user", "request a GitHub issue comment approval")],
+            CancellationToken.None,
+            dbContext,
+            testUser);
+    AssertTrue(commentIssueRequestReply.Contains("Pending action #"), "AgentRunner creates a pending action for github_comment_issue");
+    PendingAction commentIssueAction = await dbContext.PendingActions.OrderByDescending(x => x.Id).FirstAsync(x => x.ToolName == "github_comment_issue", CancellationToken.None);
+    AssertEqual(PendingActionStatuses.Pending, commentIssueAction.Status, "github_comment_issue request is stored as pending");
+    AssertTrue(commentIssueAction.PayloadJson.Contains("Approved comment from agent flow"), "github_comment_issue pending action stores the comment body");
+    AssertEqual(0, fakeGitHubIssueCommenter.CommentCallCount, "github_comment_issue request does not call GitHub before approval");
+    PendingActionDecision commentIssueApproval = await pendingActionService.ApproveAsync(dbContext, testUser, commentIssueAction.Id, CancellationToken.None);
+    PendingActionExecutionResult commentIssueExecution = await pendingActionExecutor.ExecuteApprovedAsync(dbContext, commentIssueApproval.Action!, CancellationToken.None);
+    AssertTrue(commentIssueExecution.Executed, "github_comment_issue approval executes automatically");
+    AssertTrue(commentIssueExecution.Success, "github_comment_issue execution succeeds through injected commenter");
+    AssertEqual(1, fakeGitHubIssueCommenter.CommentCallCount, "github_comment_issue calls GitHub commenter once after approval");
+    AssertEqual(777, fakeGitHubIssueCommenter.LastPayload?.Number, "github_comment_issue passes issue number to commenter");
+    AssertTrue((await dbContext.PendingActions.FindAsync([commentIssueAction.Id], CancellationToken.None))!.DecisionNote.Contains("#777"), "github_comment_issue records comment URL in DecisionNote");
+    var directCommentIssueTool = new GitHubCommentIssueRequestTool(pendingActionService, gitHubWriteSettings);
+    ToolResult nonAdminCommentIssueResult = await directCommentIssueTool.CreatePendingActionAsync(
+        "{\"number\":777,\"body\":\"Unauthorized comment\"}",
+        dbContext,
+        nonAdminUser,
+        CancellationToken.None);
+    AssertFalse(nonAdminCommentIssueResult.Success, "github_comment_issue requires admin before creating pending actions");
+    ToolResult invalidCommentIssueResult = await directCommentIssueTool.CreatePendingActionAsync(
+        "{\"number\":0,\"body\":\"Nope\"}",
+        dbContext,
+        testUser,
+        CancellationToken.None);
+    AssertFalse(invalidCommentIssueResult.Success, "github_comment_issue rejects invalid issue numbers");
+    ToolResult emptyCommentIssueResult = await directCommentIssueTool.CreatePendingActionAsync(
+        "{\"number\":777,\"body\":\"\"}",
+        dbContext,
+        testUser,
+        CancellationToken.None);
+    AssertFalse(emptyCommentIssueResult.Success, "github_comment_issue rejects empty comment bodies");
     var agentTaskService = new AgentTaskService();
     var documentIndexingService = new DocumentIndexingService(documentStorage);
     var documentRetrievalService = new DocumentRetrievalService(testEmbeddingService);
@@ -2326,6 +2371,22 @@ sealed class FakeGitHubIssueCreator : IGitHubIssueCreator
             777,
             "https://github.com/mujahedgt/TelegramMessagingTool/issues/777",
             "Created GitHub issue #777: https://github.com/mujahedgt/TelegramMessagingTool/issues/777"));
+    }
+}
+
+sealed class FakeGitHubIssueCommenter : IGitHubIssueCommenter
+{
+    public int CommentCallCount { get; private set; }
+
+    public GitHubCommentIssuePayload? LastPayload { get; private set; }
+
+    public Task<GitHubIssueCommentResult> CommentAsync(GitHubCommentIssuePayload payload, CancellationToken cancellationToken)
+    {
+        CommentCallCount++;
+        LastPayload = payload;
+        return Task.FromResult(GitHubIssueCommentResult.Ok(
+            "https://github.com/mujahedgt/TelegramMessagingTool/issues/777#issuecomment-123",
+            "Created GitHub issue comment on #777: https://github.com/mujahedgt/TelegramMessagingTool/issues/777#issuecomment-123"));
     }
 }
 

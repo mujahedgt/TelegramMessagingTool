@@ -14,17 +14,20 @@ public sealed class PendingActionExecutor
     private readonly DocumentStorageService _documentStorage;
     private readonly ILatestReleaseRestarter _latestReleaseRestarter;
     private readonly IGitHubIssueCreator _gitHubIssueCreator;
+    private readonly IGitHubIssueCommenter _gitHubIssueCommenter;
 
     public PendingActionExecutor(
         IProcessTerminator processTerminator,
         DocumentStorageService documentStorage,
         ILatestReleaseRestarter? latestReleaseRestarter = null,
-        IGitHubIssueCreator? gitHubIssueCreator = null)
+        IGitHubIssueCreator? gitHubIssueCreator = null,
+        IGitHubIssueCommenter? gitHubIssueCommenter = null)
     {
         _processTerminator = processTerminator;
         _documentStorage = documentStorage;
         _latestReleaseRestarter = latestReleaseRestarter ?? new SystemLatestReleaseRestarter();
         _gitHubIssueCreator = gitHubIssueCreator ?? new SystemGitHubIssueCreator();
+        _gitHubIssueCommenter = gitHubIssueCommenter ?? new SystemGitHubIssueCommenter();
     }
 
     public async Task<PendingActionExecutionResult> ExecuteApprovedAsync(
@@ -48,6 +51,7 @@ public sealed class PendingActionExecutor
             "repo_commit_changes" => await ExecuteRepoCommitChangesAsync(action, cancellationToken),
             "repo_push_changes" => await ExecuteRepoPushChangesAsync(action, cancellationToken),
             "github_create_issue" => await ExecuteGitHubCreateIssueAsync(action, cancellationToken),
+            "github_comment_issue" => await ExecuteGitHubCommentIssueAsync(action, cancellationToken),
             _ => PendingActionExecutionResult.Skipped($"No automatic execution is registered for action type '{action.ToolName}'.")
         };
 
@@ -431,6 +435,49 @@ public sealed class PendingActionExecutor
         catch (JsonException ex)
         {
             error = $"Execution failed: invalid github_create_issue payload JSON. {ex.Message}";
+            return false;
+        }
+    }
+
+    private async Task<PendingActionExecutionResult> ExecuteGitHubCommentIssueAsync(
+        PendingAction action,
+        CancellationToken cancellationToken)
+    {
+        if (!TryReadGitHubCommentIssuePayload(action.PayloadJson, out GitHubCommentIssuePayload payload, out string error))
+        {
+            return PendingActionExecutionResult.Failed(error);
+        }
+
+        GitHubIssueCommentResult commentResult = await _gitHubIssueCommenter.CommentAsync(payload, cancellationToken);
+        return commentResult.Success
+            ? PendingActionExecutionResult.Completed(commentResult.Message)
+            : PendingActionExecutionResult.Failed(commentResult.Message);
+    }
+
+    private static bool TryReadGitHubCommentIssuePayload(string payloadJson, out GitHubCommentIssuePayload payload, out string error)
+    {
+        payload = GitHubCommentIssuePayload.Empty;
+        error = string.Empty;
+
+        try
+        {
+            GitHubCommentIssuePayload? parsed = JsonSerializer.Deserialize<GitHubCommentIssuePayload>(payloadJson, JsonOptions);
+            if (parsed is null
+                || string.IsNullOrWhiteSpace(parsed.Owner)
+                || string.IsNullOrWhiteSpace(parsed.Repo)
+                || parsed.Number <= 0
+                || string.IsNullOrWhiteSpace(parsed.Body))
+            {
+                error = "Execution failed: github_comment_issue payload is missing owner, repo, number, or body.";
+                return false;
+            }
+
+            payload = parsed;
+            return true;
+        }
+        catch (JsonException ex)
+        {
+            error = $"Execution failed: invalid github_comment_issue payload JSON. {ex.Message}";
             return false;
         }
     }
