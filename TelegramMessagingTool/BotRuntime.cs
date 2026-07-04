@@ -41,6 +41,8 @@ public sealed record BotSettings(
 
     public bool EnableAudioTranscription { get; init; }
 
+    public bool EnableRepoWriteTools { get; init; }
+
     public GitHubSettings GitHub { get; init; } = GitHubSettings.Disabled;
 }
 
@@ -98,6 +100,7 @@ public static class BotConfiguration
             OllamaVoiceModel = NormalizeModelRoute(Environment.GetEnvironmentVariable("OLLAMA_MODEL_VOICE"), ollamaModel),
             EnableImageVision = IsEnabled(Environment.GetEnvironmentVariable("ENABLE_IMAGE_VISION"), defaultValue: false),
             EnableAudioTranscription = IsEnabled(Environment.GetEnvironmentVariable("ENABLE_AUDIO_TRANSCRIPTION"), defaultValue: false),
+            EnableRepoWriteTools = IsEnabled(Environment.GetEnvironmentVariable("ENABLE_REPO_WRITE_TOOLS"), defaultValue: false),
             GitHub = GitHubSettings.LoadFromEnvironment()
         };
     }

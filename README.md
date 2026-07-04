@@ -72,7 +72,8 @@ Configuration is read from environment variables.
 | `ENABLE_IMAGE_VISION` | No | `false` | If true, `/describeimage <id>` sends the selected sandboxed image to the configured local Ollama image route for a description. Keep false to return metadata only. |
 | `ENABLE_AUDIO_TRANSCRIPTION` | No | `false` | Reserved gate for `/transcribe <id>`. Keep false until a trusted local Whisper/audio transcription provider is configured; the current command returns metadata/provider-readiness only. |
 | `ENABLE_SAFE_COMMAND_TOOLS` | No | `false` | If true, registers fixed safe command tools: `git_status`, `git_diff`, `git_log_recent`, `run_dotnet_tests`, `publish_release`, and `restart_latest_bot`. No arbitrary shell access is exposed. `run_dotnet_tests` accepts only `{"target":"helper-tests"}` and runs the helper test project. `publish_release` and `restart_latest_bot` only create high-risk pending approval requests; they do not execute release/restart directly. |
-| `SAFE_COMMAND_PROJECT_ROOT` | No | current working directory | Project root used by safe command tools. Commands run with fixed executable/argument lists under this directory. |
+| `SAFE_COMMAND_PROJECT_ROOT` | No | current working directory | Project root used by safe command tools and repo write approval tools. Commands run with fixed executable/argument lists under this directory. |
+| `ENABLE_REPO_WRITE_TOOLS` | No | `false` | If true, registers approval-backed repository write tools such as `repo_replace_text`. These tools require admin use, create pending actions first, validate paths under `SAFE_COMMAND_PROJECT_ROOT`, and execute only after `/approve`. |
 | `ENABLE_PLUGINS` | No | `false` | If true, enables plugin manifest discovery from `PLUGIN_DIRECTORY`. This phase scans manifests only and does not load plugin assemblies. Use `/plugins` for read-only manifest diagnostics. |
 | `PLUGIN_DIRECTORY` | No | `<current working directory>/plugins` | Directory scanned by `/plugins` for plugin folders containing `plugin.json`. Plugin assemblies are trusted OS-level code and should only come from trusted sources before loading is enabled. |
 | `ENABLE_GITHUB_TOOLS` | No | `false` | If true, registers read-only GitHub tools such as `github_repo_info`. Keep false unless you want the model to query GitHub. |
@@ -106,6 +107,7 @@ export ENABLE_IMAGE_VISION='false'
 export ENABLE_AUDIO_TRANSCRIPTION='false'
 export ENABLE_SAFE_COMMAND_TOOLS='false'
 export SAFE_COMMAND_PROJECT_ROOT='/c/temp/TelegramMessagingTool'
+export ENABLE_REPO_WRITE_TOOLS='false'
 export ENABLE_PLUGINS='false'
 export PLUGIN_DIRECTORY='/c/temp/TelegramMessagingTool/plugins'
 export ENABLE_GITHUB_TOOLS='false'
@@ -172,6 +174,10 @@ Available tools:
 | `git_status` | No | Optional. Registered only when `ENABLE_SAFE_COMMAND_TOOLS=true`. Read-only `git status --short --branch` for `SAFE_COMMAND_PROJECT_ROOT` |
 | `git_diff` | No | Optional. Registered only when `ENABLE_SAFE_COMMAND_TOOLS=true`. Read-only `git diff -- .` for `SAFE_COMMAND_PROJECT_ROOT` |
 | `git_log_recent` | No | Optional. Registered only when `ENABLE_SAFE_COMMAND_TOOLS=true`. Read-only `git log --oneline -5` for `SAFE_COMMAND_PROJECT_ROOT` |
+| `run_dotnet_tests` | No | Optional. Registered only when `ENABLE_SAFE_COMMAND_TOOLS=true`. Fixed helper test command only; input must be `{"target":"helper-tests"}` |
+| `publish_release` | Yes | Optional. Registered only when `ENABLE_SAFE_COMMAND_TOOLS=true` and an approval context is available. Creates a pending action only |
+| `restart_latest_bot` | Yes | Optional. Registered only when `ENABLE_SAFE_COMMAND_TOOLS=true` and an approval context is available. Creates a pending action only |
+| `repo_replace_text` | Yes | Optional. Registered only when `ENABLE_REPO_WRITE_TOOLS=true` and an approval context is available. Replaces one exact text block in an allowed project text file after `/approve` |
 
 Search behavior notes:
 
@@ -200,9 +206,13 @@ Safe command tool notes:
 
 - `ENABLE_SAFE_COMMAND_TOOLS=false` by default.
 - The first safe command tools are read-only Git inspection tools only: `git_status`, `git_diff`, and `git_log_recent`.
-- These tools use fixed executable/argument lists and do not expose arbitrary shell, PowerShell, cmd, bash, file write, delete, commit, push, release, or restart access.
+- `run_dotnet_tests` is a fixed helper-test runner only; it does not accept arbitrary projects, filters, commands, or arguments.
+- Release/restart request tools create pending actions only and do not execute directly.
+- `ENABLE_REPO_WRITE_TOOLS=false` by default.
+- `repo_replace_text` is the first repo-write tool. It is admin-only, approval-backed, restricted to source/docs/config text files under `SAFE_COMMAND_PROJECT_ROOT`, rejects path traversal/generated/runtime folders, and replaces exactly one matching text block only after `/approve`.
+- The first repo-write version does not commit or push automatically. Run tests and review `git diff` before committing.
 
-Risky tools such as shell, file write/delete, database mutation, outbound messaging, release, restart, commit, push, or process control are intentionally not included as model tools yet. Use the approval flow before adding dangerous tools.
+Risky tools such as arbitrary shell, broad file write/delete, database mutation, outbound messaging, direct commit/push, or unrestricted process control are intentionally not exposed as model tools. Use the approval flow before adding dangerous tools.
 
 ## P2 image and voice harness planning
 

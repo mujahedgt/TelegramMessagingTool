@@ -27,7 +27,7 @@ Main improvement themes:
 
 1. Replace hardcoded heuristics/config with typed settings and classifier services.
 2. Make the tool system extensible through plugins, but keep strict safety gates.
-3. Add controlled execution capabilities, not arbitrary shell access.
+3. Add controlled execution capabilities, not arbitrary shell access. ✅ Started with fixed safe command tools and approval-backed `repo_replace_text`.
 4. Add GitHub as a first-class workflow integration.
 5. Improve maintainability by extracting large `Program.cs` wiring into runtime composition services.
 
@@ -372,6 +372,28 @@ Tools:
 - `restart_latest_bot`
 
 These create pending actions and require admin approval. Direct execution remains intentionally unimplemented until a later reviewable executor patch.
+
+### Task 1.5 Add approval-backed repository text replacement ✅ Done
+
+**Status:** Added `ENABLE_REPO_WRITE_TOOLS=false` and the first repo-write tool, `repo_replace_text`. The tool is admin-only, requires a pending-action context, validates strict JSON input, restricts file paths to source/docs/config text files under `SAFE_COMMAND_PROJECT_ROOT`, rejects traversal/generated/runtime folders, creates a high-risk pending action first, and only edits the file after `/approve` through `PendingActionExecutor`.
+
+Tool:
+
+```text
+repo_replace_text
+```
+
+Input:
+
+```json
+{"path":"relative/file.cs","old_text":"existing exact text","new_text":"replacement text","reason":"why"}
+```
+
+Next repo-mode stages:
+
+1. Add `repo_run_tests`/reuse `run_dotnet_tests` in the agent flow after an approved edit.
+2. Add approval-backed `repo_commit_changes` with strict message/body schema and clean diff checks.
+3. Add optional approval-backed push only after commit/audit behavior is stable.
 
 ---
 

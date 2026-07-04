@@ -82,6 +82,7 @@ string? previousConversationMaxHistory = Environment.GetEnvironmentVariable("CON
 string? previousSearchRoutingMode = Environment.GetEnvironmentVariable("SEARCH_ROUTING_MODE");
 string? previousEnableSafeCommandTools = Environment.GetEnvironmentVariable("ENABLE_SAFE_COMMAND_TOOLS");
 string? previousSafeCommandProjectRoot = Environment.GetEnvironmentVariable("SAFE_COMMAND_PROJECT_ROOT");
+string? previousEnableRepoWriteTools = Environment.GetEnvironmentVariable("ENABLE_REPO_WRITE_TOOLS");
 string? previousEnablePlugins = Environment.GetEnvironmentVariable("ENABLE_PLUGINS");
 string? previousPluginDirectory = Environment.GetEnvironmentVariable("PLUGIN_DIRECTORY");
 string? previousEnableGitHubTools = Environment.GetEnvironmentVariable("ENABLE_GITHUB_TOOLS");
@@ -118,6 +119,12 @@ try
     AssertTrue(safeCommandEnvironmentSettings.EnableSafeCommandTools, "LoadFromEnvironment parses ENABLE_SAFE_COMMAND_TOOLS truthy values");
     AssertEqual(Path.GetFullPath(Directory.GetCurrentDirectory()), safeCommandEnvironmentSettings.SafeCommandProjectRoot, "LoadFromEnvironment reads SAFE_COMMAND_PROJECT_ROOT as a full path");
 
+    Environment.SetEnvironmentVariable("ENABLE_REPO_WRITE_TOOLS", null);
+    AssertFalse(BotConfiguration.LoadFromEnvironment().EnableRepoWriteTools, "LoadFromEnvironment defaults repo write tools to disabled");
+
+    Environment.SetEnvironmentVariable("ENABLE_REPO_WRITE_TOOLS", "yes");
+    AssertTrue(BotConfiguration.LoadFromEnvironment().EnableRepoWriteTools, "LoadFromEnvironment parses ENABLE_REPO_WRITE_TOOLS truthy values");
+
     Environment.SetEnvironmentVariable("ENABLE_PLUGINS", null);
     AssertFalse(BotConfiguration.LoadFromEnvironment().EnablePlugins, "LoadFromEnvironment defaults plugins to disabled");
 
@@ -152,6 +159,7 @@ finally
     Environment.SetEnvironmentVariable("SEARCH_ROUTING_MODE", previousSearchRoutingMode);
     Environment.SetEnvironmentVariable("ENABLE_SAFE_COMMAND_TOOLS", previousEnableSafeCommandTools);
     Environment.SetEnvironmentVariable("SAFE_COMMAND_PROJECT_ROOT", previousSafeCommandProjectRoot);
+    Environment.SetEnvironmentVariable("ENABLE_REPO_WRITE_TOOLS", previousEnableRepoWriteTools);
     Environment.SetEnvironmentVariable("ENABLE_PLUGINS", previousEnablePlugins);
     Environment.SetEnvironmentVariable("PLUGIN_DIRECTORY", previousPluginDirectory);
     Environment.SetEnvironmentVariable("ENABLE_GITHUB_TOOLS", previousEnableGitHubTools);
@@ -524,8 +532,18 @@ AssertTrue(gitStatusResult.Output.Contains("git status", StringComparison.Ordina
 ToolResult invalidTestTargetResult = await runDotnetTestsTool.ExecuteAsync("{\"target\":\"all\"}", CancellationToken.None);
 AssertFalse(invalidTestTargetResult.Success, "run_dotnet_tests rejects unsupported test targets");
 AssertTrue(invalidTestTargetResult.Output.Contains("helper-tests", StringComparison.OrdinalIgnoreCase), "run_dotnet_tests rejection explains the allowed target");
-ToolResult malformedTestTargetResult = await runDotnetTestsTool.ExecuteAsync("helper-tests", CancellationToken.None);
+    ToolResult malformedTestTargetResult = await runDotnetTestsTool.ExecuteAsync("helper-tests", CancellationToken.None);
 AssertFalse(malformedTestTargetResult.Success, "run_dotnet_tests rejects non-JSON input");
+ToolRegistry repoWriteDisabledRegistry = ToolRegistryFactory.Create(searchDisabledSettings, new HttpClient(), new PendingActionService());
+AssertFalse(repoWriteDisabledRegistry.TryGet("repo_replace_text", out _), "ToolRegistryFactory excludes repo write tools by default");
+ToolRegistry repoWriteEnabledRegistry = ToolRegistryFactory.Create(searchDisabledSettings with
+{
+    EnableRepoWriteTools = true,
+    SafeCommandProjectRoot = Directory.GetCurrentDirectory()
+}, new HttpClient(), new PendingActionService());
+AssertTrue(repoWriteEnabledRegistry.TryGet("repo_replace_text", out IAgentTool? repoReplaceTextTool), "ToolRegistryFactory includes repo_replace_text when repo write tools are enabled");
+AssertTrue(repoReplaceTextTool!.RequiresApproval, "repo_replace_text requires approval before editing files");
+AssertTrue(repoWriteEnabledRegistry.RenderToolInstructions().Contains("repo_replace_text"), "ToolRegistry instructions document repo_replace_text when enabled");
 ToolRegistry enabledSearchRegistry = ToolRegistryFactory.Create(searchEnabledSettings, new HttpClient());
 AssertTrue(enabledSearchRegistry.TryGet("online_search", out _), "ToolRegistryFactory includes online_search only when enabled");
 AssertTrue(enabledSearchRegistry.RenderToolInstructions().Contains("online_search"), "Enabled online_search is advertised in model instructions");
@@ -1147,6 +1165,57 @@ await using (var dbContext = new TelegramDbContext())
     PendingActionExecutionResult publishExecution = await pendingActionExecutor.ExecuteApprovedAsync(dbContext, publishApproval.Action!, CancellationToken.None);
     AssertFalse(publishExecution.Executed, "publish_release approval does not execute automatically yet");
     AssertTrue(publishExecution.Message.Contains("No automatic execution", StringComparison.OrdinalIgnoreCase), "publish_release approval explains that no executor is registered");
+
+    string repoWriteRoot = Path.Combine(Path.GetTempPath(), $"TelegramMessagingTool_RepoWrite_{Guid.NewGuid():N}");
+    Directory.CreateDirectory(repoWriteRoot);
+    string repoWriteFile = Path.Combine(repoWriteRoot, "SampleFeature.cs");
+    await File.WriteAllTextAsync(repoWriteFile, "public class SampleFeature { public string Name => \"Old\"; }", CancellationToken.None);
+    BotSettings repoWriteSettings = adminTestSettings with
+    {
+        EnableRepoWriteTools = true,
+        SafeCommandProjectRoot = repoWriteRoot
+    };
+    ToolRegistry repoApprovalRegistry = ToolRegistryFactory.Create(repoWriteSettings, new HttpClient(), pendingActionService);
+    var repoWriteChatClient = new ScriptedChatClient([
+        "{\"type\":\"tool_call\",\"tool\":\"repo_replace_text\",\"input\":\"{\\\"path\\\":\\\"SampleFeature.cs\\\",\\\"old_text\\\":\\\"Old\\\",\\\"new_text\\\":\\\"New\\\",\\\"reason\\\":\\\"rename sample feature marker\\\"}\"}"
+    ]);
+    string repoWriteReply = await new AgentRunner(
+        repoWriteChatClient,
+        repoApprovalRegistry,
+        searchRoutingClassifier: new OffSearchRoutingClassifier()).RunAsync(
+            [new OllamaMessageDto("user", "request a repository text replacement")],
+            CancellationToken.None,
+            dbContext,
+            testUser);
+    AssertTrue(repoWriteReply.Contains("Pending action #"), "AgentRunner creates a pending action for repo_replace_text");
+    PendingAction repoReplaceAction = await dbContext.PendingActions.OrderByDescending(x => x.Id).FirstAsync(x => x.ToolName == "repo_replace_text", CancellationToken.None);
+    AssertEqual(PendingActionStatuses.Pending, repoReplaceAction.Status, "repo_replace_text request is stored as pending");
+    AssertTrue(repoReplaceAction.PayloadJson.Contains("SampleFeature.cs"), "repo_replace_text request stores the relative path");
+    AssertTrue((await File.ReadAllTextAsync(repoWriteFile, CancellationToken.None)).Contains("Old"), "repo_replace_text request does not edit before approval");
+
+    PendingActionDecision repoWriteApproval = await pendingActionService.ApproveAsync(dbContext, testUser, repoReplaceAction.Id, CancellationToken.None);
+    AssertTrue(repoWriteApproval.Success, "repo_replace_text pending action can be approved");
+    PendingActionExecutionResult repoWriteExecution = await pendingActionExecutor.ExecuteApprovedAsync(dbContext, repoWriteApproval.Action!, CancellationToken.None);
+    AssertTrue(repoWriteExecution.Executed, "repo_replace_text approval executes automatically");
+    AssertTrue(repoWriteExecution.Success, "repo_replace_text execution succeeds");
+    string updatedRepoWriteFile = await File.ReadAllTextAsync(repoWriteFile, CancellationToken.None);
+    AssertTrue(updatedRepoWriteFile.Contains("New"), "repo_replace_text replaces old text after approval");
+    AssertFalse(updatedRepoWriteFile.Contains("Old"), "repo_replace_text removes the old text after approval");
+
+    var directRepoReplaceTool = new RepoReplaceTextRequestTool(pendingActionService, repoWriteSettings, repoWriteRoot);
+    ToolResult traversalRepoReplaceResult = await directRepoReplaceTool.CreatePendingActionAsync(
+        "{\"path\":\"../outside.cs\",\"old_text\":\"x\",\"new_text\":\"y\"}",
+        dbContext,
+        testUser,
+        CancellationToken.None);
+    AssertFalse(traversalRepoReplaceResult.Success, "repo_replace_text rejects path traversal before creating pending actions");
+    ToolResult nonAdminRepoReplaceResult = await directRepoReplaceTool.CreatePendingActionAsync(
+        "{\"path\":\"SampleFeature.cs\",\"old_text\":\"New\",\"new_text\":\"Next\"}",
+        dbContext,
+        nonAdminUser,
+        CancellationToken.None);
+    AssertFalse(nonAdminRepoReplaceResult.Success, "repo_replace_text requires admin before creating pending actions");
+    Directory.Delete(repoWriteRoot, recursive: true);
 
     AssertTrue(PendingActionCallbackParser.TryParse("act:approve:123", out PendingActionCallback approveCallback), "PendingActionCallbackParser parses approve callback");
     AssertEqual(PendingActionCallbackVerb.Approve, approveCallback.Verb, "PendingActionCallbackParser reads approve verb");

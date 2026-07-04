@@ -40,6 +40,11 @@ public static class ToolRegistryFactory
             }
         }
 
+        if (settings.EnableRepoWriteTools && pendingActionService is not null)
+        {
+            tools.Add(new RepoReplaceTextRequestTool(pendingActionService, settings, settings.SafeCommandProjectRoot));
+        }
+
         return new ToolRegistry(tools);
     }
 }

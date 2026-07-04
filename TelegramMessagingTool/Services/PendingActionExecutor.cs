@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using TelegramMessagingTool.Data;
 using TelegramMessagingTool.Models;
+using TelegramMessagingTool.Tools.CommandExecution;
 
 namespace TelegramMessagingTool.Services;
 
@@ -31,6 +32,7 @@ public sealed class PendingActionExecutor
         {
             "kill_process" => ExecuteKillProcess(action),
             "delete_file" => await ExecuteDeleteFileAsync(dbContext, action, cancellationToken),
+            "repo_replace_text" => await ExecuteRepoReplaceTextAsync(action, cancellationToken),
             _ => PendingActionExecutionResult.Skipped($"No automatic execution is registered for action type '{action.ToolName}'.")
         };
 
@@ -80,6 +82,74 @@ public sealed class PendingActionExecutor
         dbContext.UploadedFiles.Remove(file);
         await dbContext.SaveChangesAsync(cancellationToken);
         return PendingActionExecutionResult.Completed($"Deleted file #{fileId}: {fileName}. {deletionResult.Message}");
+    }
+
+    private static async Task<PendingActionExecutionResult> ExecuteRepoReplaceTextAsync(
+        PendingAction action,
+        CancellationToken cancellationToken)
+    {
+        if (!TryReadRepoReplaceTextPayload(action.PayloadJson, out RepoReplaceTextPayload payload, out string error))
+        {
+            return PendingActionExecutionResult.Failed(error);
+        }
+
+        if (!RepoWritePathPolicy.TryResolveProjectFile(payload.ProjectRoot, payload.Path, out string resolvedPath, out error))
+        {
+            return PendingActionExecutionResult.Failed($"Execution refused: {error}");
+        }
+
+        if (!string.Equals(Path.GetFullPath(payload.FullPath), resolvedPath, StringComparison.OrdinalIgnoreCase))
+        {
+            return PendingActionExecutionResult.Failed("Execution refused: payload full path does not match the resolved safe project path.");
+        }
+
+        if (!File.Exists(resolvedPath))
+        {
+            return PendingActionExecutionResult.Failed($"Execution failed: file does not exist: {payload.Path}");
+        }
+
+        string content = await File.ReadAllTextAsync(resolvedPath, cancellationToken);
+        int firstIndex = content.IndexOf(payload.OldText, StringComparison.Ordinal);
+        if (firstIndex < 0)
+        {
+            return PendingActionExecutionResult.Failed($"Execution failed: old_text was not found in {payload.Path}.");
+        }
+
+        if (content.IndexOf(payload.OldText, firstIndex + payload.OldText.Length, StringComparison.Ordinal) >= 0)
+        {
+            return PendingActionExecutionResult.Failed($"Execution refused: old_text appears more than once in {payload.Path}. Use a more specific replacement.");
+        }
+
+        string updated = content.Replace(payload.OldText, payload.NewText, StringComparison.Ordinal);
+        await File.WriteAllTextAsync(resolvedPath, updated, cancellationToken);
+        return PendingActionExecutionResult.Completed($"Replaced text in {payload.Path}. Run tests before committing.");
+    }
+
+    private static bool TryReadRepoReplaceTextPayload(string payloadJson, out RepoReplaceTextPayload payload, out string error)
+    {
+        payload = RepoReplaceTextPayload.Empty;
+        error = string.Empty;
+
+        try
+        {
+            RepoReplaceTextPayload? parsed = JsonSerializer.Deserialize<RepoReplaceTextPayload>(payloadJson);
+            if (parsed is null
+                || string.IsNullOrWhiteSpace(parsed.ProjectRoot)
+                || string.IsNullOrWhiteSpace(parsed.Path)
+                || string.IsNullOrEmpty(parsed.OldText))
+            {
+                error = "Execution failed: repo_replace_text payload is missing project_root, path, or old_text.";
+                return false;
+            }
+
+            payload = parsed;
+            return true;
+        }
+        catch (JsonException ex)
+        {
+            error = $"Execution failed: invalid repo_replace_text payload JSON. {ex.Message}";
+            return false;
+        }
     }
 
     private static bool TryReadFileId(string payloadJson, out int fileId, out string error)
