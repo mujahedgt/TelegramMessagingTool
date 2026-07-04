@@ -32,6 +32,7 @@ public sealed class PendingActionExecutor
         {
             "kill_process" => ExecuteKillProcess(action),
             "delete_file" => await ExecuteDeleteFileAsync(dbContext, action, cancellationToken),
+            "publish_release" => await ExecutePublishReleaseAsync(action, cancellationToken),
             "repo_replace_text" => await ExecuteRepoReplaceTextAsync(action, cancellationToken),
             "repo_commit_changes" => await ExecuteRepoCommitChangesAsync(action, cancellationToken),
             "repo_push_changes" => await ExecuteRepoPushChangesAsync(action, cancellationToken),
@@ -84,6 +85,61 @@ public sealed class PendingActionExecutor
         dbContext.UploadedFiles.Remove(file);
         await dbContext.SaveChangesAsync(cancellationToken);
         return PendingActionExecutionResult.Completed($"Deleted file #{fileId}: {fileName}. {deletionResult.Message}");
+    }
+
+    private static async Task<PendingActionExecutionResult> ExecutePublishReleaseAsync(
+        PendingAction action,
+        CancellationToken cancellationToken)
+    {
+        if (!TryReadPublishReleasePayload(action.PayloadJson, out PublishReleasePayload payload, out string error))
+        {
+            return PendingActionExecutionResult.Failed(error);
+        }
+
+        ReleasePublishResult publishResult = await ReleasePublishExecutor.PublishAsync(payload, cancellationToken);
+        return publishResult.Success
+            ? PendingActionExecutionResult.Completed(publishResult.Message)
+            : PendingActionExecutionResult.Failed(publishResult.Message);
+    }
+
+    private static bool TryReadPublishReleasePayload(string payloadJson, out PublishReleasePayload payload, out string error)
+    {
+        payload = PublishReleasePayload.Empty;
+        error = string.Empty;
+
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(payloadJson);
+            JsonElement root = document.RootElement;
+            string action = ReadPayloadString(root, "action");
+            string projectRoot = ReadPayloadString(root, "project_root");
+            if (string.IsNullOrWhiteSpace(projectRoot))
+            {
+                projectRoot = ReadPayloadString(root, "projectRoot");
+            }
+
+            string reason = ReadPayloadString(root, "reason");
+            if (string.IsNullOrWhiteSpace(projectRoot))
+            {
+                error = "Execution failed: publish_release payload is missing project_root.";
+                return false;
+            }
+
+            payload = new PublishReleasePayload(action, projectRoot, reason, DateTime.UtcNow);
+            return true;
+        }
+        catch (JsonException ex)
+        {
+            error = $"Execution failed: invalid publish_release payload JSON. {ex.Message}";
+            return false;
+        }
+    }
+
+    private static string ReadPayloadString(JsonElement root, string propertyName)
+    {
+        return root.TryGetProperty(propertyName, out JsonElement element) && element.ValueKind == JsonValueKind.String
+            ? element.GetString() ?? string.Empty
+            : string.Empty;
     }
 
     private static async Task<PendingActionExecutionResult> ExecuteRepoReplaceTextAsync(

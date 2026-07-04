@@ -127,7 +127,9 @@ dotnet list TelegramMessagingTool/TelegramMessagingTool.csproj package --vulnera
 - Executor uses fixed `git push origin <branch>` with no shell/user args.
 - Refuses dirty tree.
 
-## P1.3 Execute `publish_release` after approval
+## P1.3 Execute `publish_release` after approval ✅ Done
+
+**Status:** Implemented approved execution for `publish_release`. It runs fixed `dotnet publish` for `TelegramMessagingTool/TelegramMessagingTool.csproj`, writes to a timestamped `release/TelegramMessagingTool-yyyyMMdd-HHmmss` folder, updates `.latest-release` only after publish success, records the release path in `DecisionNote`, and does not restart the bot.
 
 **Objective:** Make existing `publish_release` pending action actually publish a timestamped release after approval.
 

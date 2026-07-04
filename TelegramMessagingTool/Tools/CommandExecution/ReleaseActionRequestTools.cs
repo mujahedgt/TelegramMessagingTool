@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using TelegramMessagingTool.Data;
 using TelegramMessagingTool.Models;
@@ -138,6 +139,93 @@ Deny: /deny {pendingAction.Id}
             return false;
         }
     }
+}
+
+public static class ReleasePublishExecutor
+{
+    private const int TimeoutMilliseconds = 180_000;
+
+    public static async Task<ReleasePublishResult> PublishAsync(PublishReleasePayload payload, CancellationToken cancellationToken)
+    {
+        string projectRoot = Path.GetFullPath(payload.ProjectRoot);
+        if (!Directory.Exists(projectRoot))
+        {
+            return ReleasePublishResult.Fail($"Execution failed: project root does not exist: {projectRoot}");
+        }
+
+        string projectPath = Path.Combine(projectRoot, "TelegramMessagingTool", "TelegramMessagingTool.csproj");
+        if (!File.Exists(projectPath))
+        {
+            return ReleasePublishResult.Fail($"Execution failed: expected project file does not exist: {projectPath}");
+        }
+
+        string releaseName = $"TelegramMessagingTool-{DateTime.UtcNow:yyyyMMdd-HHmmss}";
+        string relativeReleasePath = Path.Combine("release", releaseName).Replace('\\', '/');
+        string releasePath = Path.Combine(projectRoot, relativeReleasePath);
+        Directory.CreateDirectory(releasePath);
+
+        ProcessCommandResult publish = await RunDotnetAsync(
+            projectRoot,
+            ["publish", projectPath, "--configuration", "Release", "--output", releasePath, "--nologo"],
+            cancellationToken);
+        if (!publish.Success)
+        {
+            return ReleasePublishResult.Fail("Execution failed: dotnet publish failed. " + publish.RenderForMessage());
+        }
+
+        string latestReleaseFile = Path.Combine(projectRoot, ".latest-release");
+        await File.WriteAllTextAsync(latestReleaseFile, relativeReleasePath, cancellationToken);
+        return ReleasePublishResult.Ok($"Published release: {relativeReleasePath}");
+    }
+
+    private static async Task<ProcessCommandResult> RunDotnetAsync(string projectRoot, IReadOnlyList<string> arguments, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "dotnet",
+                WorkingDirectory = projectRoot,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            foreach (string argument in arguments)
+            {
+                startInfo.ArgumentList.Add(argument);
+            }
+
+            using Process process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start dotnet.");
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TimeoutMilliseconds);
+            string output = await process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
+            string error = await process.StandardError.ReadToEndAsync(timeoutCts.Token);
+            await process.WaitForExitAsync(timeoutCts.Token);
+            return new ProcessCommandResult(process.ExitCode, output, error);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return new ProcessCommandResult(-1, string.Empty, "dotnet publish timed out.");
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            return new ProcessCommandResult(-1, string.Empty, ex.Message);
+        }
+    }
+}
+
+public sealed record PublishReleasePayload(string Action, string ProjectRoot, string Reason, DateTime RequestedAtUtc)
+{
+    public static PublishReleasePayload Empty { get; } = new(string.Empty, string.Empty, string.Empty, DateTime.MinValue);
+}
+
+public sealed record ReleasePublishResult(bool Success, string Message)
+{
+    public static ReleasePublishResult Ok(string message) => new(true, message);
+
+    public static ReleasePublishResult Fail(string message) => new(false, message);
 }
 
 public sealed class PublishReleaseRequestTool : ReleaseActionRequestTool

@@ -1140,10 +1140,24 @@ await using (var dbContext = new TelegramDbContext())
     AssertTrue(samplePendingMarkup.InlineKeyboard.SelectMany(row => row).Any(button => button.Text == "Deny" && button.CallbackData == "act:deny:123"), "InlineKeyboardFactory creates deny button");
     AssertTrue(samplePendingMarkup.InlineKeyboard.SelectMany(row => row).Any(button => button.Text == "Details" && button.CallbackData == "act:details:123"), "InlineKeyboardFactory creates details button");
 
+    string publishTestRoot = Path.Combine(Path.GetTempPath(), $"TelegramMessagingTool_Publish_{Guid.NewGuid():N}");
+    string publishTestProjectDir = Path.Combine(publishTestRoot, "TelegramMessagingTool");
+    Directory.CreateDirectory(publishTestProjectDir);
+    await File.WriteAllTextAsync(Path.Combine(publishTestProjectDir, "TelegramMessagingTool.csproj"), """
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+</Project>
+""", CancellationToken.None);
+    await File.WriteAllTextAsync(Path.Combine(publishTestProjectDir, "Program.cs"), "Console.WriteLine(\"publish fixture\");", CancellationToken.None);
     BotSettings safeCommandAdminSettings = adminTestSettings with
     {
         EnableSafeCommandTools = true,
-        SafeCommandProjectRoot = Directory.GetCurrentDirectory()
+        SafeCommandProjectRoot = publishTestRoot
     };
     ToolRegistry approvalToolRegistry = ToolRegistryFactory.Create(safeCommandAdminSettings, new HttpClient(), pendingActionService);
     AssertTrue(approvalToolRegistry.TryGet("publish_release", out IAgentTool? publishReleaseTool), "ToolRegistryFactory includes publish_release approval request tool when pending service is provided");
@@ -1171,8 +1185,15 @@ await using (var dbContext = new TelegramDbContext())
     PendingActionDecision publishApproval = await pendingActionService.ApproveAsync(dbContext, testUser, publishReleaseAction.Id, CancellationToken.None);
     AssertTrue(publishApproval.Success, "publish_release pending action can be approved");
     PendingActionExecutionResult publishExecution = await pendingActionExecutor.ExecuteApprovedAsync(dbContext, publishApproval.Action!, CancellationToken.None);
-    AssertFalse(publishExecution.Executed, "publish_release approval does not execute automatically yet");
-    AssertTrue(publishExecution.Message.Contains("No automatic execution", StringComparison.OrdinalIgnoreCase), "publish_release approval explains that no executor is registered");
+    AssertTrue(publishExecution.Executed, "publish_release approval executes automatically");
+    AssertTrue(publishExecution.Success, "publish_release approval publishes successfully");
+    string latestReleaseFile = Path.Combine(publishTestRoot, ".latest-release");
+    AssertTrue(File.Exists(latestReleaseFile), "publish_release writes .latest-release after successful publish");
+    string latestReleasePath = await File.ReadAllTextAsync(latestReleaseFile, CancellationToken.None);
+    AssertTrue(latestReleasePath.Contains("release", StringComparison.OrdinalIgnoreCase), "publish_release stores a release folder path");
+    AssertTrue(Directory.Exists(Path.Combine(publishTestRoot, latestReleasePath)), "publish_release creates the timestamped release directory");
+    AssertTrue(publishExecution.Message.Contains(latestReleasePath, StringComparison.OrdinalIgnoreCase), "publish_release execution records the release path in the result");
+    TestDirectoryCleanup.DeleteRecursive(publishTestRoot);
 
     string repoWriteRoot = Path.Combine(Path.GetTempPath(), $"TelegramMessagingTool_RepoWrite_{Guid.NewGuid():N}");
     Directory.CreateDirectory(repoWriteRoot);
