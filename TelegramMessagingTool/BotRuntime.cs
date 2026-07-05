@@ -43,12 +43,16 @@ public sealed record BotSettings(
 
     public bool EnableRepoWriteTools { get; init; }
 
+    public string ImageDescriptionPrompt { get; init; } = BotConfiguration.DefaultImageDescriptionPrompt;
+
     public GitHubSettings GitHub { get; init; } = GitHubSettings.Disabled;
 }
 
 public static class BotConfiguration
 {
     public const string DefaultEmbeddingModel = "nomic-embed-text";
+
+    public const string DefaultImageDescriptionPrompt = "Describe this image clearly and concisely. Mention visible text only if you can read it. Do not invent details you cannot see.";
 
     public static BotSettings LoadFromEnvironment()
     {
@@ -101,6 +105,7 @@ public static class BotConfiguration
             EnableImageVision = IsEnabled(Environment.GetEnvironmentVariable("ENABLE_IMAGE_VISION"), defaultValue: false),
             EnableAudioTranscription = IsEnabled(Environment.GetEnvironmentVariable("ENABLE_AUDIO_TRANSCRIPTION"), defaultValue: false),
             EnableRepoWriteTools = IsEnabled(Environment.GetEnvironmentVariable("ENABLE_REPO_WRITE_TOOLS"), defaultValue: false),
+            ImageDescriptionPrompt = NormalizeImageDescriptionPrompt(Environment.GetEnvironmentVariable("IMAGE_DESCRIPTION_PROMPT")),
             GitHub = GitHubSettings.LoadFromEnvironment()
         };
     }
@@ -117,6 +122,17 @@ public static class BotConfiguration
         return string.IsNullOrWhiteSpace(value)
             ? fallbackModel.Trim()
             : value.Trim();
+    }
+
+    public static string NormalizeImageDescriptionPrompt(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return DefaultImageDescriptionPrompt;
+        }
+
+        string normalized = value.Trim();
+        return normalized.Length <= 1000 ? normalized : normalized[..1000];
     }
 
     public static string NormalizeSearchRoutingMode(string? value)

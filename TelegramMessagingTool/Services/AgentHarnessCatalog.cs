@@ -86,6 +86,7 @@ public static class AgentHarnessCatalog
             builder.AppendLine($"- image_agent route: {settings.OllamaImageModel}");
             builder.AppendLine($"- voice_agent route: {settings.OllamaVoiceModel}");
             builder.AppendLine($"- image vision execution: {(settings.EnableImageVision ? "enabled" : "disabled")}");
+            builder.AppendLine($"- image description prompt: {(settings.ImageDescriptionPrompt == BotConfiguration.DefaultImageDescriptionPrompt ? "default" : "custom")}");
             builder.AppendLine($"- audio transcription execution: {(settings.EnableAudioTranscription ? "enabled" : "disabled")}");
             builder.AppendLine("- image readiness target: pull/configure an Ollama vision model before enabling /describeimage vision execution.");
             builder.AppendLine("- voice readiness target: transcription still needs a dedicated audio/Whisper provider later; the voice route is for transcript summarization/task extraction.");

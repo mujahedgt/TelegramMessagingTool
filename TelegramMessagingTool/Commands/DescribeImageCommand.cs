@@ -88,7 +88,7 @@ Metadata:
             return new CommandResult(true, reply + "\n\nImage vision is enabled, but no image description service is configured.");
         }
 
-        string prompt = "Describe this image clearly and concisely. Mention visible text only if you can read it. Do not invent details you cannot see.";
+        string prompt = _settings.ImageDescriptionPrompt;
         ImageDescriptionResult description = await _imageDescriptionService.DescribeAsync(file, prompt, cancellationToken);
         string label = description.Success ? "Description" : "Vision analysis failed";
         return new CommandResult(true, reply + $"\n\n{label}:\n{description.Output}");

@@ -172,6 +172,7 @@ string? previousEnablePlugins = Environment.GetEnvironmentVariable("ENABLE_PLUGI
 string? previousPluginDirectory = Environment.GetEnvironmentVariable("PLUGIN_DIRECTORY");
 string? previousEnableGitHubTools = Environment.GetEnvironmentVariable("ENABLE_GITHUB_TOOLS");
 string? previousEnableGitHubWriteTools = Environment.GetEnvironmentVariable("ENABLE_GITHUB_WRITE_TOOLS");
+string? previousImageDescriptionPrompt = Environment.GetEnvironmentVariable("IMAGE_DESCRIPTION_PROMPT");
 string? previousGitHubToken = Environment.GetEnvironmentVariable("GITHUB_TOKEN");
 string? previousGitHubDefaultOwner = Environment.GetEnvironmentVariable("GITHUB_DEFAULT_OWNER");
 string? previousGitHubDefaultRepo = Environment.GetEnvironmentVariable("GITHUB_DEFAULT_REPO");
@@ -210,6 +211,12 @@ try
 
     Environment.SetEnvironmentVariable("ENABLE_REPO_WRITE_TOOLS", "yes");
     AssertTrue(BotConfiguration.LoadFromEnvironment().EnableRepoWriteTools, "LoadFromEnvironment parses ENABLE_REPO_WRITE_TOOLS truthy values");
+
+    Environment.SetEnvironmentVariable("IMAGE_DESCRIPTION_PROMPT", null);
+    AssertEqual(BotConfiguration.DefaultImageDescriptionPrompt, BotConfiguration.LoadFromEnvironment().ImageDescriptionPrompt, "LoadFromEnvironment defaults IMAGE_DESCRIPTION_PROMPT safely");
+
+    Environment.SetEnvironmentVariable("IMAGE_DESCRIPTION_PROMPT", "  Focus on UI labels and visible text.  ");
+    AssertEqual("Focus on UI labels and visible text.", BotConfiguration.LoadFromEnvironment().ImageDescriptionPrompt, "LoadFromEnvironment trims IMAGE_DESCRIPTION_PROMPT");
 
     Environment.SetEnvironmentVariable("ENABLE_PLUGINS", null);
     AssertFalse(BotConfiguration.LoadFromEnvironment().EnablePlugins, "LoadFromEnvironment defaults plugins to disabled");
@@ -268,6 +275,7 @@ finally
     Environment.SetEnvironmentVariable("PLUGIN_DIRECTORY", previousPluginDirectory);
     Environment.SetEnvironmentVariable("ENABLE_GITHUB_TOOLS", previousEnableGitHubTools);
     Environment.SetEnvironmentVariable("ENABLE_GITHUB_WRITE_TOOLS", previousEnableGitHubWriteTools);
+    Environment.SetEnvironmentVariable("IMAGE_DESCRIPTION_PROMPT", previousImageDescriptionPrompt);
     Environment.SetEnvironmentVariable("GITHUB_TOKEN", previousGitHubToken);
     Environment.SetEnvironmentVariable("GITHUB_DEFAULT_OWNER", previousGitHubDefaultOwner);
     Environment.SetEnvironmentVariable("GITHUB_DEFAULT_REPO", previousGitHubDefaultRepo);
@@ -1835,6 +1843,7 @@ diff --git a/../outside.cs b/../outside.cs
     AssertTrue(statusResult.ReplyText?.Contains("doc_qa=qwen3:8b") == true, "/status reports document QA model route");
     AssertTrue(statusResult.ReplyText?.Contains("Search routing: heuristic") == true, "/status reports search routing mode");
     AssertTrue(statusResult.ReplyText?.Contains("Image vision: disabled") == true, "/status reports image vision mode");
+    AssertTrue(statusResult.ReplyText?.Contains("Image prompt: default") == true, "/status reports image prompt mode");
     AssertTrue(statusResult.ReplyText?.Contains("Safe command tools: disabled") == true, "/status reports safe command tools mode");
 
     CommandResult statusMentionResult = await commandRouter.TryHandleAsync(TextMessage("/status@red_eye_ghost_bot"), testUser, dbContext, CancellationToken.None);
@@ -2222,8 +2231,9 @@ diff --git a/../outside.cs b/../outside.cs
     AssertTrue(describeImageResult.ReplyText?.Contains("Image vision is disabled", StringComparison.OrdinalIgnoreCase) == true, "/describeimage stays metadata-only when image vision is disabled");
 
     var fakeImageDescriptionService = new FakeImageDescriptionService("A small test image fixture.");
+    const string customImagePrompt = "Focus on UI labels and visible text.";
     var visionEnabledDescribeImageCommand = new DescribeImageCommand(
-        adminTestSettings with { EnableImageVision = true },
+        adminTestSettings with { EnableImageVision = true, ImageDescriptionPrompt = customImagePrompt },
         documentStorage,
         fakeImageDescriptionService);
     CommandResult visionDescribeImageResult = await visionEnabledDescribeImageCommand.TryHandleAsync(TextMessage($"/describeimage {uploadedImage.Id}"), testUser, dbContext, CancellationToken.None);
@@ -2231,6 +2241,7 @@ diff --git a/../outside.cs b/../outside.cs
     AssertTrue(visionDescribeImageResult.ReplyText?.Contains("Description:") == true, "/describeimage returns a vision description when enabled");
     AssertTrue(visionDescribeImageResult.ReplyText?.Contains("A small test image fixture.") == true, "/describeimage includes image service output");
     AssertEqual(uploadedImage.Id, fakeImageDescriptionService.LastImageId, "/describeimage passes selected image to image service");
+    AssertEqual(customImagePrompt, fakeImageDescriptionService.LastPrompt, "/describeimage passes configured image prompt to image service");
     AssertFalse((await commandRouter.TryHandleAsync(TextMessage("/describeimagex 1"), testUser, dbContext, CancellationToken.None)).Handled, "/describeimagex is not treated as /describeimage");
 
     CommandResult emptyVoiceFilesResult = await commandRouter.TryHandleAsync(TextMessage("/voicefiles"), testUser, dbContext, CancellationToken.None);
@@ -2566,12 +2577,15 @@ sealed class FakeImageDescriptionService : IImageDescriptionService
 
     public int? LastImageId { get; private set; }
 
+    public string? LastPrompt { get; private set; }
+
     public Task<ImageDescriptionResult> DescribeAsync(
         UploadedFile imageFile,
         string prompt,
         CancellationToken cancellationToken)
     {
         LastImageId = imageFile.Id;
+        LastPrompt = prompt;
         return Task.FromResult(ImageDescriptionResult.Ok(_output));
     }
 }

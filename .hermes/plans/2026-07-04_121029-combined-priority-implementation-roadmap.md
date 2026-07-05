@@ -413,11 +413,16 @@ Shows recent action audit records.
 
 The harness foundation is done, but real image/voice execution needs provider safety and resource planning.
 
-## P6.1 Improve image agent
+## P6.1 Improve image agent ✅ Done
 
-Next possible tasks:
+**Status:** Added configurable `/describeimage` prompt support through `IMAGE_DESCRIPTION_PROMPT`. The prompt defaults to the previous safe concise image-description instruction, is trimmed/capped at 1000 characters, is passed to the image description service when `ENABLE_IMAGE_VISION=true`, and is visible as default/custom in `/status` and `/harnesses`.
+
+Completed:
 
 - Better `/describeimage` prompt/config options.
+
+Remaining possible tasks:
+
 - Optional OCR provider behind `ENABLE_IMAGE_OCR=false`.
 - Image generation only after storage/approval rules are clear.
 
@@ -520,7 +525,7 @@ Then restart and verify:
 Continue with:
 
 ```text
-Priority 5.3 — Add secret/danger scanning
+Priority 6.2 — Improve voice agent
 ```
 
-This continues Priority 5 tool safety work by adding secret/danger scanning before commit, push, release, or other high-risk approvals.
+This continues media-agent work by adding local Whisper/provider integration behind `ENABLE_AUDIO_TRANSCRIPTION=true`, then transcript storage/summarization in later safe steps.

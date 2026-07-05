@@ -44,6 +44,7 @@ Document embeddings: {(_settings.EnableDocumentEmbeddings ? "enabled" : "disable
 Online search: {(_settings.EnableOnlineSearch ? "enabled" : "disabled")}
 Search routing: {_settings.SearchRoutingMode}
 Image vision: {(_settings.EnableImageVision ? "enabled" : "disabled")}
+Image prompt: {(_settings.ImageDescriptionPrompt == BotConfiguration.DefaultImageDescriptionPrompt ? "default" : "custom")}
 Audio transcription: {(_settings.EnableAudioTranscription ? "enabled" : "disabled")}
 Safe command tools: {(_settings.EnableSafeCommandTools ? "enabled" : "disabled")}
 Repo write tools: {(_settings.EnableRepoWriteTools ? "enabled" : "disabled")}
