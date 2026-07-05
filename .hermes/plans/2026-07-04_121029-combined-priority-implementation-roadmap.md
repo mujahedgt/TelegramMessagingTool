@@ -335,7 +335,9 @@ Plugin manifest inspection is done, but assembly loading is trusted code executi
   - `IAgentTool`
   - `ToolResult`
 
-## P4.2 Add trusted plugin loader
+## P4.2 Add trusted plugin loader ✅ Done
+
+**Status:** Added `PluginToolLoader` to load enabled, validated plugin manifests from `PLUGIN_DIRECTORY` only when `ENABLE_PLUGINS=true`. Plugin tools must implement `IAgentTool`, have public parameterless constructors, use manifest-allowlisted names, avoid duplicate built-in/plugin names, and render in `/tools` with `source: plugin:<id>`. Added a trusted sample plugin and updated plugin authoring docs to warn that DLLs are trusted OS-level code.
 
 Rules:
 
@@ -513,7 +515,7 @@ Then restart and verify:
 Continue with:
 
 ```text
-Priority 4.2 — Add trusted plugin loader
+Priority 4.3 — Add plugin risk metadata
 ```
 
-This continues Priority 4 plugin loading carefully: add trusted plugin loading behind `ENABLE_PLUGINS` while preserving manifest validation, duplicate-name rejection, source visibility, and documentation that plugin DLLs are trusted OS-level code.
+This completes Priority 4 by adding plugin risk/approval metadata before expanding plugin tool execution semantics.

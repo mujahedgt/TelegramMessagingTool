@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\TelegramMessagingTool\TelegramMessagingTool.csproj" />
+    <ProjectReference Include="..\plugins\SamplePlugin\TelegramMessagingTool.SamplePlugin.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
 </Project>

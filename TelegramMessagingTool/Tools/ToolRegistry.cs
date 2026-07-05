@@ -4,18 +4,42 @@ namespace TelegramMessagingTool.Tools;
 
 public sealed class ToolRegistry
 {
-    private readonly Dictionary<string, IAgentTool> _tools;
+    private readonly Dictionary<string, ToolRegistration> _tools;
 
     public ToolRegistry(IEnumerable<IAgentTool> tools)
+        : this(tools.Select(tool => new ToolRegistration(tool, ToolRegistration.BuiltInSource)))
     {
-        _tools = tools.ToDictionary(x => x.Name, StringComparer.OrdinalIgnoreCase);
     }
 
-    public IReadOnlyList<IAgentTool> Tools => _tools.Values.OrderBy(x => x.Name).ToList();
+    public ToolRegistry(IEnumerable<IAgentTool> builtInTools, IEnumerable<ToolRegistration> additionalTools)
+        : this(builtInTools.Select(tool => new ToolRegistration(tool, ToolRegistration.BuiltInSource)).Concat(additionalTools))
+    {
+    }
+
+    public ToolRegistry(IEnumerable<ToolRegistration> tools)
+    {
+        _tools = tools.ToDictionary(x => x.Tool.Name, StringComparer.OrdinalIgnoreCase);
+    }
+
+    public IReadOnlyList<IAgentTool> Tools => _tools.Values.Select(x => x.Tool).OrderBy(x => x.Name).ToList();
 
     public bool TryGet(string name, out IAgentTool? tool)
     {
-        return _tools.TryGetValue(name, out tool);
+        if (_tools.TryGetValue(name, out ToolRegistration? registration))
+        {
+            tool = registration.Tool;
+            return true;
+        }
+
+        tool = null;
+        return false;
+    }
+
+    public string GetSource(string toolName)
+    {
+        return _tools.TryGetValue(toolName, out ToolRegistration? registration)
+            ? registration.Source
+            : string.Empty;
     }
 
     public string RenderToolList()
@@ -31,7 +55,8 @@ public sealed class ToolRegistry
         foreach (IAgentTool tool in Tools)
         {
             string approval = tool.RequiresApproval ? "requires approval" : "safe/no approval";
-            builder.AppendLine($"- {tool.Name}: {tool.Description} ({approval})");
+            string source = GetSource(tool.Name);
+            builder.AppendLine($"- {tool.Name}: {tool.Description} ({approval}; source: {source})");
         }
 
         return builder.ToString().TrimEnd();
@@ -74,11 +99,16 @@ public sealed class ToolRegistry
 
         foreach (IAgentTool tool in Tools)
         {
-            builder.AppendLine($"- {tool.Name}: {tool.Description}");
+            builder.AppendLine($"- {tool.Name}: {tool.Description} (source: {GetSource(tool.Name)})");
         }
 
         builder.AppendLine("If no tool is needed, answer normally with plain text.");
         builder.AppendLine("After a tool runs, the application will send you the tool output. In that final answer, use only the provided tool output. Do not invent prices, specs, source names, or facts that are not present in the tool output.");
         return builder.ToString().TrimEnd();
     }
+}
+
+public sealed record ToolRegistration(IAgentTool Tool, string Source)
+{
+    public const string BuiltInSource = "built-in";
 }

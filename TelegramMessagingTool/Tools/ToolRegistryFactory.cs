@@ -1,3 +1,4 @@
+using TelegramMessagingTool.Plugins;
 using TelegramMessagingTool.Services;
 using TelegramMessagingTool.Tools.CommandExecution;
 using TelegramMessagingTool.Tools.GitHub;
@@ -57,6 +58,15 @@ public static class ToolRegistryFactory
             tools.Add(new RepoPushChangesRequestTool(pendingActionService, settings, settings.SafeCommandProjectRoot));
         }
 
-        return new ToolRegistry(tools);
+        var pluginTools = new List<ToolRegistration>();
+        if (settings.EnablePlugins)
+        {
+            PluginToolLoadResult pluginLoadResult = new PluginToolLoader().LoadEnabledTools(
+                settings.PluginDirectory,
+                tools.Select(x => x.Name));
+            pluginTools.AddRange(pluginLoadResult.Tools);
+        }
+
+        return new ToolRegistry(tools, pluginTools);
     }
 }

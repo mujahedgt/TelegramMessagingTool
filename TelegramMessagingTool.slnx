@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="TelegramMessagingTool.Abstractions/TelegramMessagingTool.Abstractions.csproj" />
+  <Project Path="plugins/SamplePlugin/TelegramMessagingTool.SamplePlugin.csproj" />
   <Project Path="TelegramMessagingTool/TelegramMessagingTool.csproj" />
   <Project Path="TelegramMessagingTool.Tests/TelegramMessagingTool.Tests.csproj" />
 </Solution>

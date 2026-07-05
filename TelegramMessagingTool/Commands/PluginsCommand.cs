@@ -33,6 +33,9 @@ public sealed class PluginsCommand : IBotCommand
 
         PluginScanResult scanResult = _scanner.Scan(_settings.PluginDirectory);
         string mode = _settings.EnablePlugins ? "enabled" : "disabled";
+        string assemblyLoading = _settings.EnablePlugins
+            ? "enabled. Plugin DLLs are trusted OS-level code and are loaded only from enabled manifests in this directory."
+            : "disabled. Set ENABLE_PLUGINS=true only for trusted local plugin DLLs.";
         string reply = $"""
 Plugin manifest discovery
 
@@ -42,7 +45,7 @@ Valid manifests: {scanResult.Manifests.Count}
 Enabled manifests: {scanResult.EnabledCount}
 Disabled manifests: {scanResult.DisabledCount}
 
-Assembly loading: disabled in this phase. /plugins only reads plugin.json manifests and diagnostics.
+Assembly loading: {assemblyLoading}
 """;
 
         if (scanResult.Manifests.Count > 0)

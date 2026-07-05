@@ -1,8 +1,10 @@
 # Plugin authoring guide
 
-This project currently supports **plugin manifest discovery only**. The runtime can scan `plugin.json` files and show them through `/plugins`, but it does **not** load plugin assemblies, register plugin tools, or execute plugin code yet.
+This project supports trusted local plugin loading behind `ENABLE_PLUGINS=true`.
 
-## Current safe phase
+Plugins are **not sandboxed**. A plugin DLL is trusted OS-level .NET code with the same process permissions as the bot. Only load DLLs you wrote, built, and trust.
+
+## Current phase
 
 Implemented:
 
@@ -10,15 +12,17 @@ Implemented:
 - `PLUGIN_DIRECTORY=<project root>/plugins` by default.
 - `/plugins` scans `plugin.json` manifests and reports diagnostics.
 - `/plugins` shows manifest path and whether the declared entry assembly file is present.
+- When `ENABLE_PLUGINS=true`, enabled manifests load their trusted entry assembly.
+- Plugin tools must implement `TelegramMessagingTool.Tools.IAgentTool` from `TelegramMessagingTool.Abstractions`.
+- Plugin tool names must be listed in `allowedToolNames`.
+- Duplicate tool names are rejected so plugins cannot override built-in tools or each other.
+- `/tools` shows each tool source, including `plugin:<plugin-id>` for plugin tools.
 
-Not implemented yet:
+Still intentionally deferred:
 
-- Loading `.dll` plugin assemblies.
-- Instantiating plugin classes.
-- Registering plugin tools in `/tools`.
-- Running plugin code from Telegram/model tool calls.
-
-Treat plugin assemblies as trusted OS-level code. Do not place untrusted DLLs in the plugin directory.
+- Plugin-specific dependency isolation/unloading.
+- Medium/high-risk plugin approval metadata.
+- Sandboxing untrusted code. Do **not** treat plugins as untrusted extensions.
 
 ## Directory layout
 
@@ -28,10 +32,12 @@ Recommended layout:
 plugins/
 └─ SamplePlugin/
    ├─ plugin.json
-   └─ SamplePlugin.dll
+   ├─ SampleEchoTool.cs
+   ├─ TelegramMessagingTool.SamplePlugin.csproj
+   └─ bin/Release/net10.0/TelegramMessagingTool.SamplePlugin.dll
 ```
 
-Use `plugins/SamplePlugin/plugin.json.example` in this repository as a starting template.
+Use `plugins/SamplePlugin/plugin.json.example` or the checked-in sample plugin as a starting template.
 
 ## Manifest schema
 
@@ -40,10 +46,10 @@ Use `plugins/SamplePlugin/plugin.json.example` in this repository as a starting 
   "id": "sample-plugin",
   "name": "Sample Plugin",
   "version": "1.0.0",
-  "entryAssembly": "SamplePlugin.dll",
-  "enabled": false,
+  "entryAssembly": "bin/Release/net10.0/TelegramMessagingTool.SamplePlugin.dll",
+  "enabled": true,
   "riskLevel": "low",
-  "allowedToolNames": ["sample_tool"]
+  "allowedToolNames": ["sample_echo"]
 }
 ```
 
@@ -54,10 +60,10 @@ Use `plugins/SamplePlugin/plugin.json.example` in this repository as a starting 
 | `id` | Yes | Stable plugin ID, usually lowercase kebab-case. |
 | `name` | Yes | Human-readable plugin name. |
 | `version` | Yes | Plugin version string. |
-| `entryAssembly` | Yes | DLL filename under the same plugin folder. Current phase only checks whether it exists. |
-| `enabled` | No | Boolean. Discovery reports it, but no plugin code is loaded yet. |
+| `entryAssembly` | Yes | DLL path under the same plugin directory. Paths outside `PLUGIN_DIRECTORY` are rejected. |
+| `enabled` | No | Boolean. Only enabled manifests are loaded when `ENABLE_PLUGINS=true`. |
 | `riskLevel` | No | `low`, `medium`, or `high`. Defaults to `medium` if omitted. |
-| `allowedToolNames` | Yes | Non-empty array of tool names this plugin may expose later. |
+| `allowedToolNames` | Yes | Non-empty array of tool names this plugin may expose. |
 
 Tool names must match:
 
@@ -68,7 +74,7 @@ Tool names must match:
 Valid examples:
 
 ```text
-sample_tool
+sample_echo
 repo_summary
 create_report_1
 ```
@@ -82,9 +88,9 @@ sample-tool
 x
 ```
 
-## Validation behavior
+## Validation and loading behavior
 
-The scanner:
+The scanner/loader:
 
 - Accepts valid manifests.
 - Rejects malformed JSON.
@@ -93,6 +99,11 @@ The scanner:
 - Rejects empty or invalid `allowedToolNames`.
 - Rejects duplicate tool names inside one manifest.
 - Skips later manifests that duplicate tool names already discovered in another manifest.
+- Skips plugin tools that duplicate built-in tool names.
+- Loads only enabled manifests when `ENABLE_PLUGINS=true`.
+- Loads entry assemblies only when the assembly path stays under `PLUGIN_DIRECTORY`.
+- Instantiates only concrete `IAgentTool` types with a public parameterless constructor.
+- Registers only tool names included in the manifest `allowedToolNames`.
 - Handles a missing plugin directory gracefully.
 
 ## How to inspect plugins
@@ -118,15 +129,40 @@ Expected output includes:
 - Manifest counts
 - Manifest path
 - Entry assembly presence: `present` or `missing`
+- Assembly loading mode
 - Diagnostics
 
-## Safety notes for future phases
+4. Use Telegram:
 
-When assembly loading is added later:
+```text
+/tools
+```
 
-- Keep it behind `ENABLE_PLUGINS=true`.
-- Only load trusted local DLLs.
-- Continue showing plugin source/path in `/plugins`.
-- Register only manifest-allowlisted tool names.
-- Prefer approval-backed execution for medium/high-risk tools.
+Expected output includes registered tools and their source, for example:
+
+```text
+- sample_echo: Sample trusted plugin tool that echoes its input. (safe/no approval; source: plugin:sample-plugin)
+```
+
+## Building the sample plugin
+
+From the project root:
+
+```bash
+dotnet build plugins/SamplePlugin/TelegramMessagingTool.SamplePlugin.csproj --configuration Release --nologo
+```
+
+Then enable plugins through environment variables before starting the bot:
+
+```text
+ENABLE_PLUGINS=true
+PLUGIN_DIRECTORY=<project root>/plugins
+```
+
+## Safety notes
+
+- Plugin DLLs are trusted OS-level code.
+- Do not place untrusted DLLs under `PLUGIN_DIRECTORY`.
+- Review plugin source before building/loading it.
+- Prefer approval-backed execution for medium/high-risk plugin tools.
 - Never allow arbitrary shell/file/network execution without explicit allowlists and approval flow.

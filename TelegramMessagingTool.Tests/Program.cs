@@ -142,6 +142,14 @@ try
     AssertTrue(pluginEnvironmentSettings.EnablePlugins, "LoadFromEnvironment parses ENABLE_PLUGINS truthy values");
     AssertEqual(Path.GetFullPath(pluginDirectory), pluginEnvironmentSettings.PluginDirectory, "LoadFromEnvironment reads PLUGIN_DIRECTORY as a full path");
 
+    PluginToolLoadResult samplePluginLoadResult = new PluginToolLoader().LoadEnabledTools(
+        Path.Combine(Directory.GetCurrentDirectory(), "plugins"),
+        ["datetime"]);
+    AssertTrue(samplePluginLoadResult.Tools.Any(x => x.Tool.Name == "sample_echo"), "PluginToolLoader loads enabled sample plugin tool");
+    AssertTrue(samplePluginLoadResult.Tools.All(x => x.Source.StartsWith("plugin:", StringComparison.OrdinalIgnoreCase)), "PluginToolLoader marks plugin tool source");
+    ToolRegistry pluginSourceRegistry = new([new DateTimeTool()], samplePluginLoadResult.Tools);
+    AssertTrue(pluginSourceRegistry.RenderToolList().Contains("source: plugin:", StringComparison.OrdinalIgnoreCase), "ToolRegistry renders plugin source in /tools output");
+
     Environment.SetEnvironmentVariable("ENABLE_GITHUB_TOOLS", null);
     Environment.SetEnvironmentVariable("ENABLE_GITHUB_WRITE_TOOLS", null);
     Environment.SetEnvironmentVariable("GITHUB_TOKEN", null);
@@ -195,7 +203,7 @@ var commandFactoryDocumentRetrievalService = new DocumentRetrievalService();
 var commandFactoryDocumentQuestionAnsweringService = new DocumentQuestionAnsweringService(commandFactoryOllamaClient);
 var commandFactoryDocumentSummaryService = new DocumentSummaryService(commandFactoryOllamaClient);
 var commandFactoryDocumentEmbeddingService = new DocumentEmbeddingService(commandFactoryEmbeddingClient, commandFactorySettings.OllamaEmbeddingModel);
-var commandFactoryToolRegistry = new ToolRegistry([]);
+var commandFactoryToolRegistry = new ToolRegistry(Array.Empty<IAgentTool>());
 var commandFactoryImageDescriptionService = new OllamaImageDescriptionService(commandFactoryHttpClient, commandFactorySettings);
 CommandRouter factoryRouter = CommandRouterFactory.Create(
     commandFactorySettings,
@@ -1261,7 +1269,7 @@ await using (var dbContext = new TelegramDbContext())
     AssertTrue(pluginsResult.ReplyText?.Contains("plugin.json") == true, "/plugins shows manifest path details");
     AssertTrue(pluginsResult.ReplyText?.Contains("SamplePlugin.dll (present)") == true, "/plugins reports present entry assembly fixture");
     AssertTrue(pluginsResult.ReplyText?.Contains("MissingAssemblyPlugin.dll (missing)") == true, "/plugins reports missing entry assembly safely");
-    AssertTrue(pluginsResult.ReplyText?.Contains("Assembly loading: disabled", StringComparison.OrdinalIgnoreCase) == true, "/plugins explains assembly loading remains disabled");
+    AssertTrue(pluginsResult.ReplyText?.Contains("Assembly loading: enabled", StringComparison.OrdinalIgnoreCase) == true, "/plugins explains trusted assembly loading is enabled");
     AssertTrue(pluginsResult.ReplyText?.Contains("sample_tool") == true, "/plugins lists allowed tool names");
 
     CommandResult pluginsMentionResult = await pluginCommand.TryHandleAsync(TextMessage("/plugins@red_eye_ghost_bot"), testUser, dbContext, CancellationToken.None);

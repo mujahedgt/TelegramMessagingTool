@@ -5,7 +5,5 @@
   "entryAssembly": "bin/Release/net10.0/TelegramMessagingTool.SamplePlugin.dll",
   "enabled": true,
   "riskLevel": "low",
-  "allowedToolNames": [
-    "sample_echo"
-  ]
+  "allowedToolNames": ["sample_echo"]
 }
