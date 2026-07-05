@@ -65,6 +65,12 @@ public static class AppServicesBuilder
         var documentQuestionAnsweringService = new DocumentQuestionAnsweringService(ollamaClient);
         var documentSummaryService = new DocumentSummaryService(ollamaClient);
         var imageDescriptionService = new OllamaImageDescriptionService(qwenClient, settings);
+        IAudioTranscriptionService? audioTranscriptionService = string.IsNullOrWhiteSpace(settings.AudioTranscriptionCommand)
+            ? null
+            : new LocalCommandAudioTranscriptionService(
+                settings.AudioTranscriptionCommand,
+                settings.AudioTranscriptionArguments,
+                TimeSpan.FromSeconds(settings.AudioTranscriptionTimeoutSeconds));
         var agentRunner = new AgentRunner(ollamaClient, toolRegistry, searchRoutingClassifier: searchRoutingClassifier);
         var conversationService = new ConversationService();
         var commandRouter = CommandRouterFactory.Create(
@@ -80,7 +86,8 @@ public static class AppServicesBuilder
             documentQuestionAnsweringService,
             documentSummaryService,
             documentEmbeddingService,
-            imageDescriptionService);
+            imageDescriptionService,
+            audioTranscriptionService);
         var telegramUpdateHandler = new TelegramUpdateHandler(
             settings,
             documentStorage,

@@ -41,6 +41,12 @@ public sealed record BotSettings(
 
     public bool EnableAudioTranscription { get; init; }
 
+    public string AudioTranscriptionCommand { get; init; } = string.Empty;
+
+    public string AudioTranscriptionArguments { get; init; } = "{file}";
+
+    public int AudioTranscriptionTimeoutSeconds { get; init; } = 120;
+
     public bool EnableRepoWriteTools { get; init; }
 
     public string ImageDescriptionPrompt { get; init; } = BotConfiguration.DefaultImageDescriptionPrompt;
@@ -104,6 +110,9 @@ public static class BotConfiguration
             OllamaVoiceModel = NormalizeModelRoute(Environment.GetEnvironmentVariable("OLLAMA_MODEL_VOICE"), ollamaModel),
             EnableImageVision = IsEnabled(Environment.GetEnvironmentVariable("ENABLE_IMAGE_VISION"), defaultValue: false),
             EnableAudioTranscription = IsEnabled(Environment.GetEnvironmentVariable("ENABLE_AUDIO_TRANSCRIPTION"), defaultValue: false),
+            AudioTranscriptionCommand = NormalizeOptionalText(Environment.GetEnvironmentVariable("AUDIO_TRANSCRIPTION_COMMAND")),
+            AudioTranscriptionArguments = NormalizeAudioTranscriptionArguments(Environment.GetEnvironmentVariable("AUDIO_TRANSCRIPTION_ARGUMENTS")),
+            AudioTranscriptionTimeoutSeconds = ParseClampedInt(Environment.GetEnvironmentVariable("AUDIO_TRANSCRIPTION_TIMEOUT_SECONDS"), defaultValue: 120, minValue: 5, maxValue: 300),
             EnableRepoWriteTools = IsEnabled(Environment.GetEnvironmentVariable("ENABLE_REPO_WRITE_TOOLS"), defaultValue: false),
             ImageDescriptionPrompt = NormalizeImageDescriptionPrompt(Environment.GetEnvironmentVariable("IMAGE_DESCRIPTION_PROMPT")),
             GitHub = GitHubSettings.LoadFromEnvironment()
@@ -133,6 +142,17 @@ public static class BotConfiguration
 
         string normalized = value.Trim();
         return normalized.Length <= 1000 ? normalized : normalized[..1000];
+    }
+
+    public static string NormalizeOptionalText(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
+    }
+
+    public static string NormalizeAudioTranscriptionArguments(string? value)
+    {
+        string normalized = string.IsNullOrWhiteSpace(value) ? "{file}" : value.Trim();
+        return normalized.Contains("{file}", StringComparison.OrdinalIgnoreCase) ? normalized : normalized + " {file}";
     }
 
     public static string NormalizeSearchRoutingMode(string? value)

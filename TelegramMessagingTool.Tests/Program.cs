@@ -173,6 +173,9 @@ string? previousPluginDirectory = Environment.GetEnvironmentVariable("PLUGIN_DIR
 string? previousEnableGitHubTools = Environment.GetEnvironmentVariable("ENABLE_GITHUB_TOOLS");
 string? previousEnableGitHubWriteTools = Environment.GetEnvironmentVariable("ENABLE_GITHUB_WRITE_TOOLS");
 string? previousImageDescriptionPrompt = Environment.GetEnvironmentVariable("IMAGE_DESCRIPTION_PROMPT");
+string? previousAudioTranscriptionCommand = Environment.GetEnvironmentVariable("AUDIO_TRANSCRIPTION_COMMAND");
+string? previousAudioTranscriptionArguments = Environment.GetEnvironmentVariable("AUDIO_TRANSCRIPTION_ARGUMENTS");
+string? previousAudioTranscriptionTimeoutSeconds = Environment.GetEnvironmentVariable("AUDIO_TRANSCRIPTION_TIMEOUT_SECONDS");
 string? previousGitHubToken = Environment.GetEnvironmentVariable("GITHUB_TOKEN");
 string? previousGitHubDefaultOwner = Environment.GetEnvironmentVariable("GITHUB_DEFAULT_OWNER");
 string? previousGitHubDefaultRepo = Environment.GetEnvironmentVariable("GITHUB_DEFAULT_REPO");
@@ -217,6 +220,22 @@ try
 
     Environment.SetEnvironmentVariable("IMAGE_DESCRIPTION_PROMPT", "  Focus on UI labels and visible text.  ");
     AssertEqual("Focus on UI labels and visible text.", BotConfiguration.LoadFromEnvironment().ImageDescriptionPrompt, "LoadFromEnvironment trims IMAGE_DESCRIPTION_PROMPT");
+
+    Environment.SetEnvironmentVariable("AUDIO_TRANSCRIPTION_COMMAND", null);
+    Environment.SetEnvironmentVariable("AUDIO_TRANSCRIPTION_ARGUMENTS", null);
+    Environment.SetEnvironmentVariable("AUDIO_TRANSCRIPTION_TIMEOUT_SECONDS", null);
+    BotSettings defaultAudioProviderSettings = BotConfiguration.LoadFromEnvironment();
+    AssertEqual(string.Empty, defaultAudioProviderSettings.AudioTranscriptionCommand, "LoadFromEnvironment defaults AUDIO_TRANSCRIPTION_COMMAND to empty");
+    AssertEqual("{file}", defaultAudioProviderSettings.AudioTranscriptionArguments, "LoadFromEnvironment defaults AUDIO_TRANSCRIPTION_ARGUMENTS to file placeholder");
+    AssertEqual(120, defaultAudioProviderSettings.AudioTranscriptionTimeoutSeconds, "LoadFromEnvironment defaults AUDIO_TRANSCRIPTION_TIMEOUT_SECONDS safely");
+
+    Environment.SetEnvironmentVariable("AUDIO_TRANSCRIPTION_COMMAND", "  whisper-cli  ");
+    Environment.SetEnvironmentVariable("AUDIO_TRANSCRIPTION_ARGUMENTS", " --model base.en --file \"{file}\" ");
+    Environment.SetEnvironmentVariable("AUDIO_TRANSCRIPTION_TIMEOUT_SECONDS", "500");
+    BotSettings audioProviderSettings = BotConfiguration.LoadFromEnvironment();
+    AssertEqual("whisper-cli", audioProviderSettings.AudioTranscriptionCommand, "LoadFromEnvironment trims AUDIO_TRANSCRIPTION_COMMAND");
+    AssertEqual("--model base.en --file \"{file}\"", audioProviderSettings.AudioTranscriptionArguments, "LoadFromEnvironment trims AUDIO_TRANSCRIPTION_ARGUMENTS");
+    AssertEqual(300, audioProviderSettings.AudioTranscriptionTimeoutSeconds, "LoadFromEnvironment clamps AUDIO_TRANSCRIPTION_TIMEOUT_SECONDS high");
 
     Environment.SetEnvironmentVariable("ENABLE_PLUGINS", null);
     AssertFalse(BotConfiguration.LoadFromEnvironment().EnablePlugins, "LoadFromEnvironment defaults plugins to disabled");
@@ -276,6 +295,9 @@ finally
     Environment.SetEnvironmentVariable("ENABLE_GITHUB_TOOLS", previousEnableGitHubTools);
     Environment.SetEnvironmentVariable("ENABLE_GITHUB_WRITE_TOOLS", previousEnableGitHubWriteTools);
     Environment.SetEnvironmentVariable("IMAGE_DESCRIPTION_PROMPT", previousImageDescriptionPrompt);
+    Environment.SetEnvironmentVariable("AUDIO_TRANSCRIPTION_COMMAND", previousAudioTranscriptionCommand);
+    Environment.SetEnvironmentVariable("AUDIO_TRANSCRIPTION_ARGUMENTS", previousAudioTranscriptionArguments);
+    Environment.SetEnvironmentVariable("AUDIO_TRANSCRIPTION_TIMEOUT_SECONDS", previousAudioTranscriptionTimeoutSeconds);
     Environment.SetEnvironmentVariable("GITHUB_TOKEN", previousGitHubToken);
     Environment.SetEnvironmentVariable("GITHUB_DEFAULT_OWNER", previousGitHubDefaultOwner);
     Environment.SetEnvironmentVariable("GITHUB_DEFAULT_REPO", previousGitHubDefaultRepo);
@@ -1844,6 +1866,7 @@ diff --git a/../outside.cs b/../outside.cs
     AssertTrue(statusResult.ReplyText?.Contains("Search routing: heuristic") == true, "/status reports search routing mode");
     AssertTrue(statusResult.ReplyText?.Contains("Image vision: disabled") == true, "/status reports image vision mode");
     AssertTrue(statusResult.ReplyText?.Contains("Image prompt: default") == true, "/status reports image prompt mode");
+    AssertTrue(statusResult.ReplyText?.Contains("Audio provider: not configured") == true, "/status reports audio transcription provider mode");
     AssertTrue(statusResult.ReplyText?.Contains("Safe command tools: disabled") == true, "/status reports safe command tools mode");
 
     CommandResult statusMentionResult = await commandRouter.TryHandleAsync(TextMessage("/status@red_eye_ghost_bot"), testUser, dbContext, CancellationToken.None);
@@ -2303,6 +2326,18 @@ diff --git a/../outside.cs b/../outside.cs
     AssertTrue(enabledTranscribeResult.ReplyText?.Contains("Transcript:") == true, "/transcribe returns transcript label when configured");
     AssertTrue(enabledTranscribeResult.ReplyText?.Contains("Transcript text from fixture.") == true, "/transcribe includes transcription service output");
     AssertEqual(uploadedAudio.Id, fakeAudioTranscriptionService.LastAudioId, "/transcribe passes selected audio to transcription service");
+
+    string transcriptScriptPath = Path.Combine(documentStorage.RootDirectory, "fake-transcribe.ps1");
+    await File.WriteAllTextAsync(transcriptScriptPath, "param([string]$AudioPath)\nWrite-Output \"Transcript from local provider for $(Split-Path -Leaf $AudioPath)\"", CancellationToken.None);
+    var localAudioTranscriptionService = new LocalCommandAudioTranscriptionService(
+        "powershell.exe",
+        $"-NoProfile -ExecutionPolicy Bypass -File \"{transcriptScriptPath}\" \"{{file}}\"",
+        timeout: TimeSpan.FromSeconds(30));
+    AudioTranscriptionResult localTranscriptionResult = await localAudioTranscriptionService.TranscribeAsync(uploadedAudio, CancellationToken.None);
+    AssertTrue(localTranscriptionResult.Success, "LocalCommandAudioTranscriptionService reports success for zero-exit local provider");
+    AssertTrue(localTranscriptionResult.Output.Contains("Transcript from local provider", StringComparison.OrdinalIgnoreCase), "LocalCommandAudioTranscriptionService captures provider stdout transcript");
+    AssertTrue(localTranscriptionResult.Output.Contains("voice-note.ogg", StringComparison.OrdinalIgnoreCase), "LocalCommandAudioTranscriptionService passes the selected audio file path to the provider");
+
     AssertFalse((await commandRouter.TryHandleAsync(TextMessage("/transcribex 1"), testUser, dbContext, CancellationToken.None)).Handled, "/transcribex is not treated as /transcribe");
 
     UploadedFile fileBeforeDelete = await dbContext.UploadedFiles.FirstAsync(x => x.Id == uploadedFileId, CancellationToken.None);

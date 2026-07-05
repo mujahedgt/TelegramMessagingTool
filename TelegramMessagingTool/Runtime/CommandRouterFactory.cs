@@ -19,7 +19,8 @@ public static class CommandRouterFactory
         DocumentQuestionAnsweringService documentQuestionAnsweringService,
         DocumentSummaryService documentSummaryService,
         DocumentEmbeddingService documentEmbeddingService,
-        IImageDescriptionService imageDescriptionService)
+        IImageDescriptionService imageDescriptionService,
+        IAudioTranscriptionService? audioTranscriptionService = null)
     {
         return new CommandRouter([
             new HelpCommand(),
@@ -35,7 +36,7 @@ public static class CommandRouterFactory
             new ImagesCommand(),
             new DescribeImageCommand(settings, documentStorage, imageDescriptionService),
             new VoiceFilesCommand(),
-            new TranscribeCommand(settings, documentStorage),
+            new TranscribeCommand(settings, documentStorage, audioTranscriptionService),
             new ReadFileCommand(documentStorage),
             new CreateFileCommand(documentStorage),
             new ImportFilesCommand(importDirectory, documentStorage, settings),

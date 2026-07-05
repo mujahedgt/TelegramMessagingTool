@@ -67,7 +67,7 @@ Configuration is read from environment variables.
 | `OLLAMA_MODEL_SUMMARY` | No | `OLLAMA_MODEL` | Model route for `/summarizefile` and `/summarizedocs` |
 | `OLLAMA_MODEL_TOOL_FINAL` | No | `OLLAMA_MODEL` | Model route for tool final-answer synthesis |
 | `OLLAMA_MODEL_IMAGE` | No | `OLLAMA_MODEL` | Reserved model route for future image-agent features. Recommended local vision model after `ollama pull`: `llama3.2-vision:11b`. |
-| `OLLAMA_MODEL_VOICE` | No | `OLLAMA_MODEL` | Reserved model route for future voice-agent transcript summarization/task extraction. Audio transcription itself still needs a dedicated transcription provider later. |
+| `OLLAMA_MODEL_VOICE` | No | `OLLAMA_MODEL` | Model route for future voice-agent transcript summarization/task extraction. Audio transcription uses the local command provider below, not Ollama directly. |
 | `OLLAMA_EMBEDDING_URL` | No | derived from `OLLAMA_URL` as `/api/embed` | Ollama embedding API endpoint |
 | `OLLAMA_EMBEDDING_MODEL` | No | `nomic-embed-text` | Local embedding model used by `/embedfile` and `/embeddocs` |
 | `ENABLE_DOCUMENT_EMBEDDINGS` | No | `false` | If true, `/askfile` and `/askdocs` use stored embeddings for hybrid semantic retrieval when available |
@@ -75,7 +75,10 @@ Configuration is read from environment variables.
 | `SEARCH_ROUTING_MODE` | No | `heuristic` | Controls direct web-search routing before normal chat. `heuristic` uses the current keyword/current-facts classifier; `llm` asks the chat model for a strict JSON search/no-search decision; `off` disables direct search routing while keeping model-requested `online_search` available when registered. |
 | `ENABLE_IMAGE_VISION` | No | `false` | If true, `/describeimage <id>` sends the selected sandboxed image to the configured local Ollama image route for a description. Keep false to return metadata only. |
 | `IMAGE_DESCRIPTION_PROMPT` | No | safe concise default | Optional custom prompt used by `/describeimage <id>` when `ENABLE_IMAGE_VISION=true`. It is trimmed and capped at 1000 characters. Use this to focus descriptions on UI labels, visible text, diagrams, or general scene details. |
-| `ENABLE_AUDIO_TRANSCRIPTION` | No | `false` | Reserved gate for `/transcribe <id>`. Keep false until a trusted local Whisper/audio transcription provider is configured; the current command returns metadata/provider-readiness only. |
+| `ENABLE_AUDIO_TRANSCRIPTION` | No | `false` | If true, `/transcribe <id>` can execute the configured trusted local audio transcription command. Keep false until `AUDIO_TRANSCRIPTION_COMMAND` is configured and tested locally. |
+| `AUDIO_TRANSCRIPTION_COMMAND` | No | empty | Local executable for audio transcription, for example a trusted Whisper/whisper.cpp wrapper. The app runs this directly with `UseShellExecute=false`; it is not a shell command string. |
+| `AUDIO_TRANSCRIPTION_ARGUMENTS` | No | `{file}` | Argument template for the local transcription command. `{file}` is replaced with the selected sandboxed audio path. Quote it as `"{file}"` if the provider expects a path argument that may contain spaces. |
+| `AUDIO_TRANSCRIPTION_TIMEOUT_SECONDS` | No | `120` | Local transcription timeout, clamped from `5` to `300` seconds. |
 | `ENABLE_SAFE_COMMAND_TOOLS` | No | `false` | If true, registers fixed safe command tools: `git_status`, `git_diff`, `git_log_recent`, `run_dotnet_tests`, `publish_release`, and `restart_latest_bot`. No arbitrary shell access is exposed. `run_dotnet_tests` accepts only `{"target":"helper-tests"}` and runs the helper test project. `publish_release` and `restart_latest_bot` only create high-risk pending approval requests; they do not execute release/restart directly. |
 | `SAFE_COMMAND_PROJECT_ROOT` | No | current working directory | Project root used by safe command tools and repo write approval tools. Commands run with fixed executable/argument lists under this directory. |
 | `ENABLE_REPO_WRITE_TOOLS` | No | `false` | If true, registers approval-backed repository write tools such as `repo_replace_text`. These tools require admin use, create pending actions first, validate paths under `SAFE_COMMAND_PROJECT_ROOT`, and execute only after `/approve`. |
@@ -112,6 +115,10 @@ export SEARCH_ROUTING_MODE='heuristic'
 export ENABLE_IMAGE_VISION='false'
 export IMAGE_DESCRIPTION_PROMPT='Describe this image clearly and concisely. Mention visible text only if you can read it. Do not invent details you cannot see.'
 export ENABLE_AUDIO_TRANSCRIPTION='false'
+# Optional trusted local transcription provider, for example a Whisper wrapper:
+# export AUDIO_TRANSCRIPTION_COMMAND='whisper-cli'
+# export AUDIO_TRANSCRIPTION_ARGUMENTS='--model C:/models/ggml-base.en.bin --file "{file}"'
+export AUDIO_TRANSCRIPTION_TIMEOUT_SECONDS='120'
 export ENABLE_SAFE_COMMAND_TOOLS='false'
 export SAFE_COMMAND_PROJECT_ROOT='/c/temp/TelegramMessagingTool'
 export ENABLE_REPO_WRITE_TOOLS='false'
@@ -249,7 +256,7 @@ The `/harnesses` command shows the next planned agent harnesses before their too
 | `image_agent` | planned | `describe_image`, `extract_image_text`, `generate_image_prompt`, `create_image` |
 | `voice_agent` | planned | `transcribe_audio`, `summarize_audio`, `extract_audio_tasks`, `speak_text` |
 
-These harnesses are currently **planning only**. The first image-agent foundation is implemented: `/images` lists sandboxed `.png/.jpg/.jpeg/.webp/.gif` files that were uploaded as Telegram documents, and `/describeimage <id>` returns safe metadata plus the configured image model route by default. When `ENABLE_IMAGE_VISION=true`, `/describeimage <id>` sends only that selected sandboxed image to the configured local Ollama image route for a concise description using `IMAGE_DESCRIPTION_PROMPT` (trimmed/capped to 1000 characters) so you can focus the model on UI labels, visible text, diagrams, or general scene details. The first voice-agent foundation is also implemented: `/voicefiles` lists sandboxed `.mp3/.wav/.m4a/.ogg/.oga/.opus/.flac` audio files, `/transcribe <audio-id>` returns safe metadata and a disabled/provider-not-configured message, and `/readfile <audio-id>` returns a safe transcription-not-implemented message. OCR/image generation and real voice/audio transcription/TTS tools are still planned next and should remain read-only/sandboxed first, followed by optional providers behind explicit feature flags.
+These harnesses are currently **planning only**. The first image-agent foundation is implemented: `/images` lists sandboxed `.png/.jpg/.jpeg/.webp/.gif` files that were uploaded as Telegram documents, and `/describeimage <id>` returns safe metadata plus the configured image model route by default. When `ENABLE_IMAGE_VISION=true`, `/describeimage <id>` sends only that selected sandboxed image to the configured local Ollama image route for a concise description using `IMAGE_DESCRIPTION_PROMPT` (trimmed/capped to 1000 characters) so you can focus the model on UI labels, visible text, diagrams, or general scene details. The voice-agent foundation now includes `/voicefiles` for sandboxed `.mp3/.wav/.m4a/.ogg/.oga/.opus/.flac` files plus `/transcribe <audio-id>`. By default `/transcribe` remains metadata/readiness-only; when `ENABLE_AUDIO_TRANSCRIPTION=true` and `AUDIO_TRANSCRIPTION_COMMAND` is configured, it runs the trusted local provider command against only the selected sandboxed audio file, captures stdout as the transcript, and reports provider failures safely. Transcript storage, summarization/task extraction, OCR/image generation, and TTS remain planned next steps behind explicit safety gates.
 
 ## Command parsing
 

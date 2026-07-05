@@ -88,8 +88,9 @@ public static class AgentHarnessCatalog
             builder.AppendLine($"- image vision execution: {(settings.EnableImageVision ? "enabled" : "disabled")}");
             builder.AppendLine($"- image description prompt: {(settings.ImageDescriptionPrompt == BotConfiguration.DefaultImageDescriptionPrompt ? "default" : "custom")}");
             builder.AppendLine($"- audio transcription execution: {(settings.EnableAudioTranscription ? "enabled" : "disabled")}");
+            builder.AppendLine($"- audio transcription provider: {(string.IsNullOrWhiteSpace(settings.AudioTranscriptionCommand) ? "not configured" : "local command configured")}");
             builder.AppendLine("- image readiness target: pull/configure an Ollama vision model before enabling /describeimage vision execution.");
-            builder.AppendLine("- voice readiness target: transcription still needs a dedicated audio/Whisper provider later; the voice route is for transcript summarization/task extraction.");
+            builder.AppendLine("- voice readiness target: configure AUDIO_TRANSCRIPTION_COMMAND/AUDIO_TRANSCRIPTION_ARGUMENTS for a trusted local Whisper/provider command before enabling transcription in real use.");
         }
 
         foreach (AgentHarnessDefinition harness in selectedHarnesses)

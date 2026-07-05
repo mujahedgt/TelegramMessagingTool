@@ -46,6 +46,7 @@ Search routing: {_settings.SearchRoutingMode}
 Image vision: {(_settings.EnableImageVision ? "enabled" : "disabled")}
 Image prompt: {(_settings.ImageDescriptionPrompt == BotConfiguration.DefaultImageDescriptionPrompt ? "default" : "custom")}
 Audio transcription: {(_settings.EnableAudioTranscription ? "enabled" : "disabled")}
+Audio provider: {(string.IsNullOrWhiteSpace(_settings.AudioTranscriptionCommand) ? "not configured" : "local command configured")}
 Safe command tools: {(_settings.EnableSafeCommandTools ? "enabled" : "disabled")}
 Repo write tools: {(_settings.EnableRepoWriteTools ? "enabled" : "disabled")}
 Plugins: {(_settings.EnablePlugins ? "enabled" : "disabled")} ({_settings.PluginDirectory})
