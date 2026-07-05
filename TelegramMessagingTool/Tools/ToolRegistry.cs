@@ -7,12 +7,12 @@ public sealed class ToolRegistry
     private readonly Dictionary<string, ToolRegistration> _tools;
 
     public ToolRegistry(IEnumerable<IAgentTool> tools)
-        : this(tools.Select(tool => new ToolRegistration(tool, ToolRegistration.BuiltInSource)))
+        : this(tools.Select(ToolRegistration.FromBuiltIn))
     {
     }
 
     public ToolRegistry(IEnumerable<IAgentTool> builtInTools, IEnumerable<ToolRegistration> additionalTools)
-        : this(builtInTools.Select(tool => new ToolRegistration(tool, ToolRegistration.BuiltInSource)).Concat(additionalTools))
+        : this(builtInTools.Select(ToolRegistration.FromBuiltIn).Concat(additionalTools))
     {
     }
 
@@ -119,4 +119,14 @@ public sealed record ToolRegistration(
     string SafetySummary = "Built-in tool managed by the application.")
 {
     public const string BuiltInSource = "built-in";
+
+    public static ToolRegistration FromBuiltIn(IAgentTool tool)
+    {
+        return new ToolRegistration(
+            tool,
+            BuiltInSource,
+            tool.RiskLevel,
+            tool.IsReadOnly,
+            tool.SafetySummary);
+    }
 }

@@ -358,17 +358,14 @@ Before loading risky plugin tools, add risk/approval metadata.
 
 # Priority 5 — Tool Safety and Approval Improvements
 
-## P5.1 Add structured risk metadata to tools
+## P5.1 Add structured risk metadata to tools ✅ Done
 
-Current `IAgentTool` only has:
+**Status:** Promoted structured risk metadata into the shared `IAgentTool` contract: `RiskLevel`, `SafetySummary`, and `IsReadOnly` now have safe defaults based on `RequiresApproval`. `ToolRegistry` now builds built-in registrations from the tool contract, while plugin registrations can still carry manifest overrides. `/tools` and model tool instructions render structured risk information.
+
+Current `IAgentTool` now has:
 
 ```csharp
 bool RequiresApproval
-```
-
-Add later:
-
-```csharp
 ToolRiskLevel RiskLevel
 string SafetySummary
 bool IsReadOnly
@@ -517,7 +514,7 @@ Then restart and verify:
 Continue with:
 
 ```text
-Priority 5.1 — Add structured risk metadata to tools
+Priority 5.2 — Improve `/pending` and `/action` previews
 ```
 
-This starts Priority 5 tool safety work by moving structured risk metadata from plugin registrations toward first-class tool contracts and richer action previews.
+This continues Priority 5 tool safety work by improving pending/action review previews with exact risk and target details.

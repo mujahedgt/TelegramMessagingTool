@@ -45,6 +45,17 @@ static void AssertFalse(bool condition, string name)
 // RED tests for upgrade helpers.
 AssertEqual("TelegramMessagingTool.Abstractions", typeof(IAgentTool).Assembly.GetName().Name, "IAgentTool lives in plugin abstraction assembly");
 AssertEqual("TelegramMessagingTool.Abstractions", typeof(ToolResult).Assembly.GetName().Name, "ToolResult lives in plugin abstraction assembly");
+IAgentTool metadataSafeTool = new DateTimeTool();
+AssertEqual(ToolRiskLevel.Low, metadataSafeTool.RiskLevel, "Safe tools expose low risk metadata");
+AssertTrue(metadataSafeTool.IsReadOnly, "Safe tools expose read-only metadata");
+AssertTrue(metadataSafeTool.SafetySummary.Length > 0, "Tools expose a safety summary");
+IAgentTool metadataHighRiskTool = new FakeHighRiskTool();
+AssertEqual(ToolRiskLevel.High, metadataHighRiskTool.RiskLevel, "Approval-backed tools expose high risk metadata by default");
+AssertFalse(metadataHighRiskTool.IsReadOnly, "Approval-backed tools expose state-changing metadata by default");
+ToolRegistry metadataRegistry = new([metadataSafeTool, metadataHighRiskTool]);
+string metadataToolList = metadataRegistry.RenderToolList();
+AssertTrue(metadataToolList.Contains("risk: high", StringComparison.OrdinalIgnoreCase), "Built-in tool risk metadata renders from the tool contract");
+AssertTrue(metadataToolList.Contains("can change state", StringComparison.OrdinalIgnoreCase), "Built-in tool read-only metadata renders from the tool contract");
 
 List<string> chunks = TelegramMessageFormatter.SplitForTelegram(new string('x', 9000), 4096).ToList();
 AssertEqual(3, chunks.Count, "SplitForTelegram creates 3 chunks for 9000 chars");
@@ -2514,6 +2525,20 @@ sealed class FakeAudioTranscriptionService : IAudioTranscriptionService
     {
         LastAudioId = audioFile.Id;
         return Task.FromResult(new AudioTranscriptionResult(true, _output));
+    }
+}
+
+sealed class FakeHighRiskTool : IAgentTool
+{
+    public string Name => "fake_high_risk";
+
+    public string Description => "Fake approval-backed test tool.";
+
+    public bool RequiresApproval => true;
+
+    public Task<ToolResult> ExecuteAsync(string input, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(ToolResult.Fail("approval required"));
     }
 }
 

@@ -21,7 +21,7 @@ Implemented:
 Still intentionally deferred:
 
 - Plugin-specific dependency isolation/unloading.
-- Medium/high-risk plugin approval metadata.
+- Plugin risk/approval policy beyond metadata display.
 - Sandboxing untrusted code. Do **not** treat plugins as untrusted extensions.
 
 ## Directory layout
@@ -146,7 +146,7 @@ Expected output includes:
 Expected output includes registered tools and their source, for example:
 
 ```text
-- sample_echo: Sample trusted plugin tool that echoes its input. (safe/no approval; source: plugin:sample-plugin)
+- sample_echo: Sample trusted plugin tool that echoes its input. (safe/no approval; source: plugin:sample-plugin; risk: low; read-only; safety: Echoes provided input only; does not write files, call networks, or change system state.)
 ```
 
 ## Building the sample plugin
