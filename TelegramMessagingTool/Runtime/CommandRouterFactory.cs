@@ -18,6 +18,7 @@ public static class CommandRouterFactory
         DocumentRetrievalService documentRetrievalService,
         DocumentQuestionAnsweringService documentQuestionAnsweringService,
         DocumentSummaryService documentSummaryService,
+        TranscriptInsightsService transcriptInsightsService,
         DocumentEmbeddingService documentEmbeddingService,
         IImageDescriptionService imageDescriptionService,
         IAudioTranscriptionService? audioTranscriptionService = null)
@@ -37,6 +38,7 @@ public static class CommandRouterFactory
             new DescribeImageCommand(settings, documentStorage, imageDescriptionService),
             new VoiceFilesCommand(),
             new TranscribeCommand(settings, documentStorage, audioTranscriptionService),
+            new TranscriptInsightsCommand(documentStorage, transcriptInsightsService),
             new ReadFileCommand(documentStorage),
             new CreateFileCommand(documentStorage),
             new ImportFilesCommand(importDirectory, documentStorage, settings),

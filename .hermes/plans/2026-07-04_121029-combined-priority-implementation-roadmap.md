@@ -428,16 +428,16 @@ Remaining possible tasks:
 
 ## P6.2 Improve voice agent ✅ Partial
 
-**Status:** Added trusted local provider integration behind `ENABLE_AUDIO_TRANSCRIPTION=true`. `/transcribe <audio-id>` remains metadata/readiness-only by default, but when `AUDIO_TRANSCRIPTION_COMMAND` is configured it runs the local command directly with `UseShellExecute=false`, substitutes `{file}` with the selected sandboxed audio path, captures stdout as the transcript, saves successful transcripts as sandboxed `*-transcript.txt` documents, and reports non-zero/timeout/start failures safely. `/status`, `/harnesses`, README, and release env handoff now show/carry provider configuration.
+**Status:** Added trusted local provider integration behind `ENABLE_AUDIO_TRANSCRIPTION=true`. `/transcribe <audio-id>` remains metadata/readiness-only by default, but when `AUDIO_TRANSCRIPTION_COMMAND` is configured it runs the local command directly with `UseShellExecute=false`, substitutes `{file}` with the selected sandboxed audio path, captures stdout as the transcript, saves successful transcripts as sandboxed `*-transcript.txt` documents, and reports non-zero/timeout/start failures safely. `/transcriptinsights <transcript-file-id>` analyzes only saved transcript documents through the `OLLAMA_MODEL_VOICE` route and returns a concise summary, decisions/facts, action items, and open questions. `/status`, `/harnesses`, README, and release env handoff show/carry provider/model configuration.
 
 Completed:
 
 - Add local Whisper/provider integration behind `ENABLE_AUDIO_TRANSCRIPTION=true`.
 - Store transcripts as sandboxed text documents.
+- Add summarization/task extraction using `OLLAMA_MODEL_VOICE`.
 
 Remaining possible tasks:
 
-- Add summarization/task extraction using `OLLAMA_MODEL_VOICE`.
 - TTS later, with explicit output storage and user approval for sending audio.
 
 ---
@@ -530,7 +530,7 @@ Then restart and verify:
 Continue with:
 
 ```text
-Priority 6.2c — Summarize/extract tasks from transcripts
+Priority 6.2d — Add TTS output storage gate
 ```
 
-This continues voice-agent work by using `OLLAMA_MODEL_VOICE` on saved transcript documents for summarization/task extraction in a safe, explicit command path.
+This continues voice-agent work by designing a safe text-to-speech path with explicit output storage, no automatic audio sending, and user/admin approval before delivery if needed.

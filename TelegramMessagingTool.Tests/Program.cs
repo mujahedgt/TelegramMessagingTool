@@ -317,6 +317,7 @@ var commandFactoryDocumentIndexingService = new DocumentIndexingService(commandF
 var commandFactoryDocumentRetrievalService = new DocumentRetrievalService();
 var commandFactoryDocumentQuestionAnsweringService = new DocumentQuestionAnsweringService(commandFactoryOllamaClient);
 var commandFactoryDocumentSummaryService = new DocumentSummaryService(commandFactoryOllamaClient);
+var commandFactoryTranscriptInsightsService = new TranscriptInsightsService(commandFactoryOllamaClient);
 var commandFactoryDocumentEmbeddingService = new DocumentEmbeddingService(commandFactoryEmbeddingClient, commandFactorySettings.OllamaEmbeddingModel);
 var commandFactoryToolRegistry = new ToolRegistry(Array.Empty<IAgentTool>());
 var commandFactoryImageDescriptionService = new OllamaImageDescriptionService(commandFactoryHttpClient, commandFactorySettings);
@@ -332,11 +333,12 @@ CommandRouter factoryRouter = CommandRouterFactory.Create(
     commandFactoryDocumentRetrievalService,
     commandFactoryDocumentQuestionAnsweringService,
     commandFactoryDocumentSummaryService,
+    commandFactoryTranscriptInsightsService,
     commandFactoryDocumentEmbeddingService,
     commandFactoryImageDescriptionService);
 string commandNames = string.Join(",", factoryRouter.Commands.Select(x => x.Name));
 AssertEqual(
-    "/help,/systeminfo,/diskstatus,/processes,/status,/reset,/remember,/memory,/forget,/files,/images,/describeimage,/voicefiles,/transcribe,/readfile,/createfile,/importfiles,/importfile,/deletefile,/indexfile,/indexdocs,/docchunks,/askfile,/askdocs,/summarizefile,/summarizedocs,/embedfile,/embeddocs,/tools,/harnesses,/plugins,/killprocess,/action,/actions,/pending,/approve,/deny,/plan,/tasks,/task,/schedule,/schedulelist,/unschedule,/done,/cancel",
+    "/help,/systeminfo,/diskstatus,/processes,/status,/reset,/remember,/memory,/forget,/files,/images,/describeimage,/voicefiles,/transcribe,/transcriptinsights,/readfile,/createfile,/importfiles,/importfile,/deletefile,/indexfile,/indexdocs,/docchunks,/askfile,/askdocs,/summarizefile,/summarizedocs,/embedfile,/embeddocs,/tools,/harnesses,/plugins,/killprocess,/action,/actions,/pending,/approve,/deny,/plan,/tasks,/task,/schedule,/schedulelist,/unschedule,/done,/cancel",
     commandNames,
     "CommandRouterFactory preserves Program command registration order");
 
@@ -2337,6 +2339,29 @@ diff --git a/../outside.cs b/../outside.cs
     AssertEqual("transcript", savedTranscriptFile.Source, "/transcribe marks transcript document source");
     string savedTranscriptText = await documentStorage.ExtractTextAsync(savedTranscriptFile, CancellationToken.None);
     AssertTrue(savedTranscriptText.Contains("Transcript text from fixture."), "/transcribe persists transcript text content");
+
+    var transcriptInsightsChatClient = new ScriptedChatClient([
+        "Voice summary: user discussed the fixture transcript. Tasks: follow up on the action item."
+    ]);
+    var transcriptInsightsCommand = new TranscriptInsightsCommand(
+        documentStorage,
+        new TranscriptInsightsService(transcriptInsightsChatClient));
+    CommandResult transcriptInsightsResult = await transcriptInsightsCommand.TryHandleAsync(
+        TextMessage($"/transcriptinsights {savedTranscriptFile.Id}"),
+        testUser,
+        dbContext,
+        CancellationToken.None);
+    AssertTrue(transcriptInsightsResult.Handled, "/transcriptinsights is handled");
+    AssertTrue(transcriptInsightsResult.ReplyText?.Contains("Voice summary", StringComparison.OrdinalIgnoreCase) == true, "/transcriptinsights returns voice summary output");
+    AssertTrue(transcriptInsightsResult.ReplyText?.Contains("Tasks", StringComparison.OrdinalIgnoreCase) == true, "/transcriptinsights returns task extraction output");
+    AssertEqual(ModelTaskKind.Voice, transcriptInsightsChatClient.ModelTaskKinds.Single(), "/transcriptinsights uses the voice model route");
+    CommandResult nonTranscriptInsightsResult = await transcriptInsightsCommand.TryHandleAsync(
+        TextMessage($"/transcriptinsights {uploadedAudio.Id}"),
+        testUser,
+        dbContext,
+        CancellationToken.None);
+    AssertTrue(nonTranscriptInsightsResult.Handled, "/transcriptinsights handles non-transcript file ids");
+    AssertTrue(nonTranscriptInsightsResult.ReplyText?.Contains("transcript", StringComparison.OrdinalIgnoreCase) == true, "/transcriptinsights rejects non-transcript files clearly");
 
     string transcriptScriptPath = Path.Combine(documentStorage.RootDirectory, "fake-transcribe.ps1");
     await File.WriteAllTextAsync(transcriptScriptPath, "param([string]$AudioPath)\nWrite-Output \"Transcript from local provider for $(Split-Path -Leaf $AudioPath)\"", CancellationToken.None);
