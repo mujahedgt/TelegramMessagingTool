@@ -324,7 +324,9 @@ Target responsibilities:
 
 Plugin manifest inspection is done, but assembly loading is trusted code execution. Do this only after repo/runtime safety improves.
 
-## P4.1 Create abstraction package
+## P4.1 Create abstraction package ✅ Done
+
+**Status:** Created `TelegramMessagingTool.Abstractions` and moved shared plugin/tool contracts (`IAgentTool`, `ToolResult`) into it while preserving the existing `TelegramMessagingTool.Tools` namespace. The main app references the abstraction package, and helper tests verify the contracts now live in the abstraction assembly.
 
 **Files:**
 
@@ -511,7 +513,7 @@ Then restart and verify:
 Continue with:
 
 ```text
-Priority 4.1 — Create plugin abstraction package
+Priority 4.2 — Add trusted plugin loader
 ```
 
-This starts Priority 4 plugin loading groundwork: create/share a safe abstraction package before any trusted plugin assembly loading.
+This continues Priority 4 plugin loading carefully: add trusted plugin loading behind `ENABLE_PLUGINS` while preserving manifest validation, duplicate-name rejection, source visibility, and documentation that plugin DLLs are trusted OS-level code.

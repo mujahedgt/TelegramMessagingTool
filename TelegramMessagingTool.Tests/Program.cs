@@ -43,6 +43,9 @@ static void AssertFalse(bool condition, string name)
 }
 
 // RED tests for upgrade helpers.
+AssertEqual("TelegramMessagingTool.Abstractions", typeof(IAgentTool).Assembly.GetName().Name, "IAgentTool lives in plugin abstraction assembly");
+AssertEqual("TelegramMessagingTool.Abstractions", typeof(ToolResult).Assembly.GetName().Name, "ToolResult lives in plugin abstraction assembly");
+
 List<string> chunks = TelegramMessageFormatter.SplitForTelegram(new string('x', 9000), 4096).ToList();
 AssertEqual(3, chunks.Count, "SplitForTelegram creates 3 chunks for 9000 chars");
 AssertTrue(chunks.All(x => x.Length <= 4096), "SplitForTelegram respects Telegram limit");
