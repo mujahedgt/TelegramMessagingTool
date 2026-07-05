@@ -97,6 +97,16 @@ var githubPreviewAction = new PendingAction
 string githubPreview = PendingActionPreviewFormatter.RenderListItem(githubPreviewAction);
 AssertTrue(githubPreview.Contains("GitHub repository: mujahedgt/TelegramMessagingTool", StringComparison.OrdinalIgnoreCase), "/pending preview shows GitHub repo target");
 AssertTrue(githubPreview.Contains("GitHub issue preview: create issue", StringComparison.OrdinalIgnoreCase), "/pending preview shows GitHub issue preview");
+RepoSafetyScanResult secretDiffScan = RepoSafetyScanner.ScanDiff("""
+diff --git a/README.md b/README.md
++TELEGRAM_BOT_TOKEN=123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ_testtokenvalue
+""");
+AssertFalse(secretDiffScan.Allowed, "RepoSafetyScanner blocks token-like values in diffs before commit/release");
+AssertTrue(secretDiffScan.Message.Contains("TELEGRAM_BOT_TOKEN", StringComparison.OrdinalIgnoreCase), "RepoSafetyScanner explains the secret-like pattern");
+AssertFalse(RepoSafetyScanner.ScanChangedPaths([".env"]).Allowed, "RepoSafetyScanner rejects .env files");
+AssertFalse(RepoSafetyScanner.ScanChangedPaths(["release/TelegramMessagingTool.exe"]).Allowed, "RepoSafetyScanner rejects release outputs");
+AssertFalse(RepoSafetyScanner.ScanChangedPaths(["TelegramMessagingTool/appsettings.Production.json"]).Allowed, "RepoSafetyScanner rejects production settings files");
+AssertTrue(RepoSafetyScanner.ScanChangedPaths(["README.md", "TelegramMessagingTool/Program.cs"]).Allowed, "RepoSafetyScanner allows normal source and docs paths");
 
 List<string> chunks = TelegramMessageFormatter.SplitForTelegram(new string('x', 9000), 4096).ToList();
 AssertEqual(3, chunks.Count, "SplitForTelegram creates 3 chunks for 9000 chars");

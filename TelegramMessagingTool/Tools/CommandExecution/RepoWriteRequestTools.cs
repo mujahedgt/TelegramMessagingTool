@@ -631,6 +631,12 @@ public static class RepoGitPushExecutor
             return RepoGitPushResult.Fail("Execution failed: could not read git status. " + status.RenderForMessage());
         }
 
+        RepoSafetyScanResult safetyScan = await RepoSafetyScanner.ScanRepositoryAsync(projectRoot, cancellationToken);
+        if (!safetyScan.Allowed)
+        {
+            return RepoGitPushResult.Fail("Execution refused: " + safetyScan.Message);
+        }
+
         if (!string.IsNullOrWhiteSpace(status.Output))
         {
             return RepoGitPushResult.Fail("Execution refused: working tree has uncommitted changes. Commit or discard changes before pushing.");
@@ -739,6 +745,12 @@ public static class RepoGitCommitExecutor
             {
                 return RepoGitCommitResult.Fail($"Execution refused: changed path '{changedPath}' is not allowed. {error}");
             }
+        }
+
+        RepoSafetyScanResult safetyScan = await RepoSafetyScanner.ScanRepositoryAsync(projectRoot, cancellationToken);
+        if (!safetyScan.Allowed)
+        {
+            return RepoGitCommitResult.Fail("Execution refused: " + safetyScan.Message);
         }
 
         ProcessCommandResult diffCheck = await RunGitAsync(projectRoot, ["diff", "--check"], cancellationToken);

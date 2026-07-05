@@ -26,6 +26,7 @@ TelegramMessagingTool is a C#/.NET console application that connects a Telegram 
 - Read-only local device commands: `/systeminfo`, `/diskstatus`, and `/processes [count]`
 - Safe approval foundation for future risky tools
 - Approval commands: `/pending`, `/approve <id>`, `/deny <id>`, and `/action <id>` with structured previews showing exact risk, target file/repository, diff or git command summaries, and GitHub issue/comment targets without dumping raw edit payloads
+- Repo safety scanning before approved commits, pushes, and releases: blocks token-like diff additions, `.env`/secret config files, local DB/certificate/backup binaries, release outputs, and generated/runtime paths
 - Task planner commands: `/plan <goal>`, `/tasks`, `/task <id>`, `/done <task-id> [step-number]`, and `/cancel <task-id>`
 - P2 planning harness command: `/harnesses` shows the planned `image_agent` and `voice_agent` tool/safety roadmap before implementation
 - Read-only plugin manifest inspection via `/plugins`; this scans `plugin.json` files only, shows manifest paths and entry assembly presence, and does not load plugin assemblies
@@ -185,12 +186,12 @@ Available tools:
 | `git_diff` | No | Optional. Registered only when `ENABLE_SAFE_COMMAND_TOOLS=true`. Read-only `git diff -- .` for `SAFE_COMMAND_PROJECT_ROOT` |
 | `git_log_recent` | No | Optional. Registered only when `ENABLE_SAFE_COMMAND_TOOLS=true`. Read-only `git log --oneline -5` for `SAFE_COMMAND_PROJECT_ROOT` |
 | `run_dotnet_tests` | No | Optional. Registered only when `ENABLE_SAFE_COMMAND_TOOLS=true`. Fixed helper test command only; input must be `{"target":"helper-tests"}` |
-| `publish_release` | Yes | Optional. Registered only when `ENABLE_SAFE_COMMAND_TOOLS=true` and an approval context is available. Publishes a timestamped release and updates `.latest-release` after `/approve`; does not restart |
+| `publish_release` | Yes | Optional. Registered only when `ENABLE_SAFE_COMMAND_TOOLS=true` and an approval context is available. After `/approve`, runs repo safety scanning, publishes a timestamped release, and updates `.latest-release`; does not restart |
 | `restart_latest_bot` | Yes | Optional. Registered only when `ENABLE_SAFE_COMMAND_TOOLS=true` and an approval context is available. Schedules a safe restart from `.latest-release` after `/approve` using environment handoff |
 | `repo_replace_text` | Yes | Optional. Registered only when `ENABLE_REPO_WRITE_TOOLS=true` and an approval context is available. Replaces one exact text block in an allowed project text file after `/approve` |
 | `repo_apply_patch` | Yes | Optional. Registered only when `ENABLE_REPO_WRITE_TOOLS=true` and an approval context is available. Applies one validated unified diff after `/approve`; rejects binary/generated/runtime/out-of-root paths |
-| `repo_commit_changes` | Yes | Optional. Registered only when `ENABLE_REPO_WRITE_TOOLS=true` and an approval context is available. Runs safe Git checks and commits current allowed project changes after `/approve`; does not push |
-| `repo_push_changes` | Yes | Optional. Registered only when `ENABLE_REPO_WRITE_TOOLS=true` and an approval context is available. Refuses dirty working trees and pushes the current branch to `origin` after `/approve`; no force push |
+| `repo_commit_changes` | Yes | Optional. Registered only when `ENABLE_REPO_WRITE_TOOLS=true` and an approval context is available. Runs Git checks plus repo safety scanning, then commits current allowed project changes after `/approve`; does not push |
+| `repo_push_changes` | Yes | Optional. Registered only when `ENABLE_REPO_WRITE_TOOLS=true` and an approval context is available. Runs repo safety scanning, refuses dirty working trees, and pushes the current branch to `origin` after `/approve`; no force push |
 
 Search behavior notes:
 

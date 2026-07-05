@@ -383,7 +383,9 @@ Add richer previews:
 - GitHub repo/issue preview
 - exact risk level
 
-## P5.3 Add secret/danger scanning
+## P5.3 Add secret/danger scanning ✅ Done
+
+**Status:** Added `RepoSafetyScanner` and wired it into approval-backed commit, push, and publish execution. It scans changed paths and diff additions before continuing, rejects token-like additions, `.env`/secret production config files, local database/certificate/backup binaries, generated/runtime folders, and release outputs. Helper tests cover token-like diff blocking plus allowed/blocked path decisions.
 
 Before commit/push/release:
 

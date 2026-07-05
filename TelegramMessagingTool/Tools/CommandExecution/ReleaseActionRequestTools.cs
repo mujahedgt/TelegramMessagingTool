@@ -159,6 +159,12 @@ public static class ReleasePublishExecutor
             return ReleasePublishResult.Fail($"Execution failed: expected project file does not exist: {projectPath}");
         }
 
+        RepoSafetyScanResult safetyScan = await RepoSafetyScanner.ScanRepositoryAsync(projectRoot, cancellationToken);
+        if (!safetyScan.Allowed)
+        {
+            return ReleasePublishResult.Fail("Execution refused: " + safetyScan.Message);
+        }
+
         string releaseName = $"TelegramMessagingTool-{DateTime.UtcNow:yyyyMMdd-HHmmss}";
         string relativeReleasePath = Path.Combine("release", releaseName).Replace('\\', '/');
         string releasePath = Path.Combine(projectRoot, relativeReleasePath);
