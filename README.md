@@ -25,7 +25,7 @@ TelegramMessagingTool is a C#/.NET console application that connects a Telegram 
 - Document Q&A indexing, question, summary, and embedding commands: `/indexfile`, `/indexdocs`, `/docchunks`, `/askfile`, `/askdocs`, `/summarizefile`, `/summarizedocs`, `/embedfile`, and `/embeddocs`
 - Read-only local device commands: `/systeminfo`, `/diskstatus`, and `/processes [count]`
 - Safe approval foundation for future risky tools
-- Approval commands: `/pending`, `/approve <id>`, and `/deny <id>`
+- Approval commands: `/pending`, `/approve <id>`, `/deny <id>`, and `/action <id>` with structured previews showing exact risk, target file/repository, diff or git command summaries, and GitHub issue/comment targets without dumping raw edit payloads
 - Task planner commands: `/plan <goal>`, `/tasks`, `/task <id>`, `/done <task-id> [step-number]`, and `/cancel <task-id>`
 - P2 planning harness command: `/harnesses` shows the planned `image_agent` and `voice_agent` tool/safety roadmap before implementation
 - Read-only plugin manifest inspection via `/plugins`; this scans `plugin.json` files only, shows manifest paths and entry assembly presence, and does not load plugin assemblies

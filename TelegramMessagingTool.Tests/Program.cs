@@ -56,6 +56,47 @@ ToolRegistry metadataRegistry = new([metadataSafeTool, metadataHighRiskTool]);
 string metadataToolList = metadataRegistry.RenderToolList();
 AssertTrue(metadataToolList.Contains("risk: high", StringComparison.OrdinalIgnoreCase), "Built-in tool risk metadata renders from the tool contract");
 AssertTrue(metadataToolList.Contains("can change state", StringComparison.OrdinalIgnoreCase), "Built-in tool read-only metadata renders from the tool contract");
+var previewAction = new PendingAction
+{
+    Id = 42,
+    ToolName = "repo_replace_text",
+    Description = "Replace text in TelegramMessagingTool/Program.cs. Reason: test preview",
+    RiskLevel = "high",
+    Status = PendingActionStatuses.Pending,
+    CreatedAt = new DateTime(2026, 7, 5, 9, 0, 0, DateTimeKind.Utc),
+    ExpiresAt = new DateTime(2026, 7, 5, 9, 15, 0, DateTimeKind.Utc),
+    PayloadJson = "{\"action\":\"repo_replace_text\",\"path\":\"TelegramMessagingTool/Program.cs\",\"old_text\":\"old\",\"new_text\":\"newer text\",\"reason\":\"test preview\"}"
+};
+string pendingPreview = PendingActionPreviewFormatter.RenderListItem(previewAction);
+AssertTrue(pendingPreview.Contains("Exact risk: high", StringComparison.OrdinalIgnoreCase), "/pending preview shows exact risk label");
+AssertTrue(pendingPreview.Contains("Target file: TelegramMessagingTool/Program.cs", StringComparison.OrdinalIgnoreCase), "/pending preview shows target file");
+AssertTrue(pendingPreview.Contains("Diff summary: -3/+10 chars", StringComparison.OrdinalIgnoreCase), "/pending preview shows diff summary for repo text replacement");
+string actionPreview = PendingActionPreviewFormatter.RenderDetails(previewAction);
+AssertTrue(actionPreview.Contains("Payload summary:", StringComparison.OrdinalIgnoreCase), "/action details show a payload summary section");
+AssertTrue(actionPreview.Contains("Target file: TelegramMessagingTool/Program.cs", StringComparison.OrdinalIgnoreCase), "/action details show target details");
+AssertTrue(!actionPreview.Contains("old_text", StringComparison.OrdinalIgnoreCase), "/action details avoid dumping raw repo edit payload fields");
+var commitPreviewAction = new PendingAction
+{
+    Id = 43,
+    ToolName = "repo_commit_changes",
+    RiskLevel = "high",
+    Status = PendingActionStatuses.Pending,
+    ExpiresAt = new DateTime(2026, 7, 5, 9, 20, 0, DateTimeKind.Utc),
+    PayloadJson = "{\"action\":\"repo_commit_changes\",\"message\":\"Add preview formatter\"}"
+};
+AssertTrue(PendingActionPreviewFormatter.RenderListItem(commitPreviewAction).Contains("Git command preview: git commit -m \"Add preview formatter\"", StringComparison.OrdinalIgnoreCase), "/pending preview shows git command preview for commits");
+var githubPreviewAction = new PendingAction
+{
+    Id = 44,
+    ToolName = "github_create_issue",
+    RiskLevel = "high",
+    Status = PendingActionStatuses.Pending,
+    ExpiresAt = new DateTime(2026, 7, 5, 9, 25, 0, DateTimeKind.Utc),
+    PayloadJson = "{\"action\":\"github_create_issue\",\"owner\":\"mujahedgt\",\"repo\":\"TelegramMessagingTool\",\"title\":\"Improve previews\",\"labels\":[\"enhancement\"]}"
+};
+string githubPreview = PendingActionPreviewFormatter.RenderListItem(githubPreviewAction);
+AssertTrue(githubPreview.Contains("GitHub repository: mujahedgt/TelegramMessagingTool", StringComparison.OrdinalIgnoreCase), "/pending preview shows GitHub repo target");
+AssertTrue(githubPreview.Contains("GitHub issue preview: create issue", StringComparison.OrdinalIgnoreCase), "/pending preview shows GitHub issue preview");
 
 List<string> chunks = TelegramMessageFormatter.SplitForTelegram(new string('x', 9000), 4096).ToList();
 AssertEqual(3, chunks.Count, "SplitForTelegram creates 3 chunks for 9000 chars");

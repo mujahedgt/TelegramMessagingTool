@@ -43,12 +43,7 @@ public sealed class PendingCommand : IBotCommand
             return new CommandResult(true, "No pending actions are waiting for your approval.");
         }
 
-        string reply = "Pending actions:\n\n" + string.Join("\n\n", actions.Select(RenderAction));
+        string reply = "Pending actions:\n\n" + string.Join("\n\n", actions.Select(PendingActionPreviewFormatter.RenderListItem));
         return new CommandResult(true, reply, InlineKeyboardFactory.ForPendingAction(actions[0].Id));
-    }
-
-    private static string RenderAction(PendingAction action)
-    {
-        return $"#{action.Id} [{action.RiskLevel}] {action.ToolName}\n{action.Description}\nExpires UTC: {action.ExpiresAt:yyyy-MM-dd HH:mm}\nApprove: /approve {action.Id}\nDeny: /deny {action.Id}";
     }
 }

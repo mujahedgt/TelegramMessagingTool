@@ -371,7 +371,9 @@ string SafetySummary
 bool IsReadOnly
 ```
 
-## P5.2 Improve `/pending` and `/action` previews
+## P5.2 Improve `/pending` and `/action` previews ✅ Done
+
+**Status:** Added `PendingActionPreviewFormatter` and routed both `/pending` and `/action <id>` through it. Reviews now show exact risk, target files, repo patch diff summaries, git command previews, release/restart targets, and GitHub repo/issue/comment previews while avoiding raw repo edit payload dumps.
 
 Add richer previews:
 
@@ -514,7 +516,7 @@ Then restart and verify:
 Continue with:
 
 ```text
-Priority 5.2 — Improve `/pending` and `/action` previews
+Priority 5.3 — Add secret/danger scanning
 ```
 
-This continues Priority 5 tool safety work by improving pending/action review previews with exact risk and target details.
+This continues Priority 5 tool safety work by adding secret/danger scanning before commit, push, release, or other high-risk approvals.
