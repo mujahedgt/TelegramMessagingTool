@@ -25,7 +25,7 @@ TelegramMessagingTool is a C#/.NET console application that connects a Telegram 
 - Document Q&A indexing, question, summary, and embedding commands: `/indexfile`, `/indexdocs`, `/docchunks`, `/askfile`, `/askdocs`, `/summarizefile`, `/summarizedocs`, `/embedfile`, and `/embeddocs`
 - Read-only local device commands: `/systeminfo`, `/diskstatus`, and `/processes [count]`
 - Safe approval foundation for future risky tools
-- Approval commands: `/pending`, `/approve <id>`, `/deny <id>`, and `/action <id>` with structured previews showing exact risk, target file/repository, diff or git command summaries, and GitHub issue/comment targets without dumping raw edit payloads
+- Approval commands: `/pending`, `/approve <id>`, `/deny <id>`, `/action <id>`, and `/actions [count]` with structured previews/history showing exact risk, target file/repository, diff or git command summaries, GitHub issue/comment targets, and compact decision notes without dumping raw edit payloads
 - Repo safety scanning before approved commits, pushes, and releases: blocks token-like diff additions, `.env`/secret config files, local DB/certificate/backup binaries, release outputs, and generated/runtime paths
 - Task planner commands: `/plan <goal>`, `/tasks`, `/task <id>`, `/done <task-id> [step-number]`, and `/cancel <task-id>`
 - P2 planning harness command: `/harnesses` shows the planned `image_agent` and `voice_agent` tool/safety roadmap before implementation
@@ -280,6 +280,7 @@ Commands:
 |---|---|
 | `/pending` | Admin-only: list pending actions waiting for your approval |
 | `/action <id>` | Admin-only: show audit details for a pending, approved, denied, expired, or executed action |
+| `/actions [count]` | Admin-only: list recent action audit records with compact status, risk, timestamps, decision notes, and `/action <id>` drill-down links |
 | `/approve <id>` | Admin-only: approve a pending action |
 | `/deny <id>` | Admin-only: deny a pending action |
 

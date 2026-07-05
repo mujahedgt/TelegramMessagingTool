@@ -59,6 +59,21 @@ public sealed class PendingActionService
             .FirstOrDefaultAsync(x => x.Id == actionId && x.ConnectedUserId == user.Id, cancellationToken);
     }
 
+    public async Task<IReadOnlyList<PendingAction>> ListRecentAsync(
+        TelegramDbContext dbContext,
+        ConnectedUser user,
+        int count,
+        CancellationToken cancellationToken)
+    {
+        await MarkExpiredAsync(dbContext, user, cancellationToken);
+        int boundedCount = Math.Clamp(count, 1, 50);
+        return await dbContext.PendingActions
+            .Where(x => x.ConnectedUserId == user.Id)
+            .OrderByDescending(x => x.CreatedAt)
+            .Take(boundedCount)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<PendingActionDecision> ApproveAsync(
         TelegramDbContext dbContext,
         ConnectedUser user,

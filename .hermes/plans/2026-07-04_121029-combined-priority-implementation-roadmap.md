@@ -393,9 +393,11 @@ Before commit/push/release:
 - reject `.env`, secret files, local DB files, release outputs
 - warn on suspicious binary/generated files
 
-## P5.4 Add audit/export
+## P5.4 Add audit/export ✅ Done
 
-Useful command later:
+**Status:** Added `/actions [count]` plus `ActionHistoryFormatter` and `PendingActionService.ListRecentAsync`. The command lists recent action audit records with compact status, risk, timestamps, decision notes, and `/action <id>` drill-down links without dumping raw payload JSON. Count is clamped to `1..50` and defaults to `10`.
+
+Useful command:
 
 ```text
 /actions [count]

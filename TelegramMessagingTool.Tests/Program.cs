@@ -107,6 +107,23 @@ AssertFalse(RepoSafetyScanner.ScanChangedPaths([".env"]).Allowed, "RepoSafetySca
 AssertFalse(RepoSafetyScanner.ScanChangedPaths(["release/TelegramMessagingTool.exe"]).Allowed, "RepoSafetyScanner rejects release outputs");
 AssertFalse(RepoSafetyScanner.ScanChangedPaths(["TelegramMessagingTool/appsettings.Production.json"]).Allowed, "RepoSafetyScanner rejects production settings files");
 AssertTrue(RepoSafetyScanner.ScanChangedPaths(["README.md", "TelegramMessagingTool/Program.cs"]).Allowed, "RepoSafetyScanner allows normal source and docs paths");
+var historyAction = new PendingAction
+{
+    Id = 45,
+    ToolName = "repo_commit_changes",
+    Description = "Commit approved repository changes.",
+    RiskLevel = "high",
+    Status = PendingActionStatuses.Approved,
+    CreatedAt = new DateTime(2026, 7, 5, 9, 30, 0, DateTimeKind.Utc),
+    DecidedAt = new DateTime(2026, 7, 5, 9, 31, 0, DateTimeKind.Utc),
+    DecisionNote = "Committed 2 file(s) as abc1234: Add safety checks",
+    PayloadJson = "{\"action\":\"repo_commit_changes\",\"message\":\"Add safety checks\"}"
+};
+string actionHistory = ActionHistoryFormatter.RenderRecent([historyAction]);
+AssertTrue(actionHistory.Contains("Recent actions", StringComparison.OrdinalIgnoreCase), "/actions history has a title");
+AssertTrue(actionHistory.Contains("#45 [approved] repo_commit_changes", StringComparison.OrdinalIgnoreCase), "/actions history includes status and type");
+AssertTrue(actionHistory.Contains("Decision: Committed 2 file(s) as abc1234", StringComparison.OrdinalIgnoreCase), "/actions history includes a compact decision note");
+AssertFalse(actionHistory.Contains("PayloadJson", StringComparison.OrdinalIgnoreCase), "/actions history avoids raw payload field dumps");
 
 List<string> chunks = TelegramMessageFormatter.SplitForTelegram(new string('x', 9000), 4096).ToList();
 AssertEqual(3, chunks.Count, "SplitForTelegram creates 3 chunks for 9000 chars");
@@ -289,7 +306,7 @@ CommandRouter factoryRouter = CommandRouterFactory.Create(
     commandFactoryImageDescriptionService);
 string commandNames = string.Join(",", factoryRouter.Commands.Select(x => x.Name));
 AssertEqual(
-    "/help,/systeminfo,/diskstatus,/processes,/status,/reset,/remember,/memory,/forget,/files,/images,/describeimage,/voicefiles,/transcribe,/readfile,/createfile,/importfiles,/importfile,/deletefile,/indexfile,/indexdocs,/docchunks,/askfile,/askdocs,/summarizefile,/summarizedocs,/embedfile,/embeddocs,/tools,/harnesses,/plugins,/killprocess,/action,/pending,/approve,/deny,/plan,/tasks,/task,/schedule,/schedulelist,/unschedule,/done,/cancel",
+    "/help,/systeminfo,/diskstatus,/processes,/status,/reset,/remember,/memory,/forget,/files,/images,/describeimage,/voicefiles,/transcribe,/readfile,/createfile,/importfiles,/importfile,/deletefile,/indexfile,/indexdocs,/docchunks,/askfile,/askdocs,/summarizefile,/summarizedocs,/embedfile,/embeddocs,/tools,/harnesses,/plugins,/killprocess,/action,/actions,/pending,/approve,/deny,/plan,/tasks,/task,/schedule,/schedulelist,/unschedule,/done,/cancel",
     commandNames,
     "CommandRouterFactory preserves Program command registration order");
 
@@ -783,7 +800,7 @@ AssertFalse(gitStatusTool!.RequiresApproval, "git_status is read-only and does n
 AssertFalse(runDotnetTestsTool!.RequiresApproval, "run_dotnet_tests uses a fixed bounded command and does not require approval");
 AssertTrue(safeCommandRegistry.RenderToolInstructions().Contains("{\"target\":\"helper-tests\"}"), "ToolRegistry instructions document run_dotnet_tests strict JSON input");
 ToolResult gitStatusResult = await gitStatusTool.ExecuteAsync(string.Empty, CancellationToken.None);
-AssertTrue(gitStatusResult.Success, "git_status runs successfully in the project root");
+AssertTrue(gitStatusResult.Success, "git_status runs successfully in the project root: " + gitStatusResult.Output);
 AssertTrue(gitStatusResult.Output.Contains("git status", StringComparison.OrdinalIgnoreCase), "git_status output identifies the command");
 ToolResult invalidTestTargetResult = await runDotnetTestsTool.ExecuteAsync("{\"target\":\"all\"}", CancellationToken.None);
 AssertFalse(invalidTestTargetResult.Success, "run_dotnet_tests rejects unsupported test targets");

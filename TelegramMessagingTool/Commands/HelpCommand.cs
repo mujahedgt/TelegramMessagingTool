@@ -57,6 +57,7 @@ TelegramMessagingTool Agent Commands
 /plugins - Show read-only plugin manifest discovery status
 /pending - List actions waiting for your approval
 /action <id> - Show pending/approved action audit details
+/actions [count] - List recent approval/action audit records
 /approve <id> - Approve a pending risky action
 /deny <id> - Deny a pending risky action
 /plan <goal> - Create a step-by-step task plan

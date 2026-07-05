@@ -55,6 +55,7 @@ public static class CommandRouterFactory
             new PluginsCommand(settings),
             new KillProcessCommand(pendingActionService, settings),
             new ActionCommand(pendingActionService, settings),
+            new ActionsCommand(pendingActionService, settings),
             new PendingCommand(pendingActionService, settings),
             new ApproveCommand(pendingActionService, pendingActionExecutor, settings),
             new DenyCommand(pendingActionService, settings),
