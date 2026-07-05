@@ -2326,6 +2326,17 @@ diff --git a/../outside.cs b/../outside.cs
     AssertTrue(enabledTranscribeResult.ReplyText?.Contains("Transcript:") == true, "/transcribe returns transcript label when configured");
     AssertTrue(enabledTranscribeResult.ReplyText?.Contains("Transcript text from fixture.") == true, "/transcribe includes transcription service output");
     AssertEqual(uploadedAudio.Id, fakeAudioTranscriptionService.LastAudioId, "/transcribe passes selected audio to transcription service");
+    AssertTrue(enabledTranscribeResult.ReplyText?.Contains("Saved transcript file:", StringComparison.OrdinalIgnoreCase) == true, "/transcribe reports saved transcript document");
+    UploadedFile savedTranscriptFile = (await dbContext.UploadedFiles
+        .Where(x => x.ConnectedUserId == testUser.Id)
+        .ToListAsync(CancellationToken.None))
+        .Where(x => x.OriginalFileName.Contains("voice-note.ogg-transcript", StringComparison.OrdinalIgnoreCase))
+        .OrderByDescending(x => x.Id)
+        .First();
+    AssertTrue(savedTranscriptFile.OriginalFileName.EndsWith(".txt", StringComparison.OrdinalIgnoreCase), "/transcribe stores transcript as a sandboxed text document");
+    AssertEqual("transcript", savedTranscriptFile.Source, "/transcribe marks transcript document source");
+    string savedTranscriptText = await documentStorage.ExtractTextAsync(savedTranscriptFile, CancellationToken.None);
+    AssertTrue(savedTranscriptText.Contains("Transcript text from fixture."), "/transcribe persists transcript text content");
 
     string transcriptScriptPath = Path.Combine(documentStorage.RootDirectory, "fake-transcribe.ps1");
     await File.WriteAllTextAsync(transcriptScriptPath, "param([string]$AudioPath)\nWrite-Output \"Transcript from local provider for $(Split-Path -Leaf $AudioPath)\"", CancellationToken.None);

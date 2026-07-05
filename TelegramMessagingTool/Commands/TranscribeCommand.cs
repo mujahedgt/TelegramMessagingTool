@@ -90,7 +90,26 @@ Metadata:
 
         AudioTranscriptionResult transcription = await _audioTranscriptionService.TranscribeAsync(file, cancellationToken);
         string label = transcription.Success ? "Transcript" : "Transcription failed";
-        return new CommandResult(true, reply + $"\n\n{label}:\n{transcription.Output}");
+        if (!transcription.Success)
+        {
+            return new CommandResult(true, reply + $"\n\n{label}:\n{transcription.Output}");
+        }
+
+        UploadedFile transcriptFile;
+        try
+        {
+            string transcriptFileName = $"{file.OriginalFileName}-transcript.txt";
+            transcriptFile = await _documentStorage.CreateTextFileAsync(user, transcriptFileName, transcription.Output, cancellationToken);
+            transcriptFile.Source = "transcript";
+            dbContext.UploadedFiles.Add(transcriptFile);
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new CommandResult(true, reply + $"\n\n{label}:\n{transcription.Output}\n\nTranscript was generated but could not be saved as a document: {ex.Message}");
+        }
+
+        return new CommandResult(true, reply + $"\n\n{label}:\n{transcription.Output}\n\nSaved transcript file: #{transcriptFile.Id} {transcriptFile.OriginalFileName}\nUse /readfile {transcriptFile.Id}, /indexfile {transcriptFile.Id}, or /askfile {transcriptFile.Id} <question>.");
     }
 
     private bool IsInsideSandbox(string absolutePath)
