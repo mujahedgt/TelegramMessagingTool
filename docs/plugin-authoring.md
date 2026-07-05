@@ -49,6 +49,8 @@ Use `plugins/SamplePlugin/plugin.json.example` or the checked-in sample plugin a
   "entryAssembly": "bin/Release/net10.0/TelegramMessagingTool.SamplePlugin.dll",
   "enabled": true,
   "riskLevel": "low",
+  "isReadOnly": true,
+  "safetySummary": "Echoes provided input only; does not write files, call networks, or change system state.",
   "allowedToolNames": ["sample_echo"]
 }
 ```
@@ -63,6 +65,8 @@ Use `plugins/SamplePlugin/plugin.json.example` or the checked-in sample plugin a
 | `entryAssembly` | Yes | DLL path under the same plugin directory. Paths outside `PLUGIN_DIRECTORY` are rejected. |
 | `enabled` | No | Boolean. Only enabled manifests are loaded when `ENABLE_PLUGINS=true`. |
 | `riskLevel` | No | `low`, `medium`, or `high`. Defaults to `medium` if omitted. |
+| `isReadOnly` | No | Boolean metadata for whether tools are expected to avoid state changes. Defaults to `true` for low risk and `false` otherwise. |
+| `safetySummary` | No | Short human-readable safety summary shown in tool metadata. Truncated to 240 characters. |
 | `allowedToolNames` | Yes | Non-empty array of tool names this plugin may expose. |
 
 Tool names must match:
@@ -104,6 +108,7 @@ The scanner/loader:
 - Loads entry assemblies only when the assembly path stays under `PLUGIN_DIRECTORY`.
 - Instantiates only concrete `IAgentTool` types with a public parameterless constructor.
 - Registers only tool names included in the manifest `allowedToolNames`.
+- Carries manifest `riskLevel`, `isReadOnly`, and `safetySummary` into `/tools` metadata.
 - Handles a missing plugin directory gracefully.
 
 ## How to inspect plugins

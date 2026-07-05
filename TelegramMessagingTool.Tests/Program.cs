@@ -145,10 +145,16 @@ try
     PluginToolLoadResult samplePluginLoadResult = new PluginToolLoader().LoadEnabledTools(
         Path.Combine(Directory.GetCurrentDirectory(), "plugins"),
         ["datetime"]);
-    AssertTrue(samplePluginLoadResult.Tools.Any(x => x.Tool.Name == "sample_echo"), "PluginToolLoader loads enabled sample plugin tool");
-    AssertTrue(samplePluginLoadResult.Tools.All(x => x.Source.StartsWith("plugin:", StringComparison.OrdinalIgnoreCase)), "PluginToolLoader marks plugin tool source");
+    ToolRegistration samplePluginRegistration = samplePluginLoadResult.Tools.Single(x => x.Tool.Name == "sample_echo");
+    AssertTrue(samplePluginRegistration.Source.StartsWith("plugin:", StringComparison.OrdinalIgnoreCase), "PluginToolLoader marks plugin tool source");
+    AssertEqual(ToolRiskLevel.Low, samplePluginRegistration.RiskLevel, "PluginToolLoader applies manifest risk metadata to plugin tool");
+    AssertTrue(samplePluginRegistration.IsReadOnly, "PluginToolLoader applies read-only metadata to plugin tool");
+    AssertTrue(samplePluginRegistration.SafetySummary.Contains("echo", StringComparison.OrdinalIgnoreCase), "PluginToolLoader applies safety summary metadata to plugin tool");
     ToolRegistry pluginSourceRegistry = new([new DateTimeTool()], samplePluginLoadResult.Tools);
-    AssertTrue(pluginSourceRegistry.RenderToolList().Contains("source: plugin:", StringComparison.OrdinalIgnoreCase), "ToolRegistry renders plugin source in /tools output");
+    string pluginToolList = pluginSourceRegistry.RenderToolList();
+    AssertTrue(pluginToolList.Contains("source: plugin:", StringComparison.OrdinalIgnoreCase), "ToolRegistry renders plugin source in /tools output");
+    AssertTrue(pluginToolList.Contains("risk: low", StringComparison.OrdinalIgnoreCase), "ToolRegistry renders plugin risk metadata in /tools output");
+    AssertTrue(pluginToolList.Contains("read-only", StringComparison.OrdinalIgnoreCase), "ToolRegistry renders plugin read-only metadata in /tools output");
 
     Environment.SetEnvironmentVariable("ENABLE_GITHUB_TOOLS", null);
     Environment.SetEnvironmentVariable("ENABLE_GITHUB_WRITE_TOOLS", null);

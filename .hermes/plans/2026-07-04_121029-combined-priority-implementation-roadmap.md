@@ -348,7 +348,9 @@ Rules:
 - Reject duplicate tool names.
 - Document that plugin DLLs are trusted OS-level code.
 
-## P4.3 Add plugin risk metadata
+## P4.3 Add plugin risk metadata ✅ Done
+
+**Status:** Added `ToolRiskLevel` to the abstraction package and carries manifest `riskLevel`, `isReadOnly`, and `safetySummary` into plugin `ToolRegistration` metadata. `/tools` now renders source, risk, read-only/state-changing flag, and safety summary so risky plugin tools can be evaluated before richer execution semantics are added.
 
 Before loading risky plugin tools, add risk/approval metadata.
 
@@ -515,7 +517,7 @@ Then restart and verify:
 Continue with:
 
 ```text
-Priority 4.3 — Add plugin risk metadata
+Priority 5.1 — Add structured risk metadata to tools
 ```
 
-This completes Priority 4 by adding plugin risk/approval metadata before expanding plugin tool execution semantics.
+This starts Priority 5 tool safety work by moving structured risk metadata from plugin registrations toward first-class tool contracts and richer action previews.

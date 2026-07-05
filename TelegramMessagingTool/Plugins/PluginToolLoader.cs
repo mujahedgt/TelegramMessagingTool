@@ -62,7 +62,13 @@ public sealed class PluginToolLoader
                     continue;
                 }
 
-                registrations.Add(new ToolRegistration(tool, $"plugin:{discovered.Manifest.Id}"));
+                ToolRiskLevel riskLevel = ParseRiskLevel(discovered.Manifest.RiskLevel);
+                registrations.Add(new ToolRegistration(
+                    tool,
+                    $"plugin:{discovered.Manifest.Id}",
+                    riskLevel,
+                    discovered.Manifest.IsReadOnly,
+                    discovered.Manifest.SafetySummary));
             }
         }
 
@@ -105,6 +111,16 @@ public sealed class PluginToolLoader
         }
 
         return tools;
+    }
+
+    private static ToolRiskLevel ParseRiskLevel(string riskLevel)
+    {
+        return riskLevel.ToLowerInvariant() switch
+        {
+            "low" => ToolRiskLevel.Low,
+            "high" => ToolRiskLevel.High,
+            _ => ToolRiskLevel.Medium
+        };
     }
 
     private static bool IsPathInsideDirectory(string candidatePath, string rootPath)

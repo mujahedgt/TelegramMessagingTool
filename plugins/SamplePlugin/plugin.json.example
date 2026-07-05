@@ -5,6 +5,8 @@
   "entryAssembly": "bin/Release/net10.0/TelegramMessagingTool.SamplePlugin.dll",
   "enabled": true,
   "riskLevel": "low",
+  "isReadOnly": true,
+  "safetySummary": "Echoes provided input only; does not write files, call networks, or change system state.",
   "allowedToolNames": [
     "sample_echo"
   ]

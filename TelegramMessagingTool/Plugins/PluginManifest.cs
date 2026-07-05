@@ -10,6 +10,8 @@ public sealed record PluginManifest(
     string EntryAssembly,
     bool Enabled,
     string RiskLevel,
+    bool IsReadOnly,
+    string SafetySummary,
     IReadOnlyList<string> AllowedToolNames)
 {
     private static readonly Regex ToolNameRegex = new("^[a-z][a-z0-9_]{1,40}$", RegexOptions.Compiled);
@@ -44,6 +46,13 @@ public sealed record PluginManifest(
             if (riskLevel is not ("low" or "medium" or "high"))
             {
                 return PluginManifestParseResult.Fail("Plugin manifest riskLevel must be low, medium, or high.");
+            }
+
+            bool isReadOnly = ReadOptionalBool(root, "isReadOnly", defaultValue: riskLevel == "low");
+            string safetySummary = ReadOptionalString(root, "safetySummary", "No plugin safety summary provided.");
+            if (safetySummary.Length > 240)
+            {
+                safetySummary = safetySummary[..240];
             }
 
             if (!root.TryGetProperty("allowedToolNames", out JsonElement toolsElement) || toolsElement.ValueKind != JsonValueKind.Array)
@@ -85,6 +94,8 @@ public sealed record PluginManifest(
                 EntryAssembly: entryAssembly,
                 Enabled: enabled,
                 RiskLevel: riskLevel,
+                IsReadOnly: isReadOnly,
+                SafetySummary: safetySummary,
                 AllowedToolNames: toolNames));
         }
         catch (JsonException ex)

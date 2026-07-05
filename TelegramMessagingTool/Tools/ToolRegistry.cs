@@ -56,7 +56,9 @@ public sealed class ToolRegistry
         {
             string approval = tool.RequiresApproval ? "requires approval" : "safe/no approval";
             string source = GetSource(tool.Name);
-            builder.AppendLine($"- {tool.Name}: {tool.Description} ({approval}; source: {source})");
+            ToolRegistration registration = _tools[tool.Name];
+            string readOnly = registration.IsReadOnly ? "read-only" : "can change state";
+            builder.AppendLine($"- {tool.Name}: {tool.Description} ({approval}; source: {source}; risk: {registration.RiskLevel.ToString().ToLowerInvariant()}; {readOnly}; safety: {registration.SafetySummary})");
         }
 
         return builder.ToString().TrimEnd();
@@ -99,7 +101,8 @@ public sealed class ToolRegistry
 
         foreach (IAgentTool tool in Tools)
         {
-            builder.AppendLine($"- {tool.Name}: {tool.Description} (source: {GetSource(tool.Name)})");
+            ToolRegistration registration = _tools[tool.Name];
+            builder.AppendLine($"- {tool.Name}: {tool.Description} (source: {GetSource(tool.Name)}, risk: {registration.RiskLevel.ToString().ToLowerInvariant()})");
         }
 
         builder.AppendLine("If no tool is needed, answer normally with plain text.");
@@ -108,7 +111,12 @@ public sealed class ToolRegistry
     }
 }
 
-public sealed record ToolRegistration(IAgentTool Tool, string Source)
+public sealed record ToolRegistration(
+    IAgentTool Tool,
+    string Source,
+    ToolRiskLevel RiskLevel = ToolRiskLevel.Low,
+    bool IsReadOnly = true,
+    string SafetySummary = "Built-in tool managed by the application.")
 {
     public const string BuiltInSource = "built-in";
 }
