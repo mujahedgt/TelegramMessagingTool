@@ -72,6 +72,13 @@ public static class AppServicesBuilder
                 settings.AudioTranscriptionCommand,
                 settings.AudioTranscriptionArguments,
                 TimeSpan.FromSeconds(settings.AudioTranscriptionTimeoutSeconds));
+        ITextToSpeechService? textToSpeechService = string.IsNullOrWhiteSpace(settings.TextToSpeechCommand)
+            ? null
+            : new LocalCommandTextToSpeechService(
+                settings.TextToSpeechCommand,
+                settings.TextToSpeechArguments,
+                TimeSpan.FromSeconds(settings.TextToSpeechTimeoutSeconds),
+                settings.TextToSpeechOutputExtension);
         var agentRunner = new AgentRunner(ollamaClient, toolRegistry, searchRoutingClassifier: searchRoutingClassifier);
         var conversationService = new ConversationService();
         var commandRouter = CommandRouterFactory.Create(
@@ -89,7 +96,8 @@ public static class AppServicesBuilder
             transcriptInsightsService,
             documentEmbeddingService,
             imageDescriptionService,
-            audioTranscriptionService);
+            audioTranscriptionService,
+            textToSpeechService);
         var telegramUpdateHandler = new TelegramUpdateHandler(
             settings,
             documentStorage,

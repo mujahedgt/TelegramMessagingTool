@@ -21,7 +21,8 @@ public static class CommandRouterFactory
         TranscriptInsightsService transcriptInsightsService,
         DocumentEmbeddingService documentEmbeddingService,
         IImageDescriptionService imageDescriptionService,
-        IAudioTranscriptionService? audioTranscriptionService = null)
+        IAudioTranscriptionService? audioTranscriptionService = null,
+        ITextToSpeechService? textToSpeechService = null)
     {
         return new CommandRouter([
             new HelpCommand(),
@@ -39,6 +40,7 @@ public static class CommandRouterFactory
             new VoiceFilesCommand(),
             new TranscribeCommand(settings, documentStorage, audioTranscriptionService),
             new TranscriptInsightsCommand(documentStorage, transcriptInsightsService),
+            new SpeakTextCommand(settings, documentStorage, textToSpeechService),
             new ReadFileCommand(documentStorage),
             new CreateFileCommand(documentStorage),
             new ImportFilesCommand(importDirectory, documentStorage, settings),

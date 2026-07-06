@@ -47,6 +47,16 @@ public sealed record BotSettings(
 
     public int AudioTranscriptionTimeoutSeconds { get; init; } = 120;
 
+    public bool EnableTextToSpeech { get; init; }
+
+    public string TextToSpeechCommand { get; init; } = string.Empty;
+
+    public string TextToSpeechArguments { get; init; } = "{text} {output}";
+
+    public int TextToSpeechTimeoutSeconds { get; init; } = 120;
+
+    public string TextToSpeechOutputExtension { get; init; } = ".mp3";
+
     public bool EnableRepoWriteTools { get; init; }
 
     public string ImageDescriptionPrompt { get; init; } = BotConfiguration.DefaultImageDescriptionPrompt;
@@ -113,6 +123,11 @@ public static class BotConfiguration
             AudioTranscriptionCommand = NormalizeOptionalText(Environment.GetEnvironmentVariable("AUDIO_TRANSCRIPTION_COMMAND")),
             AudioTranscriptionArguments = NormalizeAudioTranscriptionArguments(Environment.GetEnvironmentVariable("AUDIO_TRANSCRIPTION_ARGUMENTS")),
             AudioTranscriptionTimeoutSeconds = ParseClampedInt(Environment.GetEnvironmentVariable("AUDIO_TRANSCRIPTION_TIMEOUT_SECONDS"), defaultValue: 120, minValue: 5, maxValue: 300),
+            EnableTextToSpeech = IsEnabled(Environment.GetEnvironmentVariable("ENABLE_TEXT_TO_SPEECH"), defaultValue: false),
+            TextToSpeechCommand = NormalizeOptionalText(Environment.GetEnvironmentVariable("TEXT_TO_SPEECH_COMMAND")),
+            TextToSpeechArguments = NormalizeTextToSpeechArguments(Environment.GetEnvironmentVariable("TEXT_TO_SPEECH_ARGUMENTS")),
+            TextToSpeechTimeoutSeconds = ParseClampedInt(Environment.GetEnvironmentVariable("TEXT_TO_SPEECH_TIMEOUT_SECONDS"), defaultValue: 120, minValue: 5, maxValue: 300),
+            TextToSpeechOutputExtension = NormalizeTextToSpeechOutputExtension(Environment.GetEnvironmentVariable("TEXT_TO_SPEECH_OUTPUT_EXTENSION")),
             EnableRepoWriteTools = IsEnabled(Environment.GetEnvironmentVariable("ENABLE_REPO_WRITE_TOOLS"), defaultValue: false),
             ImageDescriptionPrompt = NormalizeImageDescriptionPrompt(Environment.GetEnvironmentVariable("IMAGE_DESCRIPTION_PROMPT")),
             GitHub = GitHubSettings.LoadFromEnvironment()
@@ -153,6 +168,35 @@ public static class BotConfiguration
     {
         string normalized = string.IsNullOrWhiteSpace(value) ? "{file}" : value.Trim();
         return normalized.Contains("{file}", StringComparison.OrdinalIgnoreCase) ? normalized : normalized + " {file}";
+    }
+
+    public static string NormalizeTextToSpeechArguments(string? value)
+    {
+        string normalized = string.IsNullOrWhiteSpace(value) ? "{text} {output}" : value.Trim();
+        if (!normalized.Contains("{text}", StringComparison.OrdinalIgnoreCase))
+        {
+            normalized += " {text}";
+        }
+
+        if (!normalized.Contains("{output}", StringComparison.OrdinalIgnoreCase))
+        {
+            normalized += " {output}";
+        }
+
+        return normalized;
+    }
+
+    public static string NormalizeTextToSpeechOutputExtension(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return ".mp3";
+        }
+
+        string normalized = value.Trim().TrimStart('.').ToLowerInvariant();
+        return normalized is "mp3" or "wav" or "m4a" or "ogg" or "oga" or "opus" or "flac"
+            ? "." + normalized
+            : ".mp3";
     }
 
     public static string NormalizeSearchRoutingMode(string? value)

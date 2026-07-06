@@ -176,6 +176,11 @@ string? previousImageDescriptionPrompt = Environment.GetEnvironmentVariable("IMA
 string? previousAudioTranscriptionCommand = Environment.GetEnvironmentVariable("AUDIO_TRANSCRIPTION_COMMAND");
 string? previousAudioTranscriptionArguments = Environment.GetEnvironmentVariable("AUDIO_TRANSCRIPTION_ARGUMENTS");
 string? previousAudioTranscriptionTimeoutSeconds = Environment.GetEnvironmentVariable("AUDIO_TRANSCRIPTION_TIMEOUT_SECONDS");
+string? previousEnableTextToSpeech = Environment.GetEnvironmentVariable("ENABLE_TEXT_TO_SPEECH");
+string? previousTextToSpeechCommand = Environment.GetEnvironmentVariable("TEXT_TO_SPEECH_COMMAND");
+string? previousTextToSpeechArguments = Environment.GetEnvironmentVariable("TEXT_TO_SPEECH_ARGUMENTS");
+string? previousTextToSpeechTimeoutSeconds = Environment.GetEnvironmentVariable("TEXT_TO_SPEECH_TIMEOUT_SECONDS");
+string? previousTextToSpeechOutputExtension = Environment.GetEnvironmentVariable("TEXT_TO_SPEECH_OUTPUT_EXTENSION");
 string? previousGitHubToken = Environment.GetEnvironmentVariable("GITHUB_TOKEN");
 string? previousGitHubDefaultOwner = Environment.GetEnvironmentVariable("GITHUB_DEFAULT_OWNER");
 string? previousGitHubDefaultRepo = Environment.GetEnvironmentVariable("GITHUB_DEFAULT_REPO");
@@ -236,6 +241,30 @@ try
     AssertEqual("whisper-cli", audioProviderSettings.AudioTranscriptionCommand, "LoadFromEnvironment trims AUDIO_TRANSCRIPTION_COMMAND");
     AssertEqual("--model base.en --file \"{file}\"", audioProviderSettings.AudioTranscriptionArguments, "LoadFromEnvironment trims AUDIO_TRANSCRIPTION_ARGUMENTS");
     AssertEqual(300, audioProviderSettings.AudioTranscriptionTimeoutSeconds, "LoadFromEnvironment clamps AUDIO_TRANSCRIPTION_TIMEOUT_SECONDS high");
+
+    Environment.SetEnvironmentVariable("ENABLE_TEXT_TO_SPEECH", null);
+    Environment.SetEnvironmentVariable("TEXT_TO_SPEECH_COMMAND", null);
+    Environment.SetEnvironmentVariable("TEXT_TO_SPEECH_ARGUMENTS", null);
+    Environment.SetEnvironmentVariable("TEXT_TO_SPEECH_TIMEOUT_SECONDS", null);
+    Environment.SetEnvironmentVariable("TEXT_TO_SPEECH_OUTPUT_EXTENSION", null);
+    BotSettings defaultTextToSpeechSettings = BotConfiguration.LoadFromEnvironment();
+    AssertFalse(defaultTextToSpeechSettings.EnableTextToSpeech, "LoadFromEnvironment defaults text-to-speech to disabled");
+    AssertEqual(string.Empty, defaultTextToSpeechSettings.TextToSpeechCommand, "LoadFromEnvironment defaults TEXT_TO_SPEECH_COMMAND to empty");
+    AssertEqual("{text} {output}", defaultTextToSpeechSettings.TextToSpeechArguments, "LoadFromEnvironment defaults TEXT_TO_SPEECH_ARGUMENTS safely");
+    AssertEqual(120, defaultTextToSpeechSettings.TextToSpeechTimeoutSeconds, "LoadFromEnvironment defaults TEXT_TO_SPEECH_TIMEOUT_SECONDS safely");
+    AssertEqual(".mp3", defaultTextToSpeechSettings.TextToSpeechOutputExtension, "LoadFromEnvironment defaults TEXT_TO_SPEECH_OUTPUT_EXTENSION safely");
+
+    Environment.SetEnvironmentVariable("ENABLE_TEXT_TO_SPEECH", "yes");
+    Environment.SetEnvironmentVariable("TEXT_TO_SPEECH_COMMAND", "  tts-cli  ");
+    Environment.SetEnvironmentVariable("TEXT_TO_SPEECH_ARGUMENTS", " --text \"{text}\" --out \"{output}\" ");
+    Environment.SetEnvironmentVariable("TEXT_TO_SPEECH_TIMEOUT_SECONDS", "1");
+    Environment.SetEnvironmentVariable("TEXT_TO_SPEECH_OUTPUT_EXTENSION", " wav ");
+    BotSettings textToSpeechSettings = BotConfiguration.LoadFromEnvironment();
+    AssertTrue(textToSpeechSettings.EnableTextToSpeech, "LoadFromEnvironment parses ENABLE_TEXT_TO_SPEECH truthy values");
+    AssertEqual("tts-cli", textToSpeechSettings.TextToSpeechCommand, "LoadFromEnvironment trims TEXT_TO_SPEECH_COMMAND");
+    AssertEqual("--text \"{text}\" --out \"{output}\"", textToSpeechSettings.TextToSpeechArguments, "LoadFromEnvironment trims TEXT_TO_SPEECH_ARGUMENTS");
+    AssertEqual(5, textToSpeechSettings.TextToSpeechTimeoutSeconds, "LoadFromEnvironment clamps TEXT_TO_SPEECH_TIMEOUT_SECONDS low");
+    AssertEqual(".wav", textToSpeechSettings.TextToSpeechOutputExtension, "LoadFromEnvironment normalizes TEXT_TO_SPEECH_OUTPUT_EXTENSION");
 
     Environment.SetEnvironmentVariable("ENABLE_PLUGINS", null);
     AssertFalse(BotConfiguration.LoadFromEnvironment().EnablePlugins, "LoadFromEnvironment defaults plugins to disabled");
@@ -298,6 +327,11 @@ finally
     Environment.SetEnvironmentVariable("AUDIO_TRANSCRIPTION_COMMAND", previousAudioTranscriptionCommand);
     Environment.SetEnvironmentVariable("AUDIO_TRANSCRIPTION_ARGUMENTS", previousAudioTranscriptionArguments);
     Environment.SetEnvironmentVariable("AUDIO_TRANSCRIPTION_TIMEOUT_SECONDS", previousAudioTranscriptionTimeoutSeconds);
+    Environment.SetEnvironmentVariable("ENABLE_TEXT_TO_SPEECH", previousEnableTextToSpeech);
+    Environment.SetEnvironmentVariable("TEXT_TO_SPEECH_COMMAND", previousTextToSpeechCommand);
+    Environment.SetEnvironmentVariable("TEXT_TO_SPEECH_ARGUMENTS", previousTextToSpeechArguments);
+    Environment.SetEnvironmentVariable("TEXT_TO_SPEECH_TIMEOUT_SECONDS", previousTextToSpeechTimeoutSeconds);
+    Environment.SetEnvironmentVariable("TEXT_TO_SPEECH_OUTPUT_EXTENSION", previousTextToSpeechOutputExtension);
     Environment.SetEnvironmentVariable("GITHUB_TOKEN", previousGitHubToken);
     Environment.SetEnvironmentVariable("GITHUB_DEFAULT_OWNER", previousGitHubDefaultOwner);
     Environment.SetEnvironmentVariable("GITHUB_DEFAULT_REPO", previousGitHubDefaultRepo);
@@ -335,10 +369,11 @@ CommandRouter factoryRouter = CommandRouterFactory.Create(
     commandFactoryDocumentSummaryService,
     commandFactoryTranscriptInsightsService,
     commandFactoryDocumentEmbeddingService,
-    commandFactoryImageDescriptionService);
+    commandFactoryImageDescriptionService,
+    textToSpeechService: null);
 string commandNames = string.Join(",", factoryRouter.Commands.Select(x => x.Name));
 AssertEqual(
-    "/help,/systeminfo,/diskstatus,/processes,/status,/reset,/remember,/memory,/forget,/files,/images,/describeimage,/voicefiles,/transcribe,/transcriptinsights,/readfile,/createfile,/importfiles,/importfile,/deletefile,/indexfile,/indexdocs,/docchunks,/askfile,/askdocs,/summarizefile,/summarizedocs,/embedfile,/embeddocs,/tools,/harnesses,/plugins,/killprocess,/action,/actions,/pending,/approve,/deny,/plan,/tasks,/task,/schedule,/schedulelist,/unschedule,/done,/cancel",
+    "/help,/systeminfo,/diskstatus,/processes,/status,/reset,/remember,/memory,/forget,/files,/images,/describeimage,/voicefiles,/transcribe,/transcriptinsights,/speaktext,/readfile,/createfile,/importfiles,/importfile,/deletefile,/indexfile,/indexdocs,/docchunks,/askfile,/askdocs,/summarizefile,/summarizedocs,/embedfile,/embeddocs,/tools,/harnesses,/plugins,/killprocess,/action,/actions,/pending,/approve,/deny,/plan,/tasks,/task,/schedule,/schedulelist,/unschedule,/done,/cancel",
     commandNames,
     "CommandRouterFactory preserves Program command registration order");
 
@@ -1869,6 +1904,8 @@ diff --git a/../outside.cs b/../outside.cs
     AssertTrue(statusResult.ReplyText?.Contains("Image vision: disabled") == true, "/status reports image vision mode");
     AssertTrue(statusResult.ReplyText?.Contains("Image prompt: default") == true, "/status reports image prompt mode");
     AssertTrue(statusResult.ReplyText?.Contains("Audio provider: not configured") == true, "/status reports audio transcription provider mode");
+    AssertTrue(statusResult.ReplyText?.Contains("Text-to-speech: disabled") == true, "/status reports TTS gate mode");
+    AssertTrue(statusResult.ReplyText?.Contains("TTS provider: not configured") == true, "/status reports TTS provider mode");
     AssertTrue(statusResult.ReplyText?.Contains("Safe command tools: disabled") == true, "/status reports safe command tools mode");
 
     CommandResult statusMentionResult = await commandRouter.TryHandleAsync(TextMessage("/status@red_eye_ghost_bot"), testUser, dbContext, CancellationToken.None);
@@ -2363,6 +2400,44 @@ diff --git a/../outside.cs b/../outside.cs
     AssertTrue(nonTranscriptInsightsResult.Handled, "/transcriptinsights handles non-transcript file ids");
     AssertTrue(nonTranscriptInsightsResult.ReplyText?.Contains("transcript", StringComparison.OrdinalIgnoreCase) == true, "/transcriptinsights rejects non-transcript files clearly");
 
+    var fakeTextToSpeechService = new FakeTextToSpeechService([0x49, 0x44, 0x33], ".mp3");
+    var speakTextDisabledCommand = new SpeakTextCommand(
+        adminTestSettings,
+        documentStorage,
+        fakeTextToSpeechService);
+    CommandResult speakTextDisabledResult = await speakTextDisabledCommand.TryHandleAsync(
+        TextMessage("/speaktext Hello from TTS"),
+        testUser,
+        dbContext,
+        CancellationToken.None);
+    AssertTrue(speakTextDisabledResult.Handled, "/speaktext is handled when disabled");
+    AssertTrue(speakTextDisabledResult.ReplyText?.Contains("disabled", StringComparison.OrdinalIgnoreCase) == true, "/speaktext reports disabled TTS gate");
+    AssertEqual(0, fakeTextToSpeechService.CallCount, "/speaktext does not call provider while disabled");
+
+    var speakTextEnabledCommand = new SpeakTextCommand(
+        adminTestSettings with { EnableTextToSpeech = true },
+        documentStorage,
+        fakeTextToSpeechService);
+    CommandResult speakTextResult = await speakTextEnabledCommand.TryHandleAsync(
+        TextMessage("/speaktext Hello from TTS"),
+        testUser,
+        dbContext,
+        CancellationToken.None);
+    AssertTrue(speakTextResult.Handled, "/speaktext enabled command is handled");
+    AssertTrue(speakTextResult.ReplyText?.Contains("Saved TTS audio file:", StringComparison.OrdinalIgnoreCase) == true, "/speaktext reports saved TTS audio file");
+    AssertTrue(speakTextResult.ReplyText?.Contains("not sent automatically", StringComparison.OrdinalIgnoreCase) == true, "/speaktext makes the output-storage gate explicit");
+    AssertEqual("Hello from TTS", fakeTextToSpeechService.LastText, "/speaktext passes requested text to TTS provider");
+    UploadedFile savedTtsFile = (await dbContext.UploadedFiles
+        .Where(x => x.ConnectedUserId == testUser.Id)
+        .ToListAsync(CancellationToken.None))
+        .Where(x => x.Source.Equals("tts", StringComparison.OrdinalIgnoreCase))
+        .OrderByDescending(x => x.Id)
+        .First();
+    AssertTrue(savedTtsFile.OriginalFileName.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase), "/speaktext stores TTS output as an audio document");
+    AssertTrue(DocumentStorageService.IsAudioFileName(savedTtsFile.OriginalFileName), "/speaktext saved output is listed as audio-capable");
+    AssertTrue(File.Exists(savedTtsFile.AbsolutePath), "/speaktext writes generated audio bytes into the sandbox");
+    AssertEqual(3L, new FileInfo(savedTtsFile.AbsolutePath).Length, "/speaktext stores provider bytes without sending audio automatically");
+
     string transcriptScriptPath = Path.Combine(documentStorage.RootDirectory, "fake-transcribe.ps1");
     await File.WriteAllTextAsync(transcriptScriptPath, "param([string]$AudioPath)\nWrite-Output \"Transcript from local provider for $(Split-Path -Leaf $AudioPath)\"", CancellationToken.None);
     var localAudioTranscriptionService = new LocalCommandAudioTranscriptionService(
@@ -2671,13 +2746,35 @@ sealed class FakeAudioTranscriptionService : IAudioTranscriptionService
     }
 
     public int? LastAudioId { get; private set; }
-
     public Task<AudioTranscriptionResult> TranscribeAsync(
         UploadedFile audioFile,
         CancellationToken cancellationToken)
     {
         LastAudioId = audioFile.Id;
         return Task.FromResult(new AudioTranscriptionResult(true, _output));
+    }
+}
+
+sealed class FakeTextToSpeechService : ITextToSpeechService
+{
+    private readonly byte[] _audioBytes;
+    private readonly string _extension;
+
+    public FakeTextToSpeechService(byte[] audioBytes, string extension)
+    {
+        _audioBytes = audioBytes;
+        _extension = extension;
+    }
+
+    public int CallCount { get; private set; }
+
+    public string? LastText { get; private set; }
+
+    public Task<TextToSpeechResult> SynthesizeAsync(string text, CancellationToken cancellationToken)
+    {
+        CallCount++;
+        LastText = text;
+        return Task.FromResult(TextToSpeechResult.Ok(_audioBytes, _extension, "fake TTS audio generated"));
     }
 }
 

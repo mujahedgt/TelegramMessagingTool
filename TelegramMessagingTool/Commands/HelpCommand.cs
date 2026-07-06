@@ -39,6 +39,7 @@ TelegramMessagingTool Agent Commands
 /voicefiles - List saved sandboxed audio files for the planned voice-agent harness
 /transcribe <id> - Transcribe a saved audio file when a trusted local provider is configured
 /transcriptinsights <id> - Summarize and extract tasks from a saved transcript document
+/speaktext <text> - Generate TTS audio into the sandbox without sending it automatically
 /readfile <id> - Read a saved text/PDF/DOCX/XLSX document
 /createfile <filename> <content> - Create a sandboxed .txt/.md/.json/.csv/.pdf/.docx/.xlsx file
 /importfiles - Admin-only: list local ImportInbox files
