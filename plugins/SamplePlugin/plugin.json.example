@@ -6,7 +6,7 @@
   "enabled": true,
   "riskLevel": "medium",
   "isReadOnly": false,
-  "safetySummary": "Includes sample_echo plus dotnet_create_project, which writes only inside the local GeneratedProjects sandbox and refuses overwrite/traversal paths.",
+  "safetySummary": "Includes sample_echo plus dotnet_create_project, which writes only inside the local GeneratedProjects sandbox, supports basic and nearest_friday console templates, and refuses overwrite/traversal paths.",
   "allowedToolNames": [
     "sample_echo",
     "dotnet_create_project"

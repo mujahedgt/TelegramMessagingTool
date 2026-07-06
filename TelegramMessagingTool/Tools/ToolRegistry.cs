@@ -97,6 +97,13 @@ public sealed class ToolRegistry
             builder.AppendLine("publish_release and restart_latest_bot create high-risk pending approval requests only. They do not publish, stop, or restart anything directly.");
         }
 
+        if (TryGet("dotnet_create_project", out _))
+        {
+            builder.AppendLine("Use dotnet_create_project when the user asks you to create/generate a C#/.NET console project. Do not merely paste project code when this tool is available; request the tool with a safe project name.");
+            builder.AppendLine("For a console project that takes today's date and returns the nearest Friday, call dotnet_create_project with input {\"name\":\"NearestFridayApp\",\"template\":\"nearest_friday\"}.");
+            builder.AppendLine("For a generic console project, call dotnet_create_project with input {\"name\":\"DemoApp\",\"template\":\"basic\"}.");
+        }
+
         builder.AppendLine("Available tools:");
 
         foreach (IAgentTool tool in Tools)

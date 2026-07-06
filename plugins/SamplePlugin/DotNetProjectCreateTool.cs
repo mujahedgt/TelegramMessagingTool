@@ -10,7 +10,7 @@ public sealed class DotNetProjectCreateTool : IAgentTool
 
     public string Name => "dotnet_create_project";
 
-    public string Description => "Sample trusted plugin tool that creates a minimal .NET console project under GeneratedProjects.";
+    public string Description => "Sample trusted plugin tool that creates a minimal .NET console project under GeneratedProjects. Input can be a project name or JSON {\"name\":\"DemoApp\",\"template\":\"basic\"}; use template \"nearest_friday\" for a console app that prints today's date and the nearest Friday.";
 
     public bool RequiresApproval => false;
 
@@ -51,10 +51,10 @@ public sealed class DotNetProjectCreateTool : IAgentTool
         string readmePath = Path.Combine(projectDirectory, "README.md");
 
         await File.WriteAllTextAsync(csprojPath, BuildProjectFile(), cancellationToken);
-        await File.WriteAllTextAsync(programPath, BuildProgramFile(safeNamespace), cancellationToken);
-        await File.WriteAllTextAsync(readmePath, BuildReadme(request.Name), cancellationToken);
+        await File.WriteAllTextAsync(programPath, BuildProgramFile(safeNamespace, request.Template), cancellationToken);
+        await File.WriteAllTextAsync(readmePath, BuildReadme(request.Name, request.Template), cancellationToken);
 
-        return ToolResult.Ok($"Created .NET console project '{request.Name}' under {projectDirectory}\nFiles: {request.Name}.csproj, Program.cs, README.md\nRun: dotnet run --project \"{csprojPath}\"");
+        return ToolResult.Ok($"Created .NET console project '{request.Name}' under {projectDirectory}\nTemplate: {request.Template}\nFiles: {request.Name}.csproj, Program.cs, README.md\nRun: dotnet run --project \"{csprojPath}\"");
     }
 
     private static ProjectCreateRequest ParseRequest(string input)
@@ -65,6 +65,7 @@ public sealed class DotNetProjectCreateTool : IAgentTool
             throw new ArgumentException("Input must be a project name or JSON like {\"name\":\"DemoApp\"}.");
         }
 
+        string template = "basic";
         if (value.StartsWith('{'))
         {
             try
@@ -79,6 +80,12 @@ public sealed class DotNetProjectCreateTool : IAgentTool
                 {
                     throw new ArgumentException("JSON input must include a string 'name' property.");
                 }
+
+                if (document.RootElement.TryGetProperty("template", out JsonElement templateElement)
+                    && templateElement.ValueKind == JsonValueKind.String)
+                {
+                    template = NormalizeTemplate(templateElement.GetString());
+                }
             }
             catch (JsonException ex)
             {
@@ -91,7 +98,23 @@ public sealed class DotNetProjectCreateTool : IAgentTool
             throw new ArgumentException("Project name must start with a letter and contain only letters, numbers, dot, underscore, or dash, up to 64 characters.");
         }
 
-        return new ProjectCreateRequest(value);
+        return new ProjectCreateRequest(value, template);
+    }
+
+    private static string NormalizeTemplate(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "basic";
+        }
+
+        string normalized = value.Trim().ToLowerInvariant().Replace('-', '_');
+        return normalized switch
+        {
+            "basic" or "console" => "basic",
+            "nearest_friday" or "nearestfriday" => "nearest_friday",
+            _ => throw new ArgumentException("Unsupported template. Use 'basic' or 'nearest_friday'.")
+        };
     }
 
     private static string BuildProjectFile()
@@ -110,8 +133,33 @@ public sealed class DotNetProjectCreateTool : IAgentTool
 """;
     }
 
-    private static string BuildProgramFile(string safeNamespace)
+    private static string BuildProgramFile(string safeNamespace, string template)
     {
+        if (template == "nearest_friday")
+        {
+            return $$"""
+namespace {{safeNamespace}};
+
+public static class Program
+{
+    public static void Main(string[] args)
+    {
+        DateTime today = DateTime.Today;
+        DateTime nearestFriday = GetNearestFriday(today);
+
+        Console.WriteLine($"Today: {today:dddd, MMMM dd, yyyy}");
+        Console.WriteLine($"Nearest Friday: {nearestFriday:dddd, MMMM dd, yyyy}");
+    }
+
+    private static DateTime GetNearestFriday(DateTime date)
+    {
+        int daysUntilFriday = ((int)DayOfWeek.Friday - (int)date.DayOfWeek + 7) % 7;
+        return date.AddDays(daysUntilFriday);
+    }
+}
+""";
+        }
+
         return $$"""
 namespace {{safeNamespace}};
 
@@ -125,12 +173,18 @@ public static class Program
 """;
     }
 
-    private static string BuildReadme(string projectName)
+    private static string BuildReadme(string projectName, string template)
     {
+        string description = template == "nearest_friday"
+            ? "This console app takes today's date and prints the nearest upcoming Friday, including today when today is Friday."
+            : "This console app prints a small hello message.";
+
         return $$"""
 # {{projectName}}
 
 Generated by the TelegramMessagingTool sample plugin tool `dotnet_create_project`.
+
+{{description}}
 
 ## Run
 
@@ -153,5 +207,5 @@ dotnet run --project "{{projectName}}.csproj"
         return candidate.StartsWith(root, StringComparison.OrdinalIgnoreCase);
     }
 
-    private sealed record ProjectCreateRequest(string Name);
+    private sealed record ProjectCreateRequest(string Name, string Template);
 }
