@@ -153,7 +153,7 @@ dotnet build TelegramMessagingTool.slnx --configuration Release
 
 ## Test
 
-The repository includes a small dependency-free console test project for helper logic.
+The repository includes a small dependency-free console test project for helper logic, command behavior, scripted agent behavior evals, and safety checks.
 
 ```bash
 dotnet run --project TelegramMessagingTool.Tests/TelegramMessagingTool.Tests.csproj --configuration Release

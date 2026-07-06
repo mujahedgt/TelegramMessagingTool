@@ -459,9 +459,11 @@ Added clearer logs for:
 
 Keep message content logging disabled by default.
 
-## P7.2 Agent behavior evals
+## P7.2 Agent behavior evals ✅ Done
 
-Add scripted tests for:
+**Status:** Added scripted helper-test eval coverage through `AgentBehaviorEvalSuite`. The eval suite exercises model-emitted strict `tool_call` JSON execution, approval-tool pending-action request behavior, safe final explanations after failed tool observations, and direct-search false-positive avoidance.
+
+Added scripted tests for:
 
 - model emits tool_call JSON
 - approval tools create pending actions
@@ -533,7 +535,7 @@ Then restart and verify:
 Continue with:
 
 ```text
-Priority 7.2 — Agent behavior evals
+Priority 7.3 — Documentation cleanup
 ```
 
-Next evals patch: add scripted tests for model-emitted `tool_call` JSON, approval tools creating pending actions, failed tool results being explained safely, and search routing avoiding false positives.
+Final polish patch: keep README, `/help`, `/status`, `/tools`, and roadmap docs synchronized with the implemented runtime, tools, media harnesses, observability, and eval coverage.
