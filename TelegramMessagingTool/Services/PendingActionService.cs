@@ -6,6 +6,13 @@ namespace TelegramMessagingTool.Services;
 
 public sealed class PendingActionService
 {
+    private readonly RuntimeObservabilityService _observability;
+
+    public PendingActionService(RuntimeObservabilityService? observability = null)
+    {
+        _observability = observability ?? new RuntimeObservabilityService();
+    }
+
     public async Task<PendingAction> CreateAsync(
         TelegramDbContext dbContext,
         ConnectedUser user,
@@ -31,6 +38,7 @@ public sealed class PendingActionService
 
         dbContext.PendingActions.Add(pendingAction);
         await dbContext.SaveChangesAsync(cancellationToken);
+        _observability.PendingActionCreated(pendingAction.Id, pendingAction.ToolName, pendingAction.RiskLevel);
         return pendingAction;
     }
 
@@ -126,6 +134,7 @@ public sealed class PendingActionService
         action.DecidedAt = DateTime.UtcNow;
         action.DecisionNote = note;
         await dbContext.SaveChangesAsync(cancellationToken);
+        _observability.PendingActionDecision(action.Id, action.ToolName, action.Status);
 
         return new PendingActionDecision(true, action, $"Action #{action.Id} was {newStatus}.");
     }

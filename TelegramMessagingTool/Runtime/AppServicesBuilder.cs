@@ -52,10 +52,11 @@ public static class AppServicesBuilder
         ITextEmbeddingService? retrievalEmbeddingService = settings.EnableDocumentEmbeddings ? ollamaEmbeddingClient : null;
         var documentStorage = new DocumentStorageService(Path.Combine(Environment.CurrentDirectory, "UserFiles"));
         string importDirectory = Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, "ImportInbox"));
-        var pendingActionService = new PendingActionService();
+        var observability = new RuntimeObservabilityService(detail => writeConsoleEvent("OBSERVE", "runtime", detail, ConsoleEventLevel.Info));
+        var pendingActionService = new PendingActionService(observability);
         var toolRegistry = ToolRegistryFactory.Create(settings, searchClient, pendingActionService);
         ISearchRoutingClassifier searchRoutingClassifier = SearchRoutingClassifierFactory.Create(settings.SearchRoutingMode, ollamaClient);
-        var pendingActionExecutor = new PendingActionExecutor(new SystemProcessTerminator(), documentStorage);
+        var pendingActionExecutor = new PendingActionExecutor(new SystemProcessTerminator(), documentStorage, observability: observability);
         var pendingActionCallbackService = new PendingActionCallbackService(pendingActionService, pendingActionExecutor, settings);
         var agentTaskService = new AgentTaskService();
         var taskCallbackService = new TaskCallbackService(agentTaskService);
@@ -79,7 +80,7 @@ public static class AppServicesBuilder
                 settings.TextToSpeechArguments,
                 TimeSpan.FromSeconds(settings.TextToSpeechTimeoutSeconds),
                 settings.TextToSpeechOutputExtension);
-        var agentRunner = new AgentRunner(ollamaClient, toolRegistry, searchRoutingClassifier: searchRoutingClassifier);
+        var agentRunner = new AgentRunner(ollamaClient, toolRegistry, searchRoutingClassifier: searchRoutingClassifier, observability: observability);
         var conversationService = new ConversationService();
         var commandRouter = CommandRouterFactory.Create(
             settings,

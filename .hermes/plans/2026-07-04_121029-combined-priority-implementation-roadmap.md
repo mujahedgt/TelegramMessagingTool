@@ -445,9 +445,11 @@ Remaining possible tasks:
 
 # Priority 7 — Observability, Evals, and Docs
 
-## P7.1 Runtime observability
+## P7.1 Runtime observability ✅ Done
 
-Add clearer logs for:
+**Status:** Added `RuntimeObservabilityService` and wired it into the agent runner, pending-action service, approval executor, and runtime builder. Console event output now includes metadata-only `OBSERVE` lines for tool calls/results, pending action creation/decisions, approval execution, repo write results, and GitHub API failures. Operational notes redact token-like values and avoid logging raw message content while `LOG_MESSAGE_CONTENT=false` remains the default.
+
+Added clearer logs for:
 
 - tool calls
 - pending action creation
@@ -531,7 +533,7 @@ Then restart and verify:
 Continue with:
 
 ```text
-Priority 7.1 — Runtime observability
+Priority 7.2 — Agent behavior evals
 ```
 
-This starts observability/docs polish: clearer logs for tool calls, pending action creation, approval execution, repo write results, and GitHub/API failures while keeping message content logging disabled by default.
+Next evals patch: add scripted tests for model-emitted `tool_call` JSON, approval tools creating pending actions, failed tool results being explained safely, and search routing avoiding false positives.

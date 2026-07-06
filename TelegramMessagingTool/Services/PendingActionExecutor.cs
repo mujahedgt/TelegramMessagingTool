@@ -15,19 +15,22 @@ public sealed class PendingActionExecutor
     private readonly ILatestReleaseRestarter _latestReleaseRestarter;
     private readonly IGitHubIssueCreator _gitHubIssueCreator;
     private readonly IGitHubIssueCommenter _gitHubIssueCommenter;
+    private readonly RuntimeObservabilityService _observability;
 
     public PendingActionExecutor(
         IProcessTerminator processTerminator,
         DocumentStorageService documentStorage,
         ILatestReleaseRestarter? latestReleaseRestarter = null,
         IGitHubIssueCreator? gitHubIssueCreator = null,
-        IGitHubIssueCommenter? gitHubIssueCommenter = null)
+        IGitHubIssueCommenter? gitHubIssueCommenter = null,
+        RuntimeObservabilityService? observability = null)
     {
         _processTerminator = processTerminator;
         _documentStorage = documentStorage;
         _latestReleaseRestarter = latestReleaseRestarter ?? new SystemLatestReleaseRestarter();
         _gitHubIssueCreator = gitHubIssueCreator ?? new SystemGitHubIssueCreator();
         _gitHubIssueCommenter = gitHubIssueCommenter ?? new SystemGitHubIssueCommenter();
+        _observability = observability ?? new RuntimeObservabilityService();
     }
 
     public async Task<PendingActionExecutionResult> ExecuteApprovedAsync(
@@ -57,6 +60,17 @@ public sealed class PendingActionExecutor
 
         action.DecisionNote = result.Message;
         await dbContext.SaveChangesAsync(cancellationToken);
+        _observability.ApprovalExecutionCompleted(action.Id, action.ToolName, result.Executed, result.Success, result.Message);
+        if (action.ToolName.StartsWith("repo_", StringComparison.OrdinalIgnoreCase) || string.Equals(action.ToolName, "publish_release", StringComparison.OrdinalIgnoreCase))
+        {
+            _observability.RepoWriteResult(action.ToolName, result.Success, result.Message);
+        }
+
+        if (action.ToolName.StartsWith("github_", StringComparison.OrdinalIgnoreCase) && !result.Success)
+        {
+            _observability.GitHubApiFailure(action.ToolName, "configured-repo", result.Message);
+        }
+
         return result;
     }
 

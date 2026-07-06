@@ -12,17 +12,20 @@ public sealed class AgentRunner
     private readonly IChatClient _chatClient;
     private readonly ToolRegistry _toolRegistry;
     private readonly ISearchRoutingClassifier _searchRoutingClassifier;
+    private readonly RuntimeObservabilityService _observability;
     private readonly int _maxToolIterations;
 
     public AgentRunner(
         IChatClient chatClient,
         ToolRegistry toolRegistry,
         int maxToolIterations = DefaultMaxToolIterations,
-        ISearchRoutingClassifier? searchRoutingClassifier = null)
+        ISearchRoutingClassifier? searchRoutingClassifier = null,
+        RuntimeObservabilityService? observability = null)
     {
         _chatClient = chatClient;
         _toolRegistry = toolRegistry;
         _searchRoutingClassifier = searchRoutingClassifier ?? new HeuristicSearchRoutingClassifier();
+        _observability = observability ?? new RuntimeObservabilityService();
         _maxToolIterations = Math.Max(1, maxToolIterations);
     }
 
@@ -37,7 +40,9 @@ public sealed class AgentRunner
             && _toolRegistry.TryGet("online_search", out IAgentTool? searchTool)
             && searchTool is not null)
         {
+            _observability.ToolCallRequested(searchTool.Name, searchTool.RiskLevel, searchTool.IsReadOnly);
             ToolResult searchResult = await searchTool.ExecuteAsync(searchRoutingDecision.Query, cancellationToken);
+            _observability.ToolCallCompleted(searchTool.Name, searchResult.Success);
             return await BuildOnlineSearchAnswerAsync(conversationContext, searchRoutingDecision.Query, searchResult, cancellationToken);
         }
 
@@ -58,6 +63,7 @@ public sealed class AgentRunner
 
             if (tool.RequiresApproval)
             {
+                _observability.ToolCallRequested(tool.Name, tool.RiskLevel, tool.IsReadOnly);
                 if (tool is IApprovalRequestTool approvalRequestTool && dbContext is not null && user is not null)
                 {
                     ToolResult approvalRequestResult = await approvalRequestTool.CreatePendingActionAsync(
@@ -73,7 +79,9 @@ public sealed class AgentRunner
                 return $"Tool '{tool.Name}' requires approval. Use /pending, /approve <id>, and /deny <id> for risky actions once that tool is wired into the approval flow.";
             }
 
+            _observability.ToolCallRequested(tool.Name, tool.RiskLevel, tool.IsReadOnly);
             ToolResult result = await tool.ExecuteAsync(toolCall.Input, cancellationToken);
+            _observability.ToolCallCompleted(tool.Name, result.Success);
 
             if (string.Equals(tool.Name, "online_search", StringComparison.OrdinalIgnoreCase))
             {

@@ -45,6 +45,16 @@ static void AssertFalse(bool condition, string name)
 // RED tests for upgrade helpers.
 AssertEqual("TelegramMessagingTool.Abstractions", typeof(IAgentTool).Assembly.GetName().Name, "IAgentTool lives in plugin abstraction assembly");
 AssertEqual("TelegramMessagingTool.Abstractions", typeof(ToolResult).Assembly.GetName().Name, "ToolResult lives in plugin abstraction assembly");
+List<string> observedRuntimeEvents = [];
+var runtimeObservability = new RuntimeObservabilityService(observedRuntimeEvents.Add);
+runtimeObservability.ToolCallRequested("calculator", ToolRiskLevel.Low, isReadOnly: true);
+runtimeObservability.PendingActionCreated(99, "repo_commit_changes", "high");
+runtimeObservability.ApprovalExecutionCompleted(99, "github_create_issue", executed: false, success: false, "GITHUB_TOKEN=ghp_exampletoken should be hidden");
+AssertTrue(observedRuntimeEvents.Any(x => x.Contains("TOOL_CALL", StringComparison.OrdinalIgnoreCase) && x.Contains("tool=calculator", StringComparison.OrdinalIgnoreCase) && x.Contains("risk=low", StringComparison.OrdinalIgnoreCase)), "Runtime observability logs tool call metadata without message content");
+AssertTrue(observedRuntimeEvents.Any(x => x.Contains("PENDING_ACTION", StringComparison.OrdinalIgnoreCase) && x.Contains("id=99", StringComparison.OrdinalIgnoreCase) && x.Contains("tool=repo_commit_changes", StringComparison.OrdinalIgnoreCase)), "Runtime observability logs pending action creation");
+AssertTrue(observedRuntimeEvents.Any(x => x.Contains("APPROVAL_EXECUTION", StringComparison.OrdinalIgnoreCase) && x.Contains("executed=false", StringComparison.OrdinalIgnoreCase) && x.Contains("success=false", StringComparison.OrdinalIgnoreCase)), "Runtime observability logs approval execution results");
+AssertFalse(string.Join('\n', observedRuntimeEvents).Contains("ghp_exampletoken", StringComparison.OrdinalIgnoreCase), "Runtime observability redacts token-like values from operational logs");
+
 IAgentTool metadataSafeTool = new DateTimeTool();
 AssertEqual(ToolRiskLevel.Low, metadataSafeTool.RiskLevel, "Safe tools expose low risk metadata");
 AssertTrue(metadataSafeTool.IsReadOnly, "Safe tools expose read-only metadata");

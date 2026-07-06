@@ -55,6 +55,7 @@ Repo write tools: {(_settings.EnableRepoWriteTools ? "enabled" : "disabled")}
 Plugins: {(_settings.EnablePlugins ? "enabled" : "disabled")} ({_settings.PluginDirectory})
 {_settings.GitHub.RenderSafeSummary()}
 Message content logging: {(_settings.LogMessageContent ? "enabled" : "disabled")}
+Operational observability: tool/action metadata only; message content redacted unless logging is explicitly enabled
 Apply migrations: {_settings.ApplyMigrations}
 """;
 
