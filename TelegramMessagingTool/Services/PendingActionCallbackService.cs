@@ -9,15 +9,18 @@ public sealed class PendingActionCallbackService
     private readonly PendingActionService _pendingActionService;
     private readonly PendingActionExecutor _pendingActionExecutor;
     private readonly BotSettings _settings;
+    private readonly RuntimeObservabilityService _observability;
 
     public PendingActionCallbackService(
         PendingActionService pendingActionService,
         PendingActionExecutor pendingActionExecutor,
-        BotSettings settings)
+        BotSettings settings,
+        RuntimeObservabilityService? observability = null)
     {
         _pendingActionService = pendingActionService;
         _pendingActionExecutor = pendingActionExecutor;
         _settings = settings;
+        _observability = observability ?? new RuntimeObservabilityService();
     }
 
     public async Task<PendingActionCallbackResult> HandleAsync(
@@ -34,8 +37,11 @@ public sealed class PendingActionCallbackService
 
         if (!BotAccessPolicy.IsAdmin(actorTelegramUserId, _settings.AdminChatId))
         {
+            _observability.CallbackDecisionRejected("pending_action", callback.Verb.ToString().ToLowerInvariant(), callback.ActionId, actorTelegramUserId, user.ChatId, "unauthorized_actor");
             return UnauthorizedActorResult;
         }
+
+        _observability.CallbackDecisionReceived("pending_action", callback.Verb.ToString().ToLowerInvariant(), callback.ActionId, actorTelegramUserId, user.ChatId);
 
         return callback.Verb switch
         {

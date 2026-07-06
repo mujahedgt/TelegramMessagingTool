@@ -119,6 +119,8 @@ git commit -m "Harden callback actor authorization"
 
 ### Task 8.2: Add callback audit metadata
 
+**Status:** Completed in current patch (`Add callback decision observability`).
+
 **Objective:** Record who clicked an approval/task callback and whether it was accepted/rejected.
 
 **Files:**

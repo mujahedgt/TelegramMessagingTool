@@ -37,6 +37,16 @@ public sealed partial class RuntimeObservabilityService
         Write($"APPROVAL_EXECUTION id={actionId} tool={SanitizeToken(toolName)} executed={executed.ToString().ToLowerInvariant()} success={success.ToString().ToLowerInvariant()} note={RedactAndTruncate(message, 180)}");
     }
 
+    public void CallbackDecisionReceived(string domain, string verb, int targetId, long actorTelegramUserId, long ownerChatId)
+    {
+        Write($"CALLBACK_DECISION domain={SanitizeToken(domain)} verb={SanitizeToken(verb)} target={targetId} actor={actorTelegramUserId} owner={ownerChatId} status=accepted");
+    }
+
+    public void CallbackDecisionRejected(string domain, string verb, int targetId, long actorTelegramUserId, long ownerChatId, string reason)
+    {
+        Write($"CALLBACK_DECISION domain={SanitizeToken(domain)} verb={SanitizeToken(verb)} target={targetId} actor={actorTelegramUserId} owner={ownerChatId} status=rejected reason={SanitizeToken(reason)}");
+    }
+
     public void GitHubApiFailure(string operation, string repository, string message)
     {
         Write($"GITHUB_API_FAILURE operation={SanitizeToken(operation)} repo={SanitizeToken(repository)} note={RedactAndTruncate(message, 180)}");

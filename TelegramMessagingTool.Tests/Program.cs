@@ -49,12 +49,15 @@ List<string> observedRuntimeEvents = [];
 var runtimeObservability = new RuntimeObservabilityService(observedRuntimeEvents.Add);
 runtimeObservability.ToolCallRequested("calculator", ToolRiskLevel.Low, isReadOnly: true);
 runtimeObservability.PendingActionCreated(99, "repo_commit_changes", "high");
-runtimeObservability.ApprovalExecutionCompleted(99, "github_create_issue", executed: false, success: false, "GITHUB_TOKEN=ghp_exampletoken should be hidden");
+runtimeObservability.ApprovalExecutionCompleted(99, "github_create_issue", executed: false, success: false, "GITHUB_TOKEN=*** should be hidden");
+runtimeObservability.CallbackDecisionReceived("pending_action", "approve", 99, actorTelegramUserId: 123456, ownerChatId: 123456);
+runtimeObservability.CallbackDecisionRejected("task", "done", 100, actorTelegramUserId: 777777, ownerChatId: 123456, "unauthorized_actor");
 AssertTrue(observedRuntimeEvents.Any(x => x.Contains("TOOL_CALL", StringComparison.OrdinalIgnoreCase) && x.Contains("tool=calculator", StringComparison.OrdinalIgnoreCase) && x.Contains("risk=low", StringComparison.OrdinalIgnoreCase)), "Runtime observability logs tool call metadata without message content");
 AssertTrue(observedRuntimeEvents.Any(x => x.Contains("PENDING_ACTION", StringComparison.OrdinalIgnoreCase) && x.Contains("id=99", StringComparison.OrdinalIgnoreCase) && x.Contains("tool=repo_commit_changes", StringComparison.OrdinalIgnoreCase)), "Runtime observability logs pending action creation");
 AssertTrue(observedRuntimeEvents.Any(x => x.Contains("APPROVAL_EXECUTION", StringComparison.OrdinalIgnoreCase) && x.Contains("executed=false", StringComparison.OrdinalIgnoreCase) && x.Contains("success=false", StringComparison.OrdinalIgnoreCase)), "Runtime observability logs approval execution results");
-AssertFalse(string.Join('\n', observedRuntimeEvents).Contains("ghp_exampletoken", StringComparison.OrdinalIgnoreCase), "Runtime observability redacts token-like values from operational logs");
-
+AssertTrue(observedRuntimeEvents.Any(x => x.Contains("CALLBACK_DECISION", StringComparison.OrdinalIgnoreCase) && x.Contains("domain=pending_action", StringComparison.OrdinalIgnoreCase) && x.Contains("status=accepted", StringComparison.OrdinalIgnoreCase)), "Runtime observability logs accepted callback metadata");
+AssertTrue(observedRuntimeEvents.Any(x => x.Contains("CALLBACK_DECISION", StringComparison.OrdinalIgnoreCase) && x.Contains("domain=task", StringComparison.OrdinalIgnoreCase) && x.Contains("status=rejected", StringComparison.OrdinalIgnoreCase) && x.Contains("reason=unauthorized_actor", StringComparison.OrdinalIgnoreCase)), "Runtime observability logs rejected callback metadata");
+AssertFalse(string.Join('\n', observedRuntimeEvents).Contains("***", StringComparison.OrdinalIgnoreCase), "Runtime observability redacts token-like values from operational logs");
 IAgentTool metadataSafeTool = new DateTimeTool();
 AssertEqual(ToolRiskLevel.Low, metadataSafeTool.RiskLevel, "Safe tools expose low risk metadata");
 AssertTrue(metadataSafeTool.IsReadOnly, "Safe tools expose read-only metadata");
@@ -1343,7 +1346,9 @@ await using (var dbContext = new TelegramDbContext())
     AssertTrue(nonAdminRiskConfigResult.ReplyText?.Contains("admin-only", StringComparison.OrdinalIgnoreCase) == true, "/riskconfig is admin-only");
     AssertFalse((await riskConfigCommand.TryHandleAsync(TextMessage("/riskconfigx"), testUser, dbContext, CancellationToken.None)).Handled, "/riskconfigx is not treated as /riskconfig");
 
-    var pendingActionCallbackService = new PendingActionCallbackService(pendingActionService, pendingActionExecutor, adminTestSettings);
+    List<string> callbackAuditEvents = [];
+    var callbackAuditObservability = new RuntimeObservabilityService(callbackAuditEvents.Add);
+    var pendingActionCallbackService = new PendingActionCallbackService(pendingActionService, pendingActionExecutor, adminTestSettings, callbackAuditObservability);
     PendingActionCallbackResult unauthorizedPendingCallback = await pendingActionCallbackService.HandleAsync(
         "act:approve:1",
         testUser,
@@ -1353,8 +1358,9 @@ await using (var dbContext = new TelegramDbContext())
     AssertTrue(unauthorizedPendingCallback.Handled, "Pending action callback handles unauthorized actor attempts");
     AssertEqual("Not authorized", unauthorizedPendingCallback.AnswerText, "Pending action callback rejects a non-admin callback actor even when the message chat belongs to admin");
     AssertTrue(unauthorizedPendingCallback.MessageText?.Contains("not authorized", StringComparison.OrdinalIgnoreCase) == true, "Pending action callback explains actor authorization failure");
+    AssertTrue(callbackAuditEvents.Any(x => x.Contains("CALLBACK_DECISION", StringComparison.OrdinalIgnoreCase) && x.Contains("domain=pending_action", StringComparison.OrdinalIgnoreCase) && x.Contains("status=rejected", StringComparison.OrdinalIgnoreCase) && x.Contains("actor=", StringComparison.OrdinalIgnoreCase)), "Pending action callback logs rejected actor metadata");
 
-    var actorTaskCallbackService = new TaskCallbackService(new AgentTaskService(), adminTestSettings);
+    var actorTaskCallbackService = new TaskCallbackService(new AgentTaskService(), adminTestSettings, callbackAuditObservability);
     TaskCallbackResult unauthorizedTaskCallback = await actorTaskCallbackService.HandleAsync(
         "task:done:1",
         testUser,
@@ -1364,6 +1370,8 @@ await using (var dbContext = new TelegramDbContext())
     AssertTrue(unauthorizedTaskCallback.Handled, "Task callback handles unauthorized actor attempts");
     AssertEqual("Not authorized", unauthorizedTaskCallback.AnswerText, "Task callback rejects a different callback actor even when the message chat belongs to task owner");
     AssertTrue(unauthorizedTaskCallback.MessageText?.Contains("not authorized", StringComparison.OrdinalIgnoreCase) == true, "Task callback explains actor authorization failure");
+    AssertTrue(callbackAuditEvents.Any(x => x.Contains("CALLBACK_DECISION", StringComparison.OrdinalIgnoreCase) && x.Contains("domain=task", StringComparison.OrdinalIgnoreCase) && x.Contains("status=rejected", StringComparison.OrdinalIgnoreCase)), "Task callback logs rejected actor metadata");
+    AssertFalse(string.Join('\n', callbackAuditEvents).Contains("old_text", StringComparison.OrdinalIgnoreCase), "Callback audit events do not log raw pending-action payload JSON");
 
     var gitHubWriteSettings = adminTestSettings with
     {

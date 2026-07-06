@@ -8,11 +8,13 @@ public sealed class TaskCallbackService
 {
     private readonly AgentTaskService _agentTaskService;
     private readonly BotSettings _settings;
+    private readonly RuntimeObservabilityService _observability;
 
-    public TaskCallbackService(AgentTaskService agentTaskService, BotSettings settings)
+    public TaskCallbackService(AgentTaskService agentTaskService, BotSettings settings, RuntimeObservabilityService? observability = null)
     {
         _agentTaskService = agentTaskService;
         _settings = settings;
+        _observability = observability ?? new RuntimeObservabilityService();
     }
 
     public async Task<TaskCallbackResult> HandleAsync(
@@ -29,8 +31,11 @@ public sealed class TaskCallbackService
 
         if (!IsAuthorizedActor(user, actorTelegramUserId))
         {
+            _observability.CallbackDecisionRejected("task", callback.Verb.ToString().ToLowerInvariant(), callback.TaskId, actorTelegramUserId, user.ChatId, "unauthorized_actor");
             return UnauthorizedActorResult;
         }
+
+        _observability.CallbackDecisionReceived("task", callback.Verb.ToString().ToLowerInvariant(), callback.TaskId, actorTelegramUserId, user.ChatId);
 
         return callback.Verb switch
         {

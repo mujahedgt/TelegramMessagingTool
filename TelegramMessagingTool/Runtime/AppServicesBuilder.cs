@@ -57,9 +57,9 @@ public static class AppServicesBuilder
         var toolRegistry = ToolRegistryFactory.Create(settings, searchClient, pendingActionService);
         ISearchRoutingClassifier searchRoutingClassifier = SearchRoutingClassifierFactory.Create(settings.SearchRoutingMode, ollamaClient);
         var pendingActionExecutor = new PendingActionExecutor(new SystemProcessTerminator(), documentStorage, observability: observability);
-        var pendingActionCallbackService = new PendingActionCallbackService(pendingActionService, pendingActionExecutor, settings);
+        var pendingActionCallbackService = new PendingActionCallbackService(pendingActionService, pendingActionExecutor, settings, observability);
         var agentTaskService = new AgentTaskService();
-        var taskCallbackService = new TaskCallbackService(agentTaskService, settings);
+        var taskCallbackService = new TaskCallbackService(agentTaskService, settings, observability);
         var documentIndexingService = new DocumentIndexingService(documentStorage);
         var documentEmbeddingService = new DocumentEmbeddingService(ollamaEmbeddingClient, settings.OllamaEmbeddingModel);
         var documentRetrievalService = new DocumentRetrievalService(retrievalEmbeddingService);
