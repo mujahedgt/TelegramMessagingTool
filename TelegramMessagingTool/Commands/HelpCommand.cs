@@ -35,7 +35,7 @@ TelegramMessagingTool Agent Commands
 /forget <id> - Delete a memory
 /files - List saved files and uploaded documents
 /images - List saved sandboxed image files for the planned image-agent harness
-/describeimage <id> - Show safe metadata for a saved image; vision description/OCR is planned next
+/describeimage <id> - Describe a saved image when image vision is enabled; otherwise show safe metadata
 /voicefiles - List saved sandboxed audio files for the planned voice-agent harness
 /transcribe <id> - Transcribe a saved audio file when a trusted local provider is configured
 /transcriptinsights <id> - Summarize and extract tasks from a saved transcript document

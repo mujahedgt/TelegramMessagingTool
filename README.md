@@ -28,8 +28,8 @@ TelegramMessagingTool is a C#/.NET console application that connects a Telegram 
 - Approval commands: `/pending`, `/approve <id>`, `/deny <id>`, `/action <id>`, and `/actions [count]` with structured previews/history showing exact risk, target file/repository, diff or git command summaries, GitHub issue/comment targets, and compact decision notes without dumping raw edit payloads
 - Repo safety scanning before approved commits, pushes, and releases: blocks token-like diff additions, `.env`/secret config files, local DB/certificate/backup binaries, release outputs, and generated/runtime paths
 - Task planner commands: `/plan <goal>`, `/tasks`, `/task <id>`, `/done <task-id> [step-number]`, and `/cancel <task-id>`
-- P2 planning harness command: `/harnesses` shows the planned `image_agent` and `voice_agent` tool/safety roadmap before implementation
-- Read-only plugin manifest inspection via `/plugins`; this scans `plugin.json` files only, shows manifest paths and entry assembly presence, and does not load plugin assemblies
+- `/harnesses` shows the `image_agent` and `voice_agent` safety roadmap plus current feature-gate readiness for image vision, audio transcription, transcript insights, and TTS output storage
+- Plugin manifest inspection and trusted plugin loading via `/plugins`/`/tools`; manifests show paths and entry assembly presence, and enabled trusted DLLs can be loaded from `PLUGIN_DIRECTORY` when `ENABLE_PLUGINS=true`
 - Plugin authoring starter docs/templates in `docs/plugin-authoring.md` and `plugins/SamplePlugin/plugin.json.example`
 
 ## Development note
@@ -87,8 +87,8 @@ Configuration is read from environment variables.
 | `ENABLE_SAFE_COMMAND_TOOLS` | No | `false` | If true, registers fixed safe command tools: `git_status`, `git_diff`, `git_log_recent`, `run_dotnet_tests`, `publish_release`, and `restart_latest_bot`. No arbitrary shell access is exposed. `run_dotnet_tests` accepts only `{"target":"helper-tests"}` and runs the helper test project. `publish_release` and `restart_latest_bot` only create high-risk pending approval requests; they do not execute release/restart directly. |
 | `SAFE_COMMAND_PROJECT_ROOT` | No | current working directory | Project root used by safe command tools and repo write approval tools. Commands run with fixed executable/argument lists under this directory. |
 | `ENABLE_REPO_WRITE_TOOLS` | No | `false` | If true, registers approval-backed repository write tools such as `repo_replace_text`. These tools require admin use, create pending actions first, validate paths under `SAFE_COMMAND_PROJECT_ROOT`, and execute only after `/approve`. |
-| `ENABLE_PLUGINS` | No | `false` | If true, enables plugin manifest discovery from `PLUGIN_DIRECTORY`. This phase scans manifests only and does not load plugin assemblies. Use `/plugins` for read-only manifest diagnostics. |
-| `PLUGIN_DIRECTORY` | No | `<current working directory>/plugins` | Directory scanned by `/plugins` for plugin folders containing `plugin.json`. Plugin assemblies are trusted OS-level code and should only come from trusted sources before loading is enabled. |
+| `ENABLE_PLUGINS` | No | `false` | If true, enables plugin manifest discovery and trusted local plugin loading from `PLUGIN_DIRECTORY`. Use `/plugins` for manifest diagnostics and `/tools` to verify loaded plugin tools. |
+| `PLUGIN_DIRECTORY` | No | `<current working directory>/plugins` | Directory scanned by `/plugins` for plugin folders containing `plugin.json`. Plugin assemblies are trusted OS-level code and should only come from reviewed/trusted sources. |
 | `ENABLE_GITHUB_TOOLS` | No | `false` | If true, registers read-only GitHub tools such as `github_repo_info`. Keep false unless you want the model to query GitHub. |
 | `ENABLE_GITHUB_WRITE_TOOLS` | No | `false` | If true, registers approval-backed GitHub write tools such as `github_create_issue` when a pending-action context is available. Requires `GITHUB_TOKEN`; keep false unless intentional. |
 | `GITHUB_TOKEN` | No | empty | Optional token for GitHub API requests. Never log or paste it into chat. `/status` only reports configured/not configured. |
@@ -258,16 +258,18 @@ Safe command tool notes:
 
 Risky tools such as arbitrary shell, broad file write/delete, database mutation, outbound messaging, direct commit/push, or unrestricted process control are intentionally not exposed as model tools. Use the approval flow before adding dangerous tools.
 
-## P2 image and voice harness planning
+## Image and voice harnesses
 
-The `/harnesses` command shows the next planned agent harnesses before their tools are executable:
+The `/harnesses` command shows current feature-gate readiness and the safety roadmap for image and voice work:
 
-| Harness | Status | Planned tool examples |
+| Harness | Current implemented gates | Later gated work |
 |---|---|---|
-| `image_agent` | planned | `describe_image`, `extract_image_text`, `generate_image_prompt`, `create_image` |
-| `voice_agent` | planned | `transcribe_audio`, `summarize_audio`, `extract_audio_tasks`, `speak_text` |
+| `image_agent` | `/images`, metadata-first `/describeimage <id>`, optional local image description behind `ENABLE_IMAGE_VISION=true` and `IMAGE_DESCRIPTION_PROMPT` | OCR extraction, image generation/prompting |
+| `voice_agent` | `/voicefiles`, optional local `/transcribe <audio-id>`, transcript document storage, `/transcriptinsights <id>`, optional sandboxed `/speaktext <text>` output storage | richer explicit audio delivery and broader voice workflows |
 
-These harnesses are currently **planning only**. The first image-agent foundation is implemented: `/images` lists sandboxed `.png/.jpg/.jpeg/.webp/.gif` files that were uploaded as Telegram documents, and `/describeimage <id>` returns safe metadata plus the configured image model route by default. When `ENABLE_IMAGE_VISION=true`, `/describeimage <id>` sends only that selected sandboxed image to the configured local Ollama image route for a concise description using `IMAGE_DESCRIPTION_PROMPT` (trimmed/capped to 1000 characters) so you can focus the model on UI labels, visible text, diagrams, or general scene details. The voice-agent foundation now includes `/voicefiles` for sandboxed `.mp3/.wav/.m4a/.ogg/.oga/.opus/.flac` files plus `/transcribe <audio-id>`. By default `/transcribe` remains metadata/readiness-only; when `ENABLE_AUDIO_TRANSCRIPTION=true` and `AUDIO_TRANSCRIPTION_COMMAND` is configured, it runs the trusted local provider command against only the selected sandboxed audio file, captures stdout as the transcript, saves successful transcripts back into the same user document sandbox as `*-transcript.txt` documents, and reports provider failures safely. `/transcriptinsights <transcript-file-id>` analyzes only saved transcript text through `OLLAMA_MODEL_VOICE` and returns a concise voice summary, decisions/facts, action items, and open questions. `/speaktext <text>` is disabled by default; when `ENABLE_TEXT_TO_SPEECH=true` and `TEXT_TO_SPEECH_COMMAND` is configured, it runs a trusted local TTS provider and saves the generated audio into the sandbox without sending it automatically. OCR/image generation and richer TTS sending remain planned next steps behind explicit safety gates.
+The image-agent foundation is implemented: `/images` lists sandboxed `.png/.jpg/.jpeg/.webp/.gif` files that were uploaded as Telegram documents, and `/describeimage <id>` returns safe metadata plus the configured image model route by default. When `ENABLE_IMAGE_VISION=true`, `/describeimage <id>` sends only that selected sandboxed image to the configured local Ollama image route for a concise description using `IMAGE_DESCRIPTION_PROMPT` (trimmed/capped to 1000 characters) so you can focus the model on UI labels, visible text, diagrams, or general scene details.
+
+The voice-agent foundation includes `/voicefiles` for sandboxed `.mp3/.wav/.m4a/.ogg/.oga/.opus/.flac` files plus `/transcribe <audio-id>`. By default `/transcribe` remains metadata/readiness-only; when `ENABLE_AUDIO_TRANSCRIPTION=true` and `AUDIO_TRANSCRIPTION_COMMAND` is configured, it runs the trusted local provider command against only the selected sandboxed audio file, captures stdout as the transcript, saves successful transcripts back into the same user document sandbox as `*-transcript.txt` documents, and reports provider failures safely. `/transcriptinsights <transcript-file-id>` analyzes only saved transcript text through `OLLAMA_MODEL_VOICE` and returns a concise voice summary, decisions/facts, action items, and open questions. `/speaktext <text>` is disabled by default; when `ENABLE_TEXT_TO_SPEECH=true` and `TEXT_TO_SPEECH_COMMAND` is configured, it runs a trusted local TTS provider and saves the generated audio into the sandbox without sending it automatically.
 
 ## Command parsing
 

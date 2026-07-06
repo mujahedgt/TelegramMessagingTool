@@ -796,6 +796,14 @@ AssertTrue(behaviorEvalReport.ContainsPassed("approval_tool_creates_pending_acti
 AssertTrue(behaviorEvalReport.ContainsPassed("failed_tool_result_is_explained_safely"), "Agent behavior eval covers safe explanation after failed tool result");
 AssertTrue(behaviorEvalReport.ContainsPassed("search_routing_avoids_false_positive"), "Agent behavior eval covers false-positive search routing avoidance");
 
+CommandResult helpDocsResult = await new HelpCommand().TryHandleAsync(TextMessage("/help"), new ConnectedUser { ChatId = 1, Name = "docs" }, null!, CancellationToken.None);
+AssertTrue(helpDocsResult.Handled, "/help docs sync check is handled");
+AssertFalse(helpDocsResult.ReplyText?.Contains("vision description/OCR is planned next", StringComparison.OrdinalIgnoreCase) == true, "/help does not describe implemented image vision as fully planned");
+string readmeDocs = await File.ReadAllTextAsync(Path.Combine(Directory.GetCurrentDirectory(), "README.md"), CancellationToken.None);
+AssertFalse(readmeDocs.Contains("does not load plugin assemblies", StringComparison.OrdinalIgnoreCase), "README no longer says plugins only scan manifests after trusted loading exists");
+AssertFalse(readmeDocs.Contains("planning only", StringComparison.OrdinalIgnoreCase), "README no longer describes image/voice harnesses as planning-only after vision/audio/TTS gates exist");
+AssertTrue(readmeDocs.Contains("scripted agent behavior evals", StringComparison.OrdinalIgnoreCase), "README documents scripted behavior eval coverage");
+
 DateTime scheduleNow = new(2026, 6, 26, 12, 0, 0, DateTimeKind.Utc);
 AssertTrue(ScheduleParser.TryParse("2026-06-28 18:30", scheduleNow, out ScheduleParseResult absoluteSchedule), "ScheduleParser parses yyyy-MM-dd HH:mm");
 AssertEqual(new DateTime(2026, 6, 28, 18, 30, 0, DateTimeKind.Utc), absoluteSchedule.ScheduledAtUtc, "ScheduleParser returns UTC absolute schedule time");

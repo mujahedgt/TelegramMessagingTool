@@ -470,7 +470,9 @@ Added scripted tests for:
 - failed tool results are explained safely
 - search routing avoids false positives
 
-## P7.3 Documentation cleanup
+## P7.3 Documentation cleanup ✅ Done
+
+**Status:** Synchronized README, `/help`, and roadmap docs with the implemented plugin loader, image/voice gates, transcript/TTS workflows, observability, and scripted eval coverage. Added helper-test guards so stale planning-only plugin/media wording does not regress.
 
 Keep README, `/help`, `/status`, `/tools`, and roadmap docs synchronized after every feature.
 
@@ -532,10 +534,4 @@ Then restart and verify:
 
 # Immediate Next Task
 
-Continue with:
-
-```text
-Priority 7.3 — Documentation cleanup
-```
-
-Final polish patch: keep README, `/help`, `/status`, `/tools`, and roadmap docs synchronized with the implemented runtime, tools, media harnesses, observability, and eval coverage.
+Current combined roadmap is complete through Priority 7.3. Next recommended step is a fresh review/roadmap pass before starting another feature batch.
