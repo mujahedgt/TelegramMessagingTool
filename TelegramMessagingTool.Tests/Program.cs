@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using static TestAssert;
 using System.Diagnostics;
 using System.Net.Sockets;
 using System.Text.Json;
@@ -17,30 +18,6 @@ using TelegramMessagingTool.Telegram;
 using TelegramMessagingTool.Tools;
 using TelegramMessagingTool.Tools.CommandExecution;
 using TelegramMessagingTool.Tools.GitHub;
-
-static void AssertEqual<T>(T expected, T actual, string name)
-{
-    if (!EqualityComparer<T>.Default.Equals(expected, actual))
-    {
-        throw new Exception($"{name}: expected '{expected}', actual '{actual}'");
-    }
-}
-
-static void AssertTrue(bool condition, string name)
-{
-    if (!condition)
-    {
-        throw new Exception($"{name}: expected true");
-    }
-}
-
-static void AssertFalse(bool condition, string name)
-{
-    if (condition)
-    {
-        throw new Exception($"{name}: expected false");
-    }
-}
 
 // RED tests for upgrade helpers.
 AssertEqual("TelegramMessagingTool.Abstractions", typeof(IAgentTool).Assembly.GetName().Name, "IAgentTool lives in plugin abstraction assembly");

@@ -223,6 +223,8 @@ git commit -m "Show consolidated runtime risk warnings"
 
 ### Task 10.1: Split giant helper test runner into thematic files
 
+**Status:** In progress — assertion helpers extracted to `TestAssert.cs` in current patch (`Extract helper test assertions`).
+
 **Objective:** Reduce `TelegramMessagingTool.Tests/Program.cs` size and make future TDD safer.
 
 **Files:**
