@@ -223,7 +223,7 @@ git commit -m "Show consolidated runtime risk warnings"
 
 ### Task 10.1: Split giant helper test runner into thematic files
 
-**Status:** In progress — assertion helpers extracted to `TestAssert.cs` in current patch (`Extract helper test assertions`).
+**Status:** In progress — assertion helpers extracted to `TestAssert.cs`; plugin tests extracted to `PluginTests.cs` in current patch (`Extract plugin helper tests`).
 
 **Objective:** Reduce `TelegramMessagingTool.Tests/Program.cs` size and make future TDD safer.
 
@@ -254,6 +254,8 @@ git commit -m "Split helper tests by feature area"
 ---
 
 ### Task 10.2: Add focused plugin tool tests
+
+**Status:** Completed in current patch (`Extract plugin helper tests`).
 
 **Objective:** Ensure `dotnet_create_project` remains sandboxed and discoverable.
 
