@@ -23,6 +23,7 @@ public sealed class PendingActionCallbackService
     public async Task<PendingActionCallbackResult> HandleAsync(
         string? callbackData,
         ConnectedUser user,
+        long actorTelegramUserId,
         TelegramDbContext dbContext,
         CancellationToken cancellationToken)
     {
@@ -31,12 +32,9 @@ public sealed class PendingActionCallbackService
             return PendingActionCallbackResult.NotHandled;
         }
 
-        if (!BotAccessPolicy.IsAdmin(user.ChatId, _settings.AdminChatId))
+        if (!BotAccessPolicy.IsAdmin(actorTelegramUserId, _settings.AdminChatId))
         {
-            return new PendingActionCallbackResult(
-                Handled: true,
-                AnswerText: "Admin only",
-                MessageText: BotAccessPolicy.AdminOnlyMessage(_settings.AdminChatId));
+            return UnauthorizedActorResult;
         }
 
         return callback.Verb switch
@@ -47,6 +45,11 @@ public sealed class PendingActionCallbackService
             _ => PendingActionCallbackResult.NotHandled
         };
     }
+
+    private static PendingActionCallbackResult UnauthorizedActorResult => new(
+        Handled: true,
+        AnswerText: "Not authorized",
+        MessageText: "This button is not authorized for your Telegram account.");
 
     private async Task<PendingActionCallbackResult> ApproveAsync(
         int actionId,

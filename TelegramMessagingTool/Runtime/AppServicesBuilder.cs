@@ -59,7 +59,7 @@ public static class AppServicesBuilder
         var pendingActionExecutor = new PendingActionExecutor(new SystemProcessTerminator(), documentStorage, observability: observability);
         var pendingActionCallbackService = new PendingActionCallbackService(pendingActionService, pendingActionExecutor, settings);
         var agentTaskService = new AgentTaskService();
-        var taskCallbackService = new TaskCallbackService(agentTaskService);
+        var taskCallbackService = new TaskCallbackService(agentTaskService, settings);
         var documentIndexingService = new DocumentIndexingService(documentStorage);
         var documentEmbeddingService = new DocumentEmbeddingService(ollamaEmbeddingClient, settings.OllamaEmbeddingModel);
         var documentRetrievalService = new DocumentRetrievalService(retrievalEmbeddingService);

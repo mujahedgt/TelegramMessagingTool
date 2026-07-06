@@ -1294,6 +1294,28 @@ await using (var dbContext = new TelegramDbContext())
     var fakeGitHubIssueCreator = new FakeGitHubIssueCreator();
     var fakeGitHubIssueCommenter = new FakeGitHubIssueCommenter();
     var pendingActionExecutor = new PendingActionExecutor(fakeProcessTerminator, documentStorage, fakeLatestReleaseRestarter, fakeGitHubIssueCreator, fakeGitHubIssueCommenter);
+    var pendingActionCallbackService = new PendingActionCallbackService(pendingActionService, pendingActionExecutor, adminTestSettings);
+    PendingActionCallbackResult unauthorizedPendingCallback = await pendingActionCallbackService.HandleAsync(
+        "act:approve:1",
+        testUser,
+        actorTelegramUserId: nonAdminUser.ChatId,
+        dbContext,
+        CancellationToken.None);
+    AssertTrue(unauthorizedPendingCallback.Handled, "Pending action callback handles unauthorized actor attempts");
+    AssertEqual("Not authorized", unauthorizedPendingCallback.AnswerText, "Pending action callback rejects a non-admin callback actor even when the message chat belongs to admin");
+    AssertTrue(unauthorizedPendingCallback.MessageText?.Contains("not authorized", StringComparison.OrdinalIgnoreCase) == true, "Pending action callback explains actor authorization failure");
+
+    var actorTaskCallbackService = new TaskCallbackService(new AgentTaskService(), adminTestSettings);
+    TaskCallbackResult unauthorizedTaskCallback = await actorTaskCallbackService.HandleAsync(
+        "task:done:1",
+        testUser,
+        actorTelegramUserId: nonAdminUser.ChatId,
+        dbContext,
+        CancellationToken.None);
+    AssertTrue(unauthorizedTaskCallback.Handled, "Task callback handles unauthorized actor attempts");
+    AssertEqual("Not authorized", unauthorizedTaskCallback.AnswerText, "Task callback rejects a different callback actor even when the message chat belongs to task owner");
+    AssertTrue(unauthorizedTaskCallback.MessageText?.Contains("not authorized", StringComparison.OrdinalIgnoreCase) == true, "Task callback explains actor authorization failure");
+
     var gitHubWriteSettings = adminTestSettings with
     {
         GitHub = gitHubSettings with { EnableGitHubWriteTools = true }
@@ -2048,10 +2070,10 @@ diff --git a/../outside.cs b/../outside.cs
     AssertTrue(pendingResult.ReplyMarkup!.InlineKeyboard.SelectMany(row => row).Any(button => button.CallbackData == $"act:deny:{pendingAction.Id}"), "/pending action keyboard includes deny callback");
 
     var pendingCallbackService = new PendingActionCallbackService(pendingActionService, pendingActionExecutor, adminTestSettings);
-    PendingActionCallbackResult invalidCallbackResult = await pendingCallbackService.HandleAsync("task:open:1", testUser, dbContext, CancellationToken.None);
+    PendingActionCallbackResult invalidCallbackResult = await pendingCallbackService.HandleAsync("task:open:1", testUser, testUser.ChatId, dbContext, CancellationToken.None);
     AssertFalse(invalidCallbackResult.Handled, "PendingActionCallbackService ignores non-action callback domains");
 
-    PendingActionCallbackResult detailsCallbackResult = await pendingCallbackService.HandleAsync($"act:details:{pendingAction.Id}", testUser, dbContext, CancellationToken.None);
+    PendingActionCallbackResult detailsCallbackResult = await pendingCallbackService.HandleAsync($"act:details:{pendingAction.Id}", testUser, testUser.ChatId, dbContext, CancellationToken.None);
     AssertTrue(detailsCallbackResult.Handled, "PendingActionCallbackService handles details callbacks");
     AssertTrue(detailsCallbackResult.AnswerText.Contains("Details"), "PendingActionCallbackService answers callback details requests");
     AssertTrue(detailsCallbackResult.MessageText?.Contains($"Action #{pendingAction.Id}") == true, "PendingActionCallbackService details includes action id");
@@ -2066,7 +2088,7 @@ diff --git a/../outside.cs b/../outside.cs
         "high",
         TimeSpan.FromMinutes(30),
         CancellationToken.None);
-    PendingActionCallbackResult denyCallbackResult = await pendingCallbackService.HandleAsync($"act:deny:{callbackDenyAction.Id}", testUser, dbContext, CancellationToken.None);
+    PendingActionCallbackResult denyCallbackResult = await pendingCallbackService.HandleAsync($"act:deny:{callbackDenyAction.Id}", testUser, testUser.ChatId, dbContext, CancellationToken.None);
     AssertTrue(denyCallbackResult.Handled, "PendingActionCallbackService handles deny callbacks");
     AssertTrue(denyCallbackResult.MessageText?.Contains("denied", StringComparison.OrdinalIgnoreCase) == true, "PendingActionCallbackService deny returns denial message");
     AssertEqual(PendingActionStatuses.Denied, (await dbContext.PendingActions.FindAsync([callbackDenyAction.Id], CancellationToken.None))!.Status, "PendingActionCallbackService deny marks action denied");
@@ -2081,7 +2103,7 @@ diff --git a/../outside.cs b/../outside.cs
         TimeSpan.FromMinutes(30),
         CancellationToken.None);
     int killCallsBeforeCallback = fakeProcessTerminator.KillCallCount;
-    PendingActionCallbackResult approveCallbackResult = await pendingCallbackService.HandleAsync($"act:approve:{callbackApproveAction.Id}", testUser, dbContext, CancellationToken.None);
+    PendingActionCallbackResult approveCallbackResult = await pendingCallbackService.HandleAsync($"act:approve:{callbackApproveAction.Id}", testUser, testUser.ChatId, dbContext, CancellationToken.None);
     AssertTrue(approveCallbackResult.Handled, "PendingActionCallbackService handles approve callbacks");
     AssertTrue(approveCallbackResult.MessageText?.Contains("Execution result", StringComparison.OrdinalIgnoreCase) == true, "PendingActionCallbackService approve reports execution result");
     AssertEqual(54321, fakeProcessTerminator.LastRequestedPid, "PendingActionCallbackService approve executes kill_process through safe terminator");
@@ -2097,9 +2119,9 @@ diff --git a/../outside.cs b/../outside.cs
         "high",
         TimeSpan.FromMinutes(30),
         CancellationToken.None);
-    PendingActionCallbackResult nonAdminCallbackResult = await pendingCallbackService.HandleAsync($"act:deny:{callbackNonAdminAction.Id}", nonAdminUser, dbContext, CancellationToken.None);
+    PendingActionCallbackResult nonAdminCallbackResult = await pendingCallbackService.HandleAsync($"act:deny:{callbackNonAdminAction.Id}", nonAdminUser, nonAdminUser.ChatId, dbContext, CancellationToken.None);
     AssertTrue(nonAdminCallbackResult.Handled, "PendingActionCallbackService handles non-admin callback attempts");
-    AssertTrue(nonAdminCallbackResult.MessageText?.Contains("admin", StringComparison.OrdinalIgnoreCase) == true, "PendingActionCallbackService requires admin");
+    AssertTrue(nonAdminCallbackResult.MessageText?.Contains("not authorized", StringComparison.OrdinalIgnoreCase) == true, "PendingActionCallbackService rejects non-admin callback actors");
     AssertEqual(PendingActionStatuses.Pending, (await dbContext.PendingActions.FindAsync([callbackNonAdminAction.Id], CancellationToken.None))!.Status, "PendingActionCallbackService non-admin does not decide action");
 
     CommandResult nonAdminPendingResult = await commandRouter.TryHandleAsync(TextMessage("/pending"), nonAdminUser, dbContext, CancellationToken.None);
@@ -2189,19 +2211,19 @@ diff --git a/../outside.cs b/../outside.cs
     AssertTrue(taskResult.ReplyMarkup!.InlineKeyboard.SelectMany(row => row).Any(button => button.CallbackData == $"task:done-step:{taskId}:1"), "/task keyboard includes done-step callback for step 1");
     AssertTrue(taskResult.ReplyMarkup!.InlineKeyboard.SelectMany(row => row).Any(button => button.CallbackData == $"task:cancel:{taskId}"), "/task keyboard includes cancel callback");
 
-    var taskCallbackService = new TaskCallbackService(agentTaskService);
-    TaskCallbackResult invalidTaskCallbackResult = await taskCallbackService.HandleAsync("act:details:1", testUser, dbContext, CancellationToken.None);
+    var taskCallbackService = new TaskCallbackService(agentTaskService, adminTestSettings);
+    TaskCallbackResult invalidTaskCallbackResult = await taskCallbackService.HandleAsync("act:details:1", testUser, testUser.ChatId, dbContext, CancellationToken.None);
     AssertFalse(invalidTaskCallbackResult.Handled, "TaskCallbackService ignores non-task callback domains");
-    TaskCallbackResult openTaskCallbackResult = await taskCallbackService.HandleAsync($"task:open:{taskId}", testUser, dbContext, CancellationToken.None);
+    TaskCallbackResult openTaskCallbackResult = await taskCallbackService.HandleAsync($"task:open:{taskId}", testUser, testUser.ChatId, dbContext, CancellationToken.None);
     AssertTrue(openTaskCallbackResult.Handled, "TaskCallbackService handles open callbacks");
     AssertTrue(openTaskCallbackResult.AnswerText.Contains("Opened"), "TaskCallbackService answers open callbacks");
     AssertTrue(openTaskCallbackResult.MessageText?.Contains($"Task #{taskId}") == true, "TaskCallbackService open returns task details");
     AssertTrue(openTaskCallbackResult.MessageText?.Contains("inventory API", StringComparison.OrdinalIgnoreCase) == true, "TaskCallbackService open includes task goal");
-    TaskCallbackResult missingStepTaskCallbackResult = await taskCallbackService.HandleAsync($"task:done-step:{taskId}:99", testUser, dbContext, CancellationToken.None);
+    TaskCallbackResult missingStepTaskCallbackResult = await taskCallbackService.HandleAsync($"task:done-step:{taskId}:99", testUser, testUser.ChatId, dbContext, CancellationToken.None);
     AssertTrue(missingStepTaskCallbackResult.Handled, "TaskCallbackService handles missing done-step callbacks safely");
     AssertTrue(missingStepTaskCallbackResult.MessageText?.Contains("does not have step 99", StringComparison.OrdinalIgnoreCase) == true, "TaskCallbackService reports missing step");
     AssertFalse((await dbContext.AgentTaskSteps.FirstAsync(x => x.AgentTaskId == taskId && x.StepNumber == 1, CancellationToken.None)).IsDone, "TaskCallbackService missing done-step callback does not mutate other steps");
-    TaskCallbackResult doneStepTaskCallbackResult = await taskCallbackService.HandleAsync($"task:done-step:{taskId}:1", testUser, dbContext, CancellationToken.None);
+    TaskCallbackResult doneStepTaskCallbackResult = await taskCallbackService.HandleAsync($"task:done-step:{taskId}:1", testUser, testUser.ChatId, dbContext, CancellationToken.None);
     AssertTrue(doneStepTaskCallbackResult.Handled, "TaskCallbackService handles done-step callbacks safely");
     AssertTrue(doneStepTaskCallbackResult.AnswerText.Contains("Done", StringComparison.OrdinalIgnoreCase), "TaskCallbackService answers successful done-step callbacks");
     AssertTrue(doneStepTaskCallbackResult.MessageText?.Contains("step 1 marked done", StringComparison.OrdinalIgnoreCase) == true, "TaskCallbackService reports done-step success");
@@ -2209,7 +2231,7 @@ diff --git a/../outside.cs b/../outside.cs
     AssertTrue((await dbContext.AgentTaskSteps.FirstAsync(x => x.AgentTaskId == taskId && x.StepNumber == 1, CancellationToken.None)).IsDone, "TaskCallbackService done-step callback marks the selected step done");
     AssertFalse((await dbContext.AgentTaskSteps.FirstAsync(x => x.AgentTaskId == taskId && x.StepNumber == 2, CancellationToken.None)).IsDone, "TaskCallbackService done-step callback does not mark other steps done");
     AgentTask cancelCallbackTask = await agentTaskService.CreatePlanAsync(dbContext, testUser, "cancel from inline button", CancellationToken.None);
-    TaskCallbackResult cancelTaskCallbackResult = await taskCallbackService.HandleAsync($"task:cancel:{cancelCallbackTask.Id}", testUser, dbContext, CancellationToken.None);
+    TaskCallbackResult cancelTaskCallbackResult = await taskCallbackService.HandleAsync($"task:cancel:{cancelCallbackTask.Id}", testUser, testUser.ChatId, dbContext, CancellationToken.None);
     AssertTrue(cancelTaskCallbackResult.Handled, "TaskCallbackService handles cancel callbacks safely");
     AssertTrue(cancelTaskCallbackResult.AnswerText.Contains("Cancelled", StringComparison.OrdinalIgnoreCase), "TaskCallbackService answers successful cancel callbacks");
     AssertTrue(cancelTaskCallbackResult.MessageText?.Contains("cancelled", StringComparison.OrdinalIgnoreCase) == true, "TaskCallbackService reports cancel success");
@@ -2217,7 +2239,7 @@ diff --git a/../outside.cs b/../outside.cs
     AssertEqual(AgentTaskStatuses.Active, (await dbContext.AgentTasks.FindAsync([taskId], CancellationToken.None))!.Status, "TaskCallbackService cancel callback does not cancel a different task");
 
     AgentTask wholeDoneTask = await agentTaskService.CreatePlanAsync(dbContext, testUser, "ship the whole done button", CancellationToken.None);
-    TaskCallbackResult doneTaskCallbackResult = await taskCallbackService.HandleAsync($"task:done:{wholeDoneTask.Id}", testUser, dbContext, CancellationToken.None);
+    TaskCallbackResult doneTaskCallbackResult = await taskCallbackService.HandleAsync($"task:done:{wholeDoneTask.Id}", testUser, testUser.ChatId, dbContext, CancellationToken.None);
     AssertTrue(doneTaskCallbackResult.Handled, "TaskCallbackService handles done callbacks safely");
     AssertTrue(doneTaskCallbackResult.AnswerText.Contains("Done", StringComparison.OrdinalIgnoreCase), "TaskCallbackService answers successful done callbacks");
     AssertTrue(doneTaskCallbackResult.MessageText?.Contains("marked completed", StringComparison.OrdinalIgnoreCase) == true, "TaskCallbackService reports whole-task done success");

@@ -329,6 +329,7 @@ public sealed class TelegramUpdateHandler
             PendingActionCallbackResult pendingActionResult = await _pendingActionCallbackService.HandleAsync(
                 callbackQuery.Data,
                 user,
+                callbackQuery.From.Id,
                 dbContext,
                 cancellationToken);
 
@@ -341,6 +342,7 @@ public sealed class TelegramUpdateHandler
                 TaskCallbackResult taskResult = await _taskCallbackService.HandleAsync(
                     callbackQuery.Data,
                     user,
+                    callbackQuery.From.Id,
                     dbContext,
                     cancellationToken);
 

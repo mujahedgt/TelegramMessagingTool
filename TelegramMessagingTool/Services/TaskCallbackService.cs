@@ -7,21 +7,29 @@ namespace TelegramMessagingTool.Services;
 public sealed class TaskCallbackService
 {
     private readonly AgentTaskService _agentTaskService;
+    private readonly BotSettings _settings;
 
-    public TaskCallbackService(AgentTaskService agentTaskService)
+    public TaskCallbackService(AgentTaskService agentTaskService, BotSettings settings)
     {
         _agentTaskService = agentTaskService;
+        _settings = settings;
     }
 
     public async Task<TaskCallbackResult> HandleAsync(
         string? callbackData,
         ConnectedUser user,
+        long actorTelegramUserId,
         TelegramDbContext dbContext,
         CancellationToken cancellationToken)
     {
         if (!TaskCallbackParser.TryParse(callbackData, out TaskCallback callback))
         {
             return TaskCallbackResult.NotHandled;
+        }
+
+        if (!IsAuthorizedActor(user, actorTelegramUserId))
+        {
+            return UnauthorizedActorResult;
         }
 
         return callback.Verb switch
@@ -33,6 +41,17 @@ public sealed class TaskCallbackService
             _ => TaskCallbackResult.NotHandled
         };
     }
+
+    private bool IsAuthorizedActor(ConnectedUser user, long actorTelegramUserId)
+    {
+        return BotAccessPolicy.IsAdmin(actorTelegramUserId, _settings.AdminChatId)
+            || actorTelegramUserId == user.ChatId;
+    }
+
+    private static TaskCallbackResult UnauthorizedActorResult => new(
+        Handled: true,
+        AnswerText: "Not authorized",
+        MessageText: "This button is not authorized for your Telegram account.");
 
     private async Task<TaskCallbackResult> OpenAsync(
         int taskId,
