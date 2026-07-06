@@ -24,7 +24,7 @@ TelegramMessagingTool is a C#/.NET console application that connects a Telegram 
 - File commands: `/files`, `/images`, `/describeimage <id>`, `/voicefiles`, `/transcribe <id>`, `/readfile <id>`, `/createfile <filename> <content>`, admin-only local import via `/importfiles` and `/importfile <filename>`, and admin-approved `/deletefile <id>`
 - Document Q&A indexing, question, summary, and embedding commands: `/indexfile`, `/indexdocs`, `/docchunks`, `/askfile`, `/askdocs`, `/summarizefile`, `/summarizedocs`, `/embedfile`, and `/embeddocs`
 - Read-only local device commands: `/systeminfo`, `/diskstatus`, and `/processes [count]`
-- Safe approval foundation for future risky tools
+- Approval foundation and executed risky tools for admin-reviewed local/process, file, repo, release/restart, and GitHub write actions
 - Approval commands: `/pending`, `/approve <id>`, `/deny <id>`, `/action <id>`, and `/actions [count]` with structured previews/history showing exact risk, target file/repository, diff or git command summaries, GitHub issue/comment targets, and compact decision notes without dumping raw edit payloads
 - Repo safety scanning before approved commits, pushes, and releases: blocks token-like diff additions, `.env`/secret config files, local DB/certificate/backup binaries, release outputs, and generated/runtime paths
 - Task planner commands: `/plan <goal>`, `/tasks`, `/task <id>`, `/done <task-id> [step-number]`, and `/cancel <task-id>`
@@ -66,7 +66,7 @@ Configuration is read from environment variables.
 | `OLLAMA_MODEL_DOC_QA` | No | `OLLAMA_MODEL` | Model route for `/askfile` and `/askdocs` |
 | `OLLAMA_MODEL_SUMMARY` | No | `OLLAMA_MODEL` | Model route for `/summarizefile` and `/summarizedocs` |
 | `OLLAMA_MODEL_TOOL_FINAL` | No | `OLLAMA_MODEL` | Model route for tool final-answer synthesis |
-| `OLLAMA_MODEL_IMAGE` | No | `OLLAMA_MODEL` | Reserved model route for future image-agent features. Recommended local vision model after `ollama pull`: `llama3.2-vision:11b`. |
+| `OLLAMA_MODEL_IMAGE` | No | `OLLAMA_MODEL` | Model route for `/describeimage <id>` when `ENABLE_IMAGE_VISION=true`. Recommended local vision model after `ollama pull`: `llama3.2-vision:11b`. |
 | `OLLAMA_MODEL_VOICE` | No | `OLLAMA_MODEL` | Model route for `/transcriptinsights <id>` transcript summarization/task extraction. Audio transcription uses the local command provider below, not Ollama directly. |
 | `OLLAMA_EMBEDDING_URL` | No | derived from `OLLAMA_URL` as `/api/embed` | Ollama embedding API endpoint |
 | `OLLAMA_EMBEDDING_MODEL` | No | `nomic-embed-text` | Local embedding model used by `/embedfile` and `/embeddocs` |
@@ -294,7 +294,7 @@ Risky approval commands are admin-only. Set `ADMIN_CHAT_ID` to your Telegram cha
 
 ## Approval flow
 
-The bot now includes a database-backed approval foundation for future risky actions. This does not execute dangerous tools yet; it stores and tracks approval decisions so future tools can be gated safely.
+The bot includes a database-backed approval system for risky actions. It stores, tracks, and executes only explicitly approved admin actions for supported local/process, file, repository, release/restart, and GitHub write workflows.
 
 Commands:
 

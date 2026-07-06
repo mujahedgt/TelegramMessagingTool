@@ -34,9 +34,9 @@ TelegramMessagingTool Agent Commands
 /remember <text> - Save a memory
 /forget <id> - Delete a memory
 /files - List saved files and uploaded documents
-/images - List saved sandboxed image files for the planned image-agent harness
+/images - List saved sandboxed image files
 /describeimage <id> - Describe a saved image when image vision is enabled; otherwise show safe metadata
-/voicefiles - List saved sandboxed audio files for the planned voice-agent harness
+/voicefiles - List saved sandboxed audio files
 /transcribe <id> - Transcribe a saved audio file when a trusted local provider is configured
 /transcriptinsights <id> - Summarize and extract tasks from a saved transcript document
 /speaktext <text> - Generate TTS audio into the sandbox without sending it automatically
@@ -55,8 +55,8 @@ TelegramMessagingTool Agent Commands
 /embedfile <id> - Generate local embeddings for one indexed document
 /embeddocs - Generate local embeddings for all indexed documents
 /tools - List available safe agent tools
-/harnesses - Show planned image and voice agent harnesses
-/plugins - Show read-only plugin manifest discovery status
+/harnesses - Show image and voice agent harness readiness
+/plugins - Show plugin manifest/loading diagnostics
 /pending - List actions waiting for your approval
 /action <id> - Show pending/approved action audit details
 /actions [count] - List recent approval/action audit records

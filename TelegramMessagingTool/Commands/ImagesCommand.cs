@@ -10,7 +10,7 @@ public sealed class ImagesCommand : IBotCommand
 {
     public string Name => "/images";
 
-    public string Description => "List saved sandboxed image files for the planned image-agent harness.";
+    public string Description => "List saved sandboxed image files.";
 
     public async Task<CommandResult> TryHandleAsync(
         Message message,
@@ -37,12 +37,12 @@ public sealed class ImagesCommand : IBotCommand
 
         if (images.Count == 0)
         {
-            return new CommandResult(true, "No images saved yet. Upload a .png/.jpg/.jpeg/.webp/.gif image as a Telegram document, then use /images again. Image description/OCR is planned next but not implemented yet.");
+            return new CommandResult(true, "No images saved yet. Upload a .png/.jpg/.jpeg/.webp/.gif image as a Telegram document, then use /images again. Use /describeimage <id> for metadata or gated local vision description.");
         }
 
-        string reply = "Saved images for image_agent harness:\n"
+        string reply = "Saved images:\n"
             + string.Join("\n", images.Select(x => $"#{x.Id}: {x.OriginalFileName} ({x.SizeBytes} bytes, {x.Source})"))
-            + "\n\nNext planned commands: /describeimage <id> and OCR/image prompt helpers.";
+            + "\n\nUse /describeimage <id> for metadata or gated local vision description.";
 
         return new CommandResult(true, reply);
     }

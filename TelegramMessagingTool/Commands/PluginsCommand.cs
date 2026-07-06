@@ -18,7 +18,7 @@ public sealed class PluginsCommand : IBotCommand
 
     public string Name => "/plugins";
 
-    public string Description => "Show read-only plugin manifest discovery status and diagnostics.";
+    public string Description => "Show plugin manifest and trusted loading diagnostics.";
 
     public Task<CommandResult> TryHandleAsync(
         Message message,

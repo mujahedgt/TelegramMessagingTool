@@ -16,7 +16,7 @@ public sealed class HarnessesCommand : IBotCommand
 
     public string Name => "/harnesses";
 
-    public string Description => "Show planned image and voice agent harnesses.";
+    public string Description => "Show image and voice agent harness readiness.";
 
     public Task<CommandResult> TryHandleAsync(
         Message message,
