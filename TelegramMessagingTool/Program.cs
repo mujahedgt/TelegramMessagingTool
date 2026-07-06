@@ -43,17 +43,19 @@ ReceiverOptions receiverOptions = new()
 try
 {
     var me = await appServices.BotClient.GetMe(cts.Token);
+    string accessMode = BotAccessPolicy.DescribeAccessMode(settings.AllowedChatIds, settings.AdminChatId, settings.AllowPublicAccess);
     Console.WriteLine(AgentConsoleRenderer.RenderStartupPanel(new AgentConsoleSnapshot(
         BotUsername: me.Username ?? "unknown",
         OllamaUrl: settings.OllamaUrl,
         OllamaModel: settings.OllamaModel,
         DatabaseConnection: settings.DatabaseConnectionString,
-        AccessMode: BotAccessPolicy.DescribeAccessMode(settings.AllowedChatIds, settings.AdminChatId, settings.AllowPublicAccess),
+        AccessMode: accessMode,
         MessageContentLoggingEnabled: settings.LogMessageContent,
         OnlineSearchEnabled: settings.EnableOnlineSearch,
         ApplyMigrations: settings.ApplyMigrations,
         Commands: appServices.CommandRouter.Commands.Select(x => x.Name).ToList(),
-        Tools: appServices.ToolRegistry.Tools.Select(x => x.Name).ToList())));
+        Tools: appServices.ToolRegistry.Tools.Select(x => x.Name).ToList(),
+        RiskWarnings: RuntimeRiskSummary.RenderStartupWarnings(settings, accessMode))));
 
     appServices.BotClient.StartReceiving(
         updateHandler: appServices.TelegramUpdateHandler.HandleUpdateAsync,

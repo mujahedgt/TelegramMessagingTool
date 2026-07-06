@@ -197,6 +197,8 @@ git commit -m "Add runtime risk configuration command"
 
 ### Task 9.2: Add startup warning consolidation for risky machine config
 
+**Status:** Completed in current patch (`Show consolidated runtime risk warnings`).
+
 **Objective:** Startup panel should summarize risky local machine flags in one obvious place.
 
 **Files:**

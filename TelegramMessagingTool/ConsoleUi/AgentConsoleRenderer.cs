@@ -12,7 +12,8 @@ public sealed record AgentConsoleSnapshot(
     bool OnlineSearchEnabled,
     bool ApplyMigrations,
     IReadOnlyList<string> Commands,
-    IReadOnlyList<string> Tools);
+    IReadOnlyList<string> Tools,
+    IReadOnlyList<string>? RiskWarnings = null);
 
 public enum ConsoleEventLevel
 {
@@ -67,29 +68,19 @@ public static class AgentConsoleRenderer
         }
         builder.AppendLine("  /exit                         Stop the console app gracefully");
         builder.AppendLine();
-        builder.AppendLine("Safety warnings");
-        builder.AppendLine("---------------");
-        bool hasWarning = false;
-        if (snapshot.AccessMode.Equals("public override", StringComparison.OrdinalIgnoreCase))
+        builder.AppendLine("Runtime risk warnings");
+        builder.AppendLine("---------------------");
+        IReadOnlyList<string> riskWarnings = snapshot.RiskWarnings ?? BuildLegacyRiskWarnings(snapshot);
+        if (riskWarnings.Count == 0)
         {
-            hasWarning = true;
-            builder.AppendLine("! ALLOW_PUBLIC_ACCESS is enabled. Anyone who finds the bot can use it.");
+            builder.AppendLine("No immediate runtime risk warnings.");
         }
-        else if (snapshot.AccessMode.Equals("locked", StringComparison.OrdinalIgnoreCase))
+        else
         {
-            hasWarning = true;
-            builder.AppendLine("! Telegram access is locked. Set ADMIN_CHAT_ID, ALLOWED_CHAT_IDS, or ALLOW_PUBLIC_ACCESS=true intentionally.");
-        }
-
-        if (snapshot.MessageContentLoggingEnabled)
-        {
-            hasWarning = true;
-            builder.AppendLine("! LOG_MESSAGE_CONTENT is enabled. Logs may contain private chat text.");
-        }
-
-        if (!hasWarning)
-        {
-            builder.AppendLine("No immediate safety warnings.");
+            foreach (string warning in riskWarnings)
+            {
+                builder.AppendLine("! " + warning);
+            }
         }
 
         builder.AppendLine();
@@ -166,6 +157,26 @@ public static class AgentConsoleRenderer
             || key.Equals("User ID", StringComparison.OrdinalIgnoreCase)
             || key.Equals("UID", StringComparison.OrdinalIgnoreCase)
             || key.Equals("Access Token", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static IReadOnlyList<string> BuildLegacyRiskWarnings(AgentConsoleSnapshot snapshot)
+    {
+        var warnings = new List<string>();
+        if (snapshot.AccessMode.Equals("public override", StringComparison.OrdinalIgnoreCase))
+        {
+            warnings.Add("ALLOW_PUBLIC_ACCESS is enabled. Anyone who finds the bot can use it.");
+        }
+        else if (snapshot.AccessMode.Equals("locked", StringComparison.OrdinalIgnoreCase))
+        {
+            warnings.Add("Telegram access is locked. Set ADMIN_CHAT_ID, ALLOWED_CHAT_IDS, or ALLOW_PUBLIC_ACCESS=true intentionally.");
+        }
+
+        if (snapshot.MessageContentLoggingEnabled)
+        {
+            warnings.Add("LOG_MESSAGE_CONTENT is enabled. Logs may contain private chat text.");
+        }
+
+        return warnings;
     }
 
     private static void AppendColumns(StringBuilder builder, IReadOnlyList<string> values, int columns)

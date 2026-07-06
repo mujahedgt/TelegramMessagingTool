@@ -1041,7 +1041,7 @@ AssertTrue(consolePanel.Contains("online_search"), "Console renderer lists tools
 AssertTrue(consolePanel.Contains("Quick start"), "Console renderer shows quick start guidance");
 AssertTrue(consolePanel.Contains("Type directly in this console"), "Console renderer shows console and Telegram usage examples");
 AssertTrue(consolePanel.Contains("/exit"), "Console renderer documents console exit command");
-AssertTrue(consolePanel.Contains("Safety warnings"), "Console renderer shows safety warning section");
+AssertTrue(consolePanel.Contains("Runtime risk warnings"), "Console renderer shows runtime risk warning section");
 AssertTrue(consolePanel.Contains("ALLOW_PUBLIC_ACCESS is enabled"), "Console renderer warns when public access override is enabled");
 AssertTrue(consolePanel.Contains("Anyone who finds the bot can use it"), "Console renderer explains public override risk");
 
@@ -1071,7 +1071,7 @@ string adminOnlyConsolePanel = AgentConsoleRenderer.RenderStartupPanel(new Agent
     ApplyMigrations: true,
     Commands: ["/help"],
     Tools: ["calculator"]));
-AssertTrue(adminOnlyConsolePanel.Contains("No immediate safety warnings."), "Console renderer does not warn for admin-only mode");
+AssertTrue(adminOnlyConsolePanel.Contains("No immediate runtime risk warnings."), "Console renderer does not warn for admin-only mode");
 AssertFalse(adminOnlyConsolePanel.Contains("Anyone who finds the bot can use it"), "Console renderer does not show public warning for admin-only mode");
 
 string maskedConnection = AgentConsoleRenderer.SummarizeDatabaseConnection("Server=(localdb)\\MSSQLLocalDB;Database=TelegramMessagingTool;User Id=admin;Password=secret-password;TrustServerCertificate=True");
@@ -1341,6 +1341,32 @@ await using (var dbContext = new TelegramDbContext())
     AssertTrue(riskConfigResult.ReplyText?.Contains("TTS: enabled, provider command missing", StringComparison.OrdinalIgnoreCase) == true, "/riskconfig warns when TTS provider command is missing");
     AssertFalse(riskConfigResult.ReplyText?.Contains("ghp_secret_value_must_not_render", StringComparison.OrdinalIgnoreCase) == true, "/riskconfig never renders GitHub token values");
     AssertFalse(riskConfigResult.ReplyText?.Contains(adminTestSettings.DatabaseConnectionString, StringComparison.OrdinalIgnoreCase) == true, "/riskconfig never renders DB connection string values");
+    IReadOnlyList<string> startupRiskWarnings = RuntimeRiskSummary.RenderStartupWarnings(
+        riskySettings,
+        BotAccessPolicy.DescribeAccessMode(riskySettings.AllowedChatIds, riskySettings.AdminChatId, riskySettings.AllowPublicAccess));
+    AssertTrue(startupRiskWarnings.Any(x => x.Contains("ALLOW_PUBLIC_ACCESS", StringComparison.OrdinalIgnoreCase)), "Startup risk warnings include public access");
+    AssertTrue(startupRiskWarnings.Any(x => x.Contains("LOG_MESSAGE_CONTENT", StringComparison.OrdinalIgnoreCase)), "Startup risk warnings include content logging");
+    AssertTrue(startupRiskWarnings.Any(x => x.Contains("repo write", StringComparison.OrdinalIgnoreCase)), "Startup risk warnings include repo write tools");
+    AssertTrue(startupRiskWarnings.Any(x => x.Contains("plugin", StringComparison.OrdinalIgnoreCase)), "Startup risk warnings include plugin loading");
+    AssertTrue(startupRiskWarnings.Any(x => x.Contains("GitHub write", StringComparison.OrdinalIgnoreCase)), "Startup risk warnings include GitHub write tools");
+    AssertTrue(startupRiskWarnings.Any(x => x.Contains("audio transcription", StringComparison.OrdinalIgnoreCase) && x.Contains("missing", StringComparison.OrdinalIgnoreCase)), "Startup risk warnings include missing audio provider command");
+    AssertTrue(startupRiskWarnings.Any(x => x.Contains("TTS", StringComparison.OrdinalIgnoreCase) && x.Contains("missing", StringComparison.OrdinalIgnoreCase)), "Startup risk warnings include missing TTS provider command");
+    string startupPanel = AgentConsoleRenderer.RenderStartupPanel(new AgentConsoleSnapshot(
+        BotUsername: "red_eye_ghost_bot",
+        OllamaUrl: riskySettings.OllamaUrl,
+        OllamaModel: riskySettings.OllamaModel,
+        DatabaseConnection: riskySettings.DatabaseConnectionString,
+        AccessMode: BotAccessPolicy.DescribeAccessMode(riskySettings.AllowedChatIds, riskySettings.AdminChatId, riskySettings.AllowPublicAccess),
+        MessageContentLoggingEnabled: riskySettings.LogMessageContent,
+        OnlineSearchEnabled: riskySettings.EnableOnlineSearch,
+        ApplyMigrations: riskySettings.ApplyMigrations,
+        Commands: ["/riskconfig"],
+        Tools: ["dotnet_create_project"],
+        RiskWarnings: startupRiskWarnings));
+    AssertTrue(startupPanel.Contains("Runtime risk warnings", StringComparison.OrdinalIgnoreCase), "Startup panel uses consolidated runtime risk warning title");
+    AssertTrue(startupPanel.Contains("repo write", StringComparison.OrdinalIgnoreCase), "Startup panel shows repo write risk warning");
+    AssertFalse(startupPanel.Contains("ghp_secret_value_must_not_render", StringComparison.OrdinalIgnoreCase), "Startup panel does not render GitHub token values");
+    AssertFalse(startupPanel.Contains(adminTestSettings.DatabaseConnectionString, StringComparison.OrdinalIgnoreCase), "Startup panel does not render full DB connection string");
     CommandResult nonAdminRiskConfigResult = await riskConfigCommand.TryHandleAsync(TextMessage("/riskconfig"), nonAdminUser, dbContext, CancellationToken.None);
     AssertTrue(nonAdminRiskConfigResult.Handled, "/riskconfig non-admin attempt is handled");
     AssertTrue(nonAdminRiskConfigResult.ReplyText?.Contains("admin-only", StringComparison.OrdinalIgnoreCase) == true, "/riskconfig is admin-only");

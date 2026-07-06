@@ -38,42 +38,6 @@ public sealed class RiskConfigCommand : IBotCommand
 
     public static string RenderSummary(BotSettings settings)
     {
-        return string.Join("\n", new[]
-        {
-            "Risk configuration summary",
-            $"- Public access: {FormatEnabled(settings.AllowPublicAccess, warnWhenEnabled: true)}",
-            $"- Message content logging: {FormatEnabled(settings.LogMessageContent, warnWhenEnabled: true)}",
-            $"- Repo write tools: {FormatEnabled(settings.EnableRepoWriteTools, warnWhenEnabled: true)}",
-            $"- GitHub write tools: {FormatEnabled(settings.GitHub.EnableGitHubWriteTools, warnWhenEnabled: true)}",
-            $"- Plugin loading: {FormatEnabled(settings.EnablePlugins, warnWhenEnabled: true)} (trusted local DLLs only)",
-            $"- Safe command tools: {FormatEnabled(settings.EnableSafeCommandTools, warnWhenEnabled: true)}",
-            $"- Search routing: {settings.SearchRoutingMode}",
-            $"- Audio transcription: {FormatProviderGate(settings.EnableAudioTranscription, settings.AudioTranscriptionCommand)}",
-            $"- TTS: {FormatProviderGate(settings.EnableTextToSpeech, settings.TextToSpeechCommand)}",
-            "",
-            "Secrets: token values, database connection strings, and provider credentials are intentionally not shown."
-        });
-    }
-
-    private static string FormatEnabled(bool enabled, bool warnWhenEnabled)
-    {
-        if (!enabled)
-        {
-            return "disabled";
-        }
-
-        return warnWhenEnabled ? "ENABLED ⚠" : "ENABLED";
-    }
-
-    private static string FormatProviderGate(bool enabled, string command)
-    {
-        if (!enabled)
-        {
-            return "disabled";
-        }
-
-        return string.IsNullOrWhiteSpace(command)
-            ? "enabled, provider command missing"
-            : "enabled, provider command configured";
+        return RuntimeRiskSummary.RenderRiskConfig(settings);
     }
 }
