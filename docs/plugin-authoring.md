@@ -32,6 +32,7 @@ Recommended layout:
 plugins/
 └─ SamplePlugin/
    ├─ plugin.json
+   ├─ DotNetProjectCreateTool.cs
    ├─ SampleEchoTool.cs
    ├─ TelegramMessagingTool.SamplePlugin.csproj
    └─ bin/Release/net10.0/TelegramMessagingTool.SamplePlugin.dll
@@ -48,10 +49,10 @@ Use `plugins/SamplePlugin/plugin.json.example` or the checked-in sample plugin a
   "version": "1.0.0",
   "entryAssembly": "bin/Release/net10.0/TelegramMessagingTool.SamplePlugin.dll",
   "enabled": true,
-  "riskLevel": "low",
-  "isReadOnly": true,
-  "safetySummary": "Echoes provided input only; does not write files, call networks, or change system state.",
-  "allowedToolNames": ["sample_echo"]
+  "riskLevel": "medium",
+  "isReadOnly": false,
+  "safetySummary": "Includes sample_echo plus dotnet_create_project, which writes only inside the local GeneratedProjects sandbox and refuses overwrite/traversal paths.",
+  "allowedToolNames": ["sample_echo", "dotnet_create_project"]
 }
 ```
 
@@ -146,8 +147,27 @@ Expected output includes:
 Expected output includes registered tools and their source, for example:
 
 ```text
-- sample_echo: Sample trusted plugin tool that echoes its input. (safe/no approval; source: plugin:sample-plugin; risk: low; read-only; safety: Echoes provided input only; does not write files, call networks, or change system state.)
+- sample_echo: Sample trusted plugin tool that echoes its input. (safe/no approval; source: plugin:sample-plugin; risk: medium; can change state; safety: Includes sample_echo plus dotnet_create_project, which writes only inside the local GeneratedProjects sandbox and refuses overwrite/traversal paths.)
+- dotnet_create_project: Sample trusted plugin tool that creates a minimal .NET console project under GeneratedProjects. (safe/no approval; source: plugin:sample-plugin; risk: medium; can change state; safety: Includes sample_echo plus dotnet_create_project, which writes only inside the local GeneratedProjects sandbox and refuses overwrite/traversal paths.)
 ```
+
+## Sample .NET project creation tool
+
+The checked-in sample plugin includes `dotnet_create_project` as a small state-changing plugin example. It accepts either a plain project name or strict JSON:
+
+```json
+{"name":"DemoPluginApp"}
+```
+
+It creates only:
+
+```text
+GeneratedProjects/<name>/<name>.csproj
+GeneratedProjects/<name>/Program.cs
+GeneratedProjects/<name>/README.md
+```
+
+The tool rejects traversal-style names, unsupported characters, and existing non-empty project folders. It is still trusted local code, so review the source before enabling plugins on another machine.
 
 ## Building the sample plugin
 

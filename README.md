@@ -212,6 +212,8 @@ Available tools:
 | `repo_apply_patch` | Yes | Optional. Registered only when `ENABLE_REPO_WRITE_TOOLS=true` and an approval context is available. Applies one validated unified diff after `/approve`; rejects binary/generated/runtime/out-of-root paths |
 | `repo_commit_changes` | Yes | Optional. Registered only when `ENABLE_REPO_WRITE_TOOLS=true` and an approval context is available. Runs Git checks plus repo safety scanning, then commits current allowed project changes after `/approve`; does not push |
 | `repo_push_changes` | Yes | Optional. Registered only when `ENABLE_REPO_WRITE_TOOLS=true` and an approval context is available. Runs repo safety scanning, refuses dirty working trees, and pushes the current branch to `origin` after `/approve`; no force push |
+| `sample_echo` | No | Sample trusted plugin tool from `plugins/SamplePlugin`; echoes input when `ENABLE_PLUGINS=true` and the sample manifest/DLL are present |
+| `dotnet_create_project` | No | Sample trusted plugin tool from `plugins/SamplePlugin`; creates a minimal .NET console project only under `GeneratedProjects/<name>` and refuses overwrite/traversal paths |
 
 Search behavior notes:
 

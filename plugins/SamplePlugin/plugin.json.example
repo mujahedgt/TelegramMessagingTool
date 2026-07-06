@@ -4,10 +4,11 @@
   "version": "1.0.0",
   "entryAssembly": "bin/Release/net10.0/TelegramMessagingTool.SamplePlugin.dll",
   "enabled": true,
-  "riskLevel": "low",
-  "isReadOnly": true,
-  "safetySummary": "Echoes provided input only; does not write files, call networks, or change system state.",
+  "riskLevel": "medium",
+  "isReadOnly": false,
+  "safetySummary": "Includes sample_echo plus dotnet_create_project, which writes only inside the local GeneratedProjects sandbox and refuses overwrite/traversal paths.",
   "allowedToolNames": [
-    "sample_echo"
+    "sample_echo",
+    "dotnet_create_project"
   ]
 }
