@@ -14,6 +14,7 @@ TelegramMessagingTool is a C#/.NET console application that connects a Telegram 
 - Safe agent tool system with bounded multi-step tool calling
 - Built-in tools: `datetime`, `calculator`, `status`, optional `online_search` when `ENABLE_ONLINE_SEARCH=true`, optional read-only GitHub tools when `ENABLE_GITHUB_TOOLS=true`, and optional fixed safe command tools when `ENABLE_SAFE_COMMAND_TOOLS=true`
 - `/tools` command to show available tools
+- Admin-only `/riskconfig` command summarizes risky runtime feature flags without printing tokens, database connection strings, or provider credentials
 - Agent-style startup console panel with commands, model, safety, and tool status
 - Local console chat/command input using the same command router, memory, tools, and agent runner as Telegram
 - Runtime composition now builds runtime services through `Runtime/AppServicesBuilder.cs`, command registration through `Runtime/CommandRouterFactory.cs`, Telegram update handling through `Runtime/TelegramUpdateHandler.cs`, local console input through `Runtime/ConsoleInputHandler.cs`, and reminder polling through `Runtime/TaskReminderLoop.cs`, keeping `Program.cs` thin while preserving behavior
@@ -99,6 +100,8 @@ Configuration is read from environment variables.
 | `APPLY_MIGRATIONS` | No | `true` | Apply EF migrations on startup |
 | `LOG_MESSAGE_CONTENT` | No | `false` | Log user messages and assistant responses. Keep disabled for privacy. |
 | `CONVERSATION_MAX_HISTORY` | No | `8` | Number of recent persisted chat messages included in normal agent context. Values are clamped from `1` to `50`. |
+
+Use `/riskconfig` from the admin chat to review high-risk local machine settings such as `ALLOW_PUBLIC_ACCESS=true`, `LOG_MESSAGE_CONTENT=true`, repo/GitHub write tools, trusted plugin loading, safe command tools, `SEARCH_ROUTING_MODE=llm`, and media provider gates with missing commands. The command reports only enabled/disabled/configured status and intentionally never prints token values, database connection strings, or provider secrets.
 
 Example Git Bash setup:
 

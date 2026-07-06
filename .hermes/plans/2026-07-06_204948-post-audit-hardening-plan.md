@@ -56,6 +56,8 @@ For every task that changes code:
 
 ### Task 8.1: Authorize inline callback decisions by Telegram actor user ID
 
+**Status:** Completed in commit `f31bfa2` (`Harden callback actor authorization`).
+
 **Objective:** Prevent approval/action buttons in groups from being executed by a different Telegram user than the authorized actor/admin.
 
 **Files:**
@@ -144,6 +146,8 @@ git commit -m "Add callback decision observability"
 ## Priority 9: Risky Runtime Configuration Visibility
 
 ### Task 9.1: Add `/riskconfig` admin command
+
+**Status:** Completed in current patch (`Add runtime risk configuration command`).
 
 **Objective:** Since Mujahed enabled many local machine flags, add an admin-only command that shows risky enabled features clearly without exposing secrets.
 

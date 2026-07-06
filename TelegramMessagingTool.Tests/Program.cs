@@ -407,7 +407,7 @@ CommandRouter factoryRouter = CommandRouterFactory.Create(
     textToSpeechService: null);
 string commandNames = string.Join(",", factoryRouter.Commands.Select(x => x.Name));
 AssertEqual(
-    "/help,/systeminfo,/diskstatus,/processes,/status,/reset,/remember,/memory,/forget,/files,/images,/describeimage,/voicefiles,/transcribe,/transcriptinsights,/speaktext,/readfile,/createfile,/importfiles,/importfile,/deletefile,/indexfile,/indexdocs,/docchunks,/askfile,/askdocs,/summarizefile,/summarizedocs,/embedfile,/embeddocs,/tools,/harnesses,/plugins,/killprocess,/action,/actions,/pending,/approve,/deny,/plan,/tasks,/task,/schedule,/schedulelist,/unschedule,/done,/cancel",
+    "/help,/systeminfo,/diskstatus,/processes,/status,/riskconfig,/reset,/remember,/memory,/forget,/files,/images,/describeimage,/voicefiles,/transcribe,/transcriptinsights,/speaktext,/readfile,/createfile,/importfiles,/importfile,/deletefile,/indexfile,/indexdocs,/docchunks,/askfile,/askdocs,/summarizefile,/summarizedocs,/embedfile,/embeddocs,/tools,/harnesses,/plugins,/killprocess,/action,/actions,/pending,/approve,/deny,/plan,/tasks,/task,/schedule,/schedulelist,/unschedule,/done,/cancel",
     commandNames,
     "CommandRouterFactory preserves Program command registration order");
 
@@ -837,6 +837,7 @@ string readmeDocs = await File.ReadAllTextAsync(Path.Combine(Directory.GetCurren
 AssertFalse(readmeDocs.Contains("does not load plugin assemblies", StringComparison.OrdinalIgnoreCase), "README no longer says plugins only scan manifests after trusted loading exists");
 AssertFalse(readmeDocs.Contains("planning only", StringComparison.OrdinalIgnoreCase), "README no longer describes image/voice harnesses as planning-only after vision/audio/TTS gates exist");
 AssertTrue(readmeDocs.Contains("scripted agent behavior evals", StringComparison.OrdinalIgnoreCase), "README documents scripted behavior eval coverage");
+AssertTrue(readmeDocs.Contains("/riskconfig", StringComparison.OrdinalIgnoreCase), "README documents /riskconfig command");
 
 DateTime scheduleNow = new(2026, 6, 26, 12, 0, 0, DateTimeKind.Utc);
 AssertTrue(ScheduleParser.TryParse("2026-06-28 18:30", scheduleNow, out ScheduleParseResult absoluteSchedule), "ScheduleParser parses yyyy-MM-dd HH:mm");
@@ -1294,6 +1295,44 @@ await using (var dbContext = new TelegramDbContext())
     var fakeGitHubIssueCreator = new FakeGitHubIssueCreator();
     var fakeGitHubIssueCommenter = new FakeGitHubIssueCommenter();
     var pendingActionExecutor = new PendingActionExecutor(fakeProcessTerminator, documentStorage, fakeLatestReleaseRestarter, fakeGitHubIssueCreator, fakeGitHubIssueCommenter);
+    var riskySettings = adminTestSettings with
+    {
+        AllowPublicAccess = true,
+        LogMessageContent = true,
+        EnableRepoWriteTools = true,
+        EnableSafeCommandTools = true,
+        EnablePlugins = true,
+        SearchRoutingMode = "llm",
+        EnableAudioTranscription = true,
+        AudioTranscriptionCommand = string.Empty,
+        EnableTextToSpeech = true,
+        TextToSpeechCommand = string.Empty,
+        GitHub = adminTestSettings.GitHub with
+        {
+            EnableGitHubWriteTools = true,
+            Token = "ghp_secret_value_must_not_render"
+        }
+    };
+    var riskConfigCommand = new RiskConfigCommand(riskySettings);
+    CommandResult riskConfigResult = await riskConfigCommand.TryHandleAsync(TextMessage("/riskconfig"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(riskConfigResult.Handled, "/riskconfig is handled");
+    AssertTrue(riskConfigResult.ReplyText?.Contains("Risk configuration summary", StringComparison.OrdinalIgnoreCase) == true, "/riskconfig includes title");
+    AssertTrue(riskConfigResult.ReplyText?.Contains("Public access: ENABLED", StringComparison.OrdinalIgnoreCase) == true, "/riskconfig warns about public access");
+    AssertTrue(riskConfigResult.ReplyText?.Contains("Message content logging: ENABLED", StringComparison.OrdinalIgnoreCase) == true, "/riskconfig warns about content logging");
+    AssertTrue(riskConfigResult.ReplyText?.Contains("Repo write tools: ENABLED", StringComparison.OrdinalIgnoreCase) == true, "/riskconfig shows repo write tools");
+    AssertTrue(riskConfigResult.ReplyText?.Contains("GitHub write tools: ENABLED", StringComparison.OrdinalIgnoreCase) == true, "/riskconfig shows GitHub write tools");
+    AssertTrue(riskConfigResult.ReplyText?.Contains("Plugin loading: ENABLED", StringComparison.OrdinalIgnoreCase) == true, "/riskconfig shows plugin loading");
+    AssertTrue(riskConfigResult.ReplyText?.Contains("Safe command tools: ENABLED", StringComparison.OrdinalIgnoreCase) == true, "/riskconfig shows safe command tools");
+    AssertTrue(riskConfigResult.ReplyText?.Contains("Search routing: llm", StringComparison.OrdinalIgnoreCase) == true, "/riskconfig shows search routing mode");
+    AssertTrue(riskConfigResult.ReplyText?.Contains("Audio transcription: enabled, provider command missing", StringComparison.OrdinalIgnoreCase) == true, "/riskconfig warns when transcription provider command is missing");
+    AssertTrue(riskConfigResult.ReplyText?.Contains("TTS: enabled, provider command missing", StringComparison.OrdinalIgnoreCase) == true, "/riskconfig warns when TTS provider command is missing");
+    AssertFalse(riskConfigResult.ReplyText?.Contains("ghp_secret_value_must_not_render", StringComparison.OrdinalIgnoreCase) == true, "/riskconfig never renders GitHub token values");
+    AssertFalse(riskConfigResult.ReplyText?.Contains(adminTestSettings.DatabaseConnectionString, StringComparison.OrdinalIgnoreCase) == true, "/riskconfig never renders DB connection string values");
+    CommandResult nonAdminRiskConfigResult = await riskConfigCommand.TryHandleAsync(TextMessage("/riskconfig"), nonAdminUser, dbContext, CancellationToken.None);
+    AssertTrue(nonAdminRiskConfigResult.Handled, "/riskconfig non-admin attempt is handled");
+    AssertTrue(nonAdminRiskConfigResult.ReplyText?.Contains("admin-only", StringComparison.OrdinalIgnoreCase) == true, "/riskconfig is admin-only");
+    AssertFalse((await riskConfigCommand.TryHandleAsync(TextMessage("/riskconfigx"), testUser, dbContext, CancellationToken.None)).Handled, "/riskconfigx is not treated as /riskconfig");
+
     var pendingActionCallbackService = new PendingActionCallbackService(pendingActionService, pendingActionExecutor, adminTestSettings);
     PendingActionCallbackResult unauthorizedPendingCallback = await pendingActionCallbackService.HandleAsync(
         "act:approve:1",
@@ -1424,6 +1463,7 @@ await using (var dbContext = new TelegramDbContext())
         new DiskStatusCommand(),
         new ProcessesCommand(),
         new StatusCommand(adminTestSettings),
+        new RiskConfigCommand(adminTestSettings),
         new ResetCommand(),
         new RememberCommand(),
         new MemoryCommand(),

@@ -30,6 +30,7 @@ public static class CommandRouterFactory
             new DiskStatusCommand(),
             new ProcessesCommand(),
             new StatusCommand(settings),
+            new RiskConfigCommand(settings),
             new ResetCommand(),
             new RememberCommand(),
             new MemoryCommand(),
