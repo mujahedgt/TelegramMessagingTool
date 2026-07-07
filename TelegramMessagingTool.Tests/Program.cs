@@ -137,43 +137,7 @@ await PluginTests.RunSamplePluginToolTestsAsync();
 ConfigurationTests.RunConfigurationTests();
 
 BotSettings commandFactorySettings = BotConfiguration.LoadFromEnvironment();
-using HttpClient commandFactoryHttpClient = new();
-var commandFactoryOllamaClient = new OllamaChatClient(commandFactoryHttpClient, commandFactorySettings);
-var commandFactoryEmbeddingClient = new OllamaEmbeddingClient(commandFactoryHttpClient, commandFactorySettings);
-var commandFactoryDocumentStorage = new DocumentStorageService(Path.Combine(Path.GetTempPath(), $"TelegramMessagingTool_CommandFactory_{Guid.NewGuid():N}"));
-string commandFactoryImportDirectory = Path.Combine(Path.GetTempPath(), $"TelegramMessagingTool_Import_{Guid.NewGuid():N}");
-var commandFactoryPendingActionService = new PendingActionService();
-var commandFactoryPendingActionExecutor = new PendingActionExecutor(new SystemProcessTerminator(), commandFactoryDocumentStorage);
-var commandFactoryAgentTaskService = new AgentTaskService();
-var commandFactoryDocumentIndexingService = new DocumentIndexingService(commandFactoryDocumentStorage);
-var commandFactoryDocumentRetrievalService = new DocumentRetrievalService();
-var commandFactoryDocumentQuestionAnsweringService = new DocumentQuestionAnsweringService(commandFactoryOllamaClient);
-var commandFactoryDocumentSummaryService = new DocumentSummaryService(commandFactoryOllamaClient);
-var commandFactoryTranscriptInsightsService = new TranscriptInsightsService(commandFactoryOllamaClient);
-var commandFactoryDocumentEmbeddingService = new DocumentEmbeddingService(commandFactoryEmbeddingClient, commandFactorySettings.OllamaEmbeddingModel);
-var commandFactoryToolRegistry = new ToolRegistry(Array.Empty<IAgentTool>());
-var commandFactoryImageDescriptionService = new OllamaImageDescriptionService(commandFactoryHttpClient, commandFactorySettings);
-CommandRouter factoryRouter = CommandRouterFactory.Create(
-    commandFactorySettings,
-    commandFactoryToolRegistry,
-    commandFactoryDocumentStorage,
-    commandFactoryImportDirectory,
-    commandFactoryPendingActionService,
-    commandFactoryPendingActionExecutor,
-    commandFactoryAgentTaskService,
-    commandFactoryDocumentIndexingService,
-    commandFactoryDocumentRetrievalService,
-    commandFactoryDocumentQuestionAnsweringService,
-    commandFactoryDocumentSummaryService,
-    commandFactoryTranscriptInsightsService,
-    commandFactoryDocumentEmbeddingService,
-    commandFactoryImageDescriptionService,
-    textToSpeechService: null);
-string commandNames = string.Join(",", factoryRouter.Commands.Select(x => x.Name));
-AssertEqual(
-    "/help,/systeminfo,/diskstatus,/processes,/status,/riskconfig,/reset,/remember,/memory,/forget,/files,/images,/describeimage,/voicefiles,/transcribe,/transcriptinsights,/speaktext,/readfile,/createfile,/importfiles,/importfile,/deletefile,/indexfile,/indexdocs,/docchunks,/askfile,/askdocs,/summarizefile,/summarizedocs,/embedfile,/embeddocs,/tools,/harnesses,/plugins,/killprocess,/action,/actions,/pending,/approve,/deny,/plan,/tasks,/task,/schedule,/schedulelist,/unschedule,/done,/cancel",
-    commandNames,
-    "CommandRouterFactory preserves Program command registration order");
+CommandTests.RunCommandRouterFactoryTests(commandFactorySettings);
 
 BotSettings appServicesSettings = commandFactorySettings with
 {
