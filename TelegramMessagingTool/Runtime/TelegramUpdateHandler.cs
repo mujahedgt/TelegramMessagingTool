@@ -207,6 +207,11 @@ public sealed class TelegramUpdateHandler
                     await SendAudioFileAsync(bot, message, commandResult.AudioFile, commandResult.SendAudioAsVoice, cancellationToken);
                 }
 
+                if (commandResult.DocumentFile is not null)
+                {
+                    await SendDocumentFileAsync(bot, message, commandResult.DocumentFile, cancellationToken);
+                }
+
                 await _reactionService.TrySendReactionAsync(bot, message.Chat.Id, message.MessageId, commandResult.ReactionEmoji, cancellationToken);
 
                 return;
@@ -431,6 +436,22 @@ public sealed class TelegramUpdateHandler
             chatId: message.Chat.Id,
             audio: inputFile,
             caption: audioFile.OriginalFileName,
+            replyParameters: new ReplyParameters { MessageId = message.MessageId },
+            cancellationToken: cancellationToken);
+    }
+
+    private static async Task SendDocumentFileAsync(
+        ITelegramBotClient bot,
+        Message message,
+        UploadedFile documentFile,
+        CancellationToken cancellationToken)
+    {
+        await using FileStream documentStream = File.OpenRead(documentFile.AbsolutePath);
+        InputFile inputFile = InputFile.FromStream(documentStream, documentFile.OriginalFileName);
+        await bot.SendDocument(
+            chatId: message.Chat.Id,
+            document: inputFile,
+            caption: documentFile.OriginalFileName,
             replyParameters: new ReplyParameters { MessageId = message.MessageId },
             cancellationToken: cancellationToken);
     }

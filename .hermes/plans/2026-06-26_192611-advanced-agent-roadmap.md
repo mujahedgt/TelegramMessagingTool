@@ -365,6 +365,12 @@ Examples:
 
 # Phase 4: Export to Telegram
 
+## Status
+
+- Task 4.1 is complete: `/exportchat txt [last N]` exports only the current user's recent persisted chat messages, clamps the count, saves the TXT file inside the existing document sandbox, returns it as a Telegram document attachment, and documents first-phase behavior.
+- Task 4.2 is complete: `/exportchat docx [last N]` reuses the same privacy boundary and sandbox flow to generate an attached DOCX export through the existing OpenXML document support.
+- Task 4.3 is complete: `/exportchat pdf [last N]` generates an attached PDF export through the existing safe PDF generation path while keeping the same current-user-only privacy boundary.
+
 ## Goal
 
 Add:

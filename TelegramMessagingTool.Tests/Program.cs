@@ -1251,6 +1251,7 @@ await using (var dbContext = new TelegramDbContext())
         new TranscriptTasksCommand(documentStorage, new TranscriptInsightsService(new ScriptedChatClient(["Proposed title: command router transcript task fixture\nDraft task list:\n- Follow up\nSuggested /plan command: /plan Follow up\nMissing information: none"]))),
         new SpeakTextCommand(adminTestSettings, documentStorage),
         new SendAudioCommand(documentStorage),
+        new ExportChatCommand(documentStorage),
         new ReadFileCommand(documentStorage),
         new CreateFileCommand(documentStorage),
         new ImportFilesCommand(importDirectory, documentStorage, adminTestSettings),
@@ -1282,6 +1283,71 @@ await using (var dbContext = new TelegramDbContext())
         new DoneCommand(agentTaskService),
         new CancelCommand(agentTaskService)
     ]);
+
+    dbContext.Messages.AddRange(
+        new ChatMessage
+        {
+            ConnectedUserId = testUser.Id,
+            ChatId = testUser.ChatId,
+            Role = ChatRoles.User,
+            Content = "First export message",
+            Timestamp = new DateTime(2026, 7, 7, 18, 0, 0, DateTimeKind.Utc)
+        },
+        new ChatMessage
+        {
+            ConnectedUserId = testUser.Id,
+            ChatId = testUser.ChatId,
+            Role = ChatRoles.Assistant,
+            Content = "Second export answer",
+            Timestamp = new DateTime(2026, 7, 7, 18, 1, 0, DateTimeKind.Utc)
+        },
+        new ChatMessage
+        {
+            ConnectedUserId = nonAdminUser.Id,
+            ChatId = nonAdminUser.ChatId,
+            Role = ChatRoles.User,
+            Content = "Other user private message must not export",
+            Timestamp = new DateTime(2026, 7, 7, 18, 2, 0, DateTimeKind.Utc)
+        });
+    await dbContext.SaveChangesAsync(CancellationToken.None);
+
+    CommandResult exportChatResult = await new ExportChatCommand(documentStorage)
+        .TryHandleAsync(TextMessage("/exportchat txt last 2"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(exportChatResult.Handled, "/exportchat txt last N is handled");
+    AssertTrue(exportChatResult.ReplyText?.Contains("Chat export created", StringComparison.OrdinalIgnoreCase) == true, "/exportchat confirms export creation");
+    AssertTrue(exportChatResult.DocumentFile is not null, "/exportchat returns a document attachment for Telegram sending");
+    AssertTrue(File.Exists(exportChatResult.DocumentFile!.AbsolutePath), "/exportchat writes the export file inside document storage");
+    string exportedChatText = await File.ReadAllTextAsync(exportChatResult.DocumentFile.AbsolutePath, CancellationToken.None);
+    AssertTrue(exportedChatText.Contains("First export message", StringComparison.OrdinalIgnoreCase), "/exportchat includes the user's selected history");
+    AssertTrue(exportedChatText.Contains("Second export answer", StringComparison.OrdinalIgnoreCase), "/exportchat includes assistant messages");
+    AssertFalse(exportedChatText.Contains("Other user private message", StringComparison.OrdinalIgnoreCase), "/exportchat exports only the current user's chat history");
+
+    CommandResult exportChatDocxResult = await new ExportChatCommand(documentStorage)
+        .TryHandleAsync(TextMessage("/exportchat docx last 1"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(exportChatDocxResult.Handled, "/exportchat docx last N is handled");
+    AssertTrue(exportChatDocxResult.DocumentFile is not null, "/exportchat docx returns a document attachment");
+    AssertTrue(exportChatDocxResult.DocumentFile!.OriginalFileName.EndsWith(".docx", StringComparison.OrdinalIgnoreCase), "/exportchat docx creates a DOCX file");
+    string exportedDocxText = await documentStorage.ExtractTextAsync(exportChatDocxResult.DocumentFile, CancellationToken.None);
+    AssertTrue(exportedDocxText.Contains("Second export answer", StringComparison.OrdinalIgnoreCase), "/exportchat docx includes the selected chat history");
+    AssertFalse(exportedDocxText.Contains("First export message", StringComparison.OrdinalIgnoreCase), "/exportchat docx respects last N");
+
+    CommandResult exportChatPdfResult = await new ExportChatCommand(documentStorage)
+        .TryHandleAsync(TextMessage("/exportchat pdf last 2"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(exportChatPdfResult.Handled, "/exportchat pdf last N is handled");
+    AssertTrue(exportChatPdfResult.DocumentFile is not null, "/exportchat pdf returns a document attachment");
+    AssertTrue(exportChatPdfResult.DocumentFile!.OriginalFileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase), "/exportchat pdf creates a PDF file");
+    string exportedPdfText = await documentStorage.ExtractTextAsync(exportChatPdfResult.DocumentFile, CancellationToken.None);
+    AssertTrue(exportedPdfText.Contains("First export message", StringComparison.OrdinalIgnoreCase), "/exportchat pdf includes selected user history");
+    AssertTrue(exportedPdfText.Contains("Second export answer", StringComparison.OrdinalIgnoreCase), "/exportchat pdf includes assistant history");
+    AssertFalse(exportedPdfText.Contains("Other user private message", StringComparison.OrdinalIgnoreCase), "/exportchat pdf excludes other users");
+
+    AssertTrue((await new ExportChatCommand(documentStorage).TryHandleAsync(TextMessage("/exportchat xlsx last 2"), testUser, dbContext, CancellationToken.None)).ReplyText?.Contains("TXT, DOCX, or PDF", StringComparison.OrdinalIgnoreCase) == true, "/exportchat clearly limits this phase to TXT, DOCX, or PDF");
+    AssertFalse((await new ExportChatCommand(documentStorage).TryHandleAsync(TextMessage("/exportchatx txt last 2"), testUser, dbContext, CancellationToken.None)).Handled, "/exportchatx is not treated as /exportchat");
+    dbContext.UploadedFiles.RemoveRange(exportChatResult.DocumentFile!, exportChatDocxResult.DocumentFile!, exportChatPdfResult.DocumentFile!);
+    await dbContext.SaveChangesAsync(CancellationToken.None);
+    File.Delete(exportChatResult.DocumentFile.AbsolutePath);
+    File.Delete(exportChatDocxResult.DocumentFile.AbsolutePath);
+    File.Delete(exportChatPdfResult.DocumentFile.AbsolutePath);
 
     string pluginCommandRoot = Path.Combine(Path.GetTempPath(), $"TelegramMessagingTool_PluginsCommand_{Guid.NewGuid():N}");
     Directory.CreateDirectory(Path.Combine(pluginCommandRoot, "SamplePlugin"));

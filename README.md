@@ -25,7 +25,7 @@ TelegramMessagingTool is a C#/.NET console application that connects a Telegram 
 - Trusted local plugin loading is available behind `ENABLE_PLUGINS=true`; plugin DLLs must live under `PLUGIN_DIRECTORY`, pass manifest validation including compatible `apiVersion`, expose allowlisted `IAgentTool` names, avoid duplicates, and appear in `/tools` with `source`, `risk`, read-only, and safety metadata. State-changing plugin tools currently run directly when called, so keep them reviewed, sandboxed, and disabled unless trusted.
 - Live console event lines for startup, commands, messages, denied users, shutdown, errors, and operational observability metadata for tool calls, pending-action creation/decisions, approval execution, repo write results, and GitHub API failures without logging raw message content by default
 - Sandboxed document/file support for `.txt`, `.md`, `.json`, `.csv`, `.pdf`, `.docx`, `.xlsx`, `.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`, `.mp3`, `.wav`, `.m4a`, `.ogg`, `.oga`, `.opus`, and `.flac`
-- File commands: `/files`, `/images`, `/describeimage <id>`, `/voicefiles`, `/transcribe <id>`, `/transcriptinsights <id>`, `/transcripttasks <id>`, `/speaktext <text>`, `/sendaudio <id>`, `/readfile <id>`, `/createfile <filename> <content>`, admin-only local import via `/importfiles` and `/importfile <filename>`, and admin-approved `/deletefile <id>`
+- File commands: `/files`, `/images`, `/describeimage <id>`, `/voicefiles`, `/transcribe <id>`, `/transcriptinsights <id>`, `/transcripttasks <id>`, `/speaktext <text>`, `/sendaudio <id>`, `/exportchat [txt|docx|pdf] [last N]`, `/readfile <id>`, `/createfile <filename> <content>`, admin-only local import via `/importfiles` and `/importfile <filename>`, and admin-approved `/deletefile <id>`
 - Document Q&A indexing, question, summary, and embedding commands: `/indexfile`, `/indexdocs`, `/docchunks`, `/askfile`, `/askdocs`, `/summarizefile`, `/summarizedocs`, `/embedfile`, and `/embeddocs`
 - Read-only local device commands: `/systeminfo`, `/diskstatus`, and `/processes [count]`
 - Approval foundation and executed risky tools for admin-reviewed local/process, file, repo, release/restart, and GitHub write actions
@@ -365,6 +365,7 @@ Commands:
 | Command | Purpose |
 |---|---|
 | `/files` | List your saved/uploaded files |
+| `/exportchat [txt|docx|pdf] [last N]` | Export your recent chat history as a sandboxed TXT, DOCX, or PDF file and attach it back to Telegram. Defaults to TXT and clamps the count to a safe maximum. |
 | `/readfile <id>` | Extract/read text from a saved file by ID |
 | `/createfile <filename> <content>` | Create a sandboxed txt/md/json/csv/pdf/docx/xlsx file |
 | `/importfiles` | Admin-only: list supported files placed in the local `ImportInbox/` folder |

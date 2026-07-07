@@ -9,4 +9,5 @@ public sealed record CommandResult(
     InlineKeyboardMarkup? ReplyMarkup = null,
     UploadedFile? AudioFile = null,
     bool SendAudioAsVoice = false,
-    string? ReactionEmoji = null);
+    string? ReactionEmoji = null,
+    UploadedFile? DocumentFile = null);

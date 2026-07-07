@@ -48,6 +48,7 @@ public static class CommandRouterFactory
             new TranscriptTasksCommand(documentStorage, transcriptInsightsService),
             new SpeakTextCommand(settings, documentStorage, textToSpeechService),
             new SendAudioCommand(documentStorage),
+            new ExportChatCommand(documentStorage),
             new ReadFileCommand(documentStorage),
             new CreateFileCommand(documentStorage),
             new ImportFilesCommand(importDirectory, documentStorage, settings),
