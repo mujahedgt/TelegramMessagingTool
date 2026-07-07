@@ -408,7 +408,7 @@ git commit -m "Add transcript task draft command"
 
 ### Task 13.1: Add plugin API version compatibility checks
 
-**Objective:** Prevent loading old/future plugin manifests against incompatible app contracts.
+**Status:** Completed — plugin manifests now carry `apiVersion`; missing values are accepted with a backward-compatibility warning/default to `1.0`, current/future same-major `1.x` manifests are accepted, and incompatible future major versions such as `2.0` are rejected. `/plugins` output and docs/templates show API version metadata.
 
 **Files:**
 - Modify: `TelegramMessagingTool/Plugins/PluginManifest.cs`

@@ -7,6 +7,7 @@ public sealed record PluginManifest(
     string Id,
     string Name,
     string Version,
+    string ApiVersion,
     string EntryAssembly,
     bool Enabled,
     string RiskLevel,
@@ -14,6 +15,8 @@ public sealed record PluginManifest(
     string SafetySummary,
     IReadOnlyList<string> AllowedToolNames)
 {
+    public const string SupportedApiVersion = "1.0";
+
     private static readonly Regex ToolNameRegex = new("^[a-z][a-z0-9_]{1,40}$", RegexOptions.Compiled);
 
     public static PluginManifestParseResult TryParse(string json)
@@ -27,6 +30,7 @@ public sealed record PluginManifest(
         {
             using JsonDocument document = JsonDocument.Parse(json);
             JsonElement root = document.RootElement;
+            var warnings = new List<string>();
             if (root.ValueKind != JsonValueKind.Object)
             {
                 return PluginManifestParseResult.Fail("Plugin manifest root must be a JSON object.");
@@ -39,6 +43,17 @@ public sealed record PluginManifest(
             if (id is null || name is null || version is null || entryAssembly is null)
             {
                 return PluginManifestParseResult.Fail("Plugin manifest must include id, name, version, and entryAssembly string properties.");
+            }
+
+            string apiVersion = ReadOptionalString(root, "apiVersion", string.Empty);
+            if (string.IsNullOrWhiteSpace(apiVersion))
+            {
+                apiVersion = SupportedApiVersion;
+                warnings.Add($"Plugin manifest is missing apiVersion; assuming {SupportedApiVersion} for backward compatibility. Add \"apiVersion\": \"{SupportedApiVersion}\" to remove this warning.");
+            }
+            else if (!IsCompatibleApiVersion(apiVersion))
+            {
+                return PluginManifestParseResult.Fail($"Plugin manifest apiVersion '{apiVersion}' is not compatible with supported API version {SupportedApiVersion}.");
             }
 
             bool enabled = ReadOptionalBool(root, "enabled", defaultValue: false);
@@ -91,12 +106,13 @@ public sealed record PluginManifest(
                 Id: id,
                 Name: name,
                 Version: version,
+                ApiVersion: apiVersion,
                 EntryAssembly: entryAssembly,
                 Enabled: enabled,
                 RiskLevel: riskLevel,
                 IsReadOnly: isReadOnly,
                 SafetySummary: safetySummary,
-                AllowedToolNames: toolNames));
+                AllowedToolNames: toolNames), warnings);
         }
         catch (JsonException ex)
         {
@@ -107,6 +123,18 @@ public sealed record PluginManifest(
     public static bool IsValidToolName(string toolName)
     {
         return !string.IsNullOrWhiteSpace(toolName) && ToolNameRegex.IsMatch(toolName.Trim());
+    }
+
+    public static bool IsCompatibleApiVersion(string apiVersion)
+    {
+        if (string.IsNullOrWhiteSpace(apiVersion))
+        {
+            return false;
+        }
+
+        string supportedMajor = SupportedApiVersion.Split('.', 2)[0];
+        string candidateMajor = apiVersion.Trim().Split('.', 2)[0];
+        return string.Equals(candidateMajor, supportedMajor, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string? ReadRequiredString(JsonElement root, string propertyName)
@@ -139,9 +167,9 @@ public sealed record PluginManifest(
     }
 }
 
-public sealed record PluginManifestParseResult(bool Success, PluginManifest? Manifest, string Error)
+public sealed record PluginManifestParseResult(bool Success, PluginManifest? Manifest, string Error, IReadOnlyList<string> Warnings)
 {
-    public static PluginManifestParseResult Ok(PluginManifest manifest) => new(true, manifest, string.Empty);
+    public static PluginManifestParseResult Ok(PluginManifest manifest, IReadOnlyList<string>? warnings = null) => new(true, manifest, string.Empty, warnings ?? []);
 
-    public static PluginManifestParseResult Fail(string error) => new(false, null, error);
+    public static PluginManifestParseResult Fail(string error) => new(false, null, error, []);
 }

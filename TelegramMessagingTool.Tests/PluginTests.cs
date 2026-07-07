@@ -4,6 +4,52 @@ using TelegramMessagingTool.Tools;
 
 public static class PluginTests
 {
+    public static void RunPluginManifestCompatibilityTests()
+    {
+        PluginManifestParseResult compatibleResult = PluginManifest.TryParse("""
+        {
+          "id": "compatible-plugin",
+          "name": "Compatible Plugin",
+          "version": "1.2.3",
+          "apiVersion": "1.0",
+          "entryAssembly": "CompatiblePlugin.dll",
+          "enabled": true,
+          "allowedToolNames": ["compatible_tool"]
+        }
+        """);
+        AssertTrue(compatibleResult.Success, "PluginManifest accepts current API version manifests");
+        AssertEqual("1.0", compatibleResult.Manifest?.ApiVersion, "PluginManifest stores API version metadata");
+        AssertEqual(0, compatibleResult.Warnings.Count, "PluginManifest does not warn for explicit compatible API version");
+
+        PluginManifestParseResult missingApiResult = PluginManifest.TryParse("""
+        {
+          "id": "legacy-plugin",
+          "name": "Legacy Plugin",
+          "version": "1.0.0",
+          "entryAssembly": "LegacyPlugin.dll",
+          "enabled": true,
+          "allowedToolNames": ["legacy_tool"]
+        }
+        """);
+        AssertTrue(missingApiResult.Success, "PluginManifest accepts missing apiVersion for backward compatibility");
+        AssertEqual(PluginManifest.SupportedApiVersion, missingApiResult.Manifest?.ApiVersion, "PluginManifest defaults missing apiVersion to the supported API version");
+        AssertTrue(missingApiResult.Warnings.Any(x => x.Contains("missing apiVersion", StringComparison.OrdinalIgnoreCase)), "PluginManifest warns when apiVersion is missing");
+
+        PluginManifestParseResult futureMajorResult = PluginManifest.TryParse("""
+        {
+          "id": "future-plugin",
+          "name": "Future Plugin",
+          "version": "2.0.0",
+          "apiVersion": "2.0",
+          "entryAssembly": "FuturePlugin.dll",
+          "enabled": true,
+          "allowedToolNames": ["future_tool"]
+        }
+        """);
+        AssertFalse(futureMajorResult.Success, "PluginManifest rejects incompatible future major API versions");
+        AssertTrue(futureMajorResult.Error.Contains("apiVersion", StringComparison.OrdinalIgnoreCase), "PluginManifest incompatible API error names apiVersion");
+    }
+
     public static async Task RunSamplePluginToolTestsAsync()
     {
         PluginToolLoadResult samplePluginLoadResult = new PluginToolLoader().LoadEnabledTools(

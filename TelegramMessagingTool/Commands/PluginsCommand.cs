@@ -72,7 +72,7 @@ Assembly loading: {assemblyLoading}
         string manifestDirectory = Path.GetDirectoryName(discovered.ManifestPath) ?? string.Empty;
         string entryAssemblyPath = Path.GetFullPath(Path.Combine(manifestDirectory, manifest.EntryAssembly));
         string assemblyStatus = File.Exists(entryAssemblyPath) ? "present" : "missing";
-        return $"- {manifest.Id} v{manifest.Version} ({enabled}, risk: {manifest.RiskLevel}, tools: {string.Join(", ", manifest.AllowedToolNames)})\n"
+        return $"- {manifest.Id} v{manifest.Version} (api {manifest.ApiVersion}, {enabled}, risk: {manifest.RiskLevel}, tools: {string.Join(", ", manifest.AllowedToolNames)})\n"
             + $"  manifest: {discovered.ManifestPath}\n"
             + $"  entry assembly: {manifest.EntryAssembly} ({assemblyStatus})";
     }

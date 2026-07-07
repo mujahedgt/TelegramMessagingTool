@@ -46,6 +46,11 @@ public sealed class PluginManifestScanner
                 continue;
             }
 
+            foreach (string warning in parseResult.Warnings)
+            {
+                diagnostics.Add($"Manifest warning {fullManifestPath}: {warning}");
+            }
+
             var duplicateTools = parseResult.Manifest.AllowedToolNames
                 .Where(toolName => seenToolNames.Contains(toolName))
                 .ToList();
@@ -91,7 +96,7 @@ public sealed record PluginScanResult(string PluginDirectory, IReadOnlyList<Disc
                 : $"No valid plugin manifests found in {PluginDirectory}. Diagnostics: {string.Join("; ", Diagnostics.Take(3))}";
         }
 
-        string manifestSummary = string.Join("; ", Manifests.Select(x => $"{x.Manifest.Id} v{x.Manifest.Version} ({(x.Manifest.Enabled ? "enabled" : "disabled")}, tools: {string.Join(", ", x.Manifest.AllowedToolNames)})"));
+        string manifestSummary = string.Join("; ", Manifests.Select(x => $"{x.Manifest.Id} v{x.Manifest.Version} (api {x.Manifest.ApiVersion}, {(x.Manifest.Enabled ? "enabled" : "disabled")}, tools: {string.Join(", ", x.Manifest.AllowedToolNames)})"));
         string diagnosticSummary = Diagnostics.Count == 0 ? string.Empty : $" Diagnostics: {string.Join("; ", Diagnostics.Take(3))}";
         return $"Plugin manifests: {Manifests.Count} total, {EnabledCount} enabled, {DisabledCount} disabled. {manifestSummary}.{diagnosticSummary}";
     }

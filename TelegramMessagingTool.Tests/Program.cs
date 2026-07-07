@@ -133,6 +133,7 @@ AssertTrue(TelegramReceiverErrorClassifier.IsTransientNetworkError(transientTele
 AssertTrue(TelegramReceiverErrorClassifier.Summarize(transientTelegramException).Contains("Long polling will continue automatically"), "TelegramReceiverErrorClassifier summarizes transient network errors without stack spam");
 AssertFalse(TelegramReceiverErrorClassifier.IsTransientNetworkError(new InvalidOperationException("bad config")), "TelegramReceiverErrorClassifier does not hide non-network errors");
 
+PluginTests.RunPluginManifestCompatibilityTests();
 await PluginTests.RunSamplePluginToolTestsAsync();
 ConfigurationTests.RunConfigurationTests();
 
@@ -165,6 +166,7 @@ AssertTrue(PluginManifest.TryParse("""
   "id": "sample-plugin",
   "name": "Sample Plugin",
   "version": "1.0.0",
+  "apiVersion": "1.0",
   "entryAssembly": "SamplePlugin.dll",
   "enabled": true,
   "riskLevel": "low",
@@ -177,6 +179,7 @@ AssertFalse(PluginManifest.TryParse("""
   "id": "bad-plugin",
   "name": "Bad Plugin",
   "version": "1.0.0",
+  "apiVersion": "1.0",
   "entryAssembly": "BadPlugin.dll",
   "enabled": true,
   "riskLevel": "low",
@@ -192,6 +195,7 @@ await File.WriteAllTextAsync(Path.Combine(pluginTestRoot, "SamplePlugin", "plugi
   "id": "sample-plugin",
   "name": "Sample Plugin",
   "version": "1.0.0",
+  "apiVersion": "1.0",
   "entryAssembly": "SamplePlugin.dll",
   "enabled": true,
   "riskLevel": "low",
@@ -203,6 +207,7 @@ await File.WriteAllTextAsync(Path.Combine(pluginTestRoot, "DuplicatePlugin", "pl
   "id": "duplicate-plugin",
   "name": "Duplicate Plugin",
   "version": "1.0.0",
+  "apiVersion": "1.0",
   "entryAssembly": "DuplicatePlugin.dll",
   "enabled": true,
   "riskLevel": "low",
@@ -1275,6 +1280,7 @@ await using (var dbContext = new TelegramDbContext())
       "id": "sample-plugin",
       "name": "Sample Plugin",
       "version": "1.0.0",
+      "apiVersion": "1.0",
       "entryAssembly": "SamplePlugin.dll",
       "enabled": true,
       "riskLevel": "low",
@@ -1288,6 +1294,7 @@ await using (var dbContext = new TelegramDbContext())
       "id": "missing-assembly-plugin",
       "name": "Missing Assembly Plugin",
       "version": "1.0.0",
+      "apiVersion": "1.0",
       "entryAssembly": "MissingAssemblyPlugin.dll",
       "enabled": false,
       "riskLevel": "medium",

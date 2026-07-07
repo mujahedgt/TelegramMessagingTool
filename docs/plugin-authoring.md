@@ -47,6 +47,7 @@ Use `plugins/SamplePlugin/plugin.json.example` or the checked-in sample plugin a
   "id": "sample-plugin",
   "name": "Sample Plugin",
   "version": "1.0.0",
+  "apiVersion": "1.0",
   "entryAssembly": "bin/Release/net10.0/TelegramMessagingTool.SamplePlugin.dll",
   "enabled": true,
   "riskLevel": "medium",
@@ -63,6 +64,7 @@ Use `plugins/SamplePlugin/plugin.json.example` or the checked-in sample plugin a
 | `id` | Yes | Stable plugin ID, usually lowercase kebab-case. |
 | `name` | Yes | Human-readable plugin name. |
 | `version` | Yes | Plugin version string. |
+| `apiVersion` | No, recommended | Plugin API contract version. Current supported major version is `1` (`1.0`). Missing values are accepted temporarily with a warning and default to `1.0`; incompatible future major versions such as `2.0` are rejected. |
 | `entryAssembly` | Yes | DLL path under the same plugin directory. Paths outside `PLUGIN_DIRECTORY` are rejected. |
 | `enabled` | No | Boolean. Only enabled manifests are loaded when `ENABLE_PLUGINS=true`. |
 | `riskLevel` | No | `low`, `medium`, or `high`. Defaults to `medium` if omitted. |
@@ -100,6 +102,8 @@ The scanner/loader:
 - Accepts valid manifests.
 - Rejects malformed JSON.
 - Rejects missing required fields.
+- Accepts missing `apiVersion` temporarily with a warning and assumes `1.0`.
+- Rejects manifests with incompatible future major `apiVersion` values.
 - Rejects invalid risk levels.
 - Rejects empty or invalid `allowedToolNames`.
 - Rejects duplicate tool names inside one manifest.
