@@ -99,4 +99,4 @@ When you send a Telegram voice message:
 5. If TTS is configured, the bot synthesizes the answer.
 6. If the TTS output is `.ogg`, `.oga`, or `.opus`, the bot replies with Telegram `SendVoice`; otherwise it replies with `SendAudio`.
 
-`/speaktext <text>` still stores generated TTS output only and does not auto-send it. Automatic audio sending is limited to direct replies to inbound Telegram voice messages.
+`/speaktext <text>` still stores generated TTS output only and does not auto-send it. Use `/sendaudio <audio-file-id>` to manually send any saved sandboxed audio file back to Telegram. Automatic audio sending is also available as direct replies to inbound Telegram voice messages when both transcription and TTS providers are configured.

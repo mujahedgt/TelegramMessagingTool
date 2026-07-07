@@ -149,6 +149,21 @@ static class DocumentTests
         AssertFalse(voiceFilesResult.ReplyText?.Contains("sample.png") == true, "/voicefiles does not list image files");
         AssertFalse(voiceFilesResult.ReplyText?.Contains("notes.md") == true, "/voicefiles does not list non-audio documents");
 
+        CommandResult invalidSendAudioResult = await commandRouter.TryHandleAsync(TextMessage("/sendaudio nope"), testUser, dbContext, CancellationToken.None);
+        AssertTrue(invalidSendAudioResult.Handled, "/sendaudio invalid input is handled");
+        AssertTrue(invalidSendAudioResult.ReplyText?.Contains("Usage: /sendaudio <audio-file-id>") == true, "/sendaudio validates audio file id input");
+
+        CommandResult nonAudioSendAudioResult = await commandRouter.TryHandleAsync(TextMessage($"/sendaudio {uploadedImage.Id}"), testUser, dbContext, CancellationToken.None);
+        AssertTrue(nonAudioSendAudioResult.Handled, "/sendaudio non-audio input is handled");
+        AssertTrue(nonAudioSendAudioResult.ReplyText?.Contains("not an audio", StringComparison.OrdinalIgnoreCase) == true, "/sendaudio rejects non-audio files");
+
+        CommandResult sendAudioResult = await commandRouter.TryHandleAsync(TextMessage($"/sendaudio {uploadedAudio.Id}"), testUser, dbContext, CancellationToken.None);
+        AssertTrue(sendAudioResult.Handled, "/sendaudio is handled");
+        AssertTrue(sendAudioResult.ReplyText?.Contains("voice-note.ogg") == true, "/sendaudio reports selected audio filename");
+        AssertEqual(uploadedAudio.Id, sendAudioResult.AudioFile?.Id, "/sendaudio returns the selected audio file for Telegram delivery");
+        AssertTrue(sendAudioResult.SendAudioAsVoice, "/sendaudio marks OGG/Opus-compatible audio for Telegram voice-note delivery");
+        AssertFalse((await commandRouter.TryHandleAsync(TextMessage("/sendaudiox 1"), testUser, dbContext, CancellationToken.None)).Handled, "/sendaudiox is not treated as /sendaudio");
+
         CommandResult voiceFilesMentionResult = await commandRouter.TryHandleAsync(TextMessage("/voicefiles@red_eye_ghost_bot"), testUser, dbContext, CancellationToken.None);
         AssertTrue(voiceFilesMentionResult.Handled, "/voicefiles@bot is handled");
         AssertFalse((await commandRouter.TryHandleAsync(TextMessage("/voicefilesx"), testUser, dbContext, CancellationToken.None)).Handled, "/voicefilesx is not treated as /voicefiles");

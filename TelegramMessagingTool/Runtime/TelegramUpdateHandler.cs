@@ -199,6 +199,11 @@ public sealed class TelegramUpdateHandler
                     }
                 }
 
+                if (commandResult.AudioFile is not null)
+                {
+                    await SendAudioFileAsync(bot, message, commandResult.AudioFile, commandResult.SendAudioAsVoice, cancellationToken);
+                }
+
                 return;
             }
 
@@ -395,6 +400,34 @@ public sealed class TelegramUpdateHandler
                 showAlert: true,
                 cancellationToken: cancellationToken);
         }
+    }
+
+    private static async Task SendAudioFileAsync(
+        ITelegramBotClient bot,
+        Message message,
+        UploadedFile audioFile,
+        bool sendAsVoice,
+        CancellationToken cancellationToken)
+    {
+        await using FileStream audioStream = File.OpenRead(audioFile.AbsolutePath);
+        InputFile inputFile = InputFile.FromStream(audioStream, audioFile.OriginalFileName);
+        if (sendAsVoice)
+        {
+            await bot.SendVoice(
+                chatId: message.Chat.Id,
+                voice: inputFile,
+                caption: audioFile.OriginalFileName,
+                replyParameters: new ReplyParameters { MessageId = message.MessageId },
+                cancellationToken: cancellationToken);
+            return;
+        }
+
+        await bot.SendAudio(
+            chatId: message.Chat.Id,
+            audio: inputFile,
+            caption: audioFile.OriginalFileName,
+            replyParameters: new ReplyParameters { MessageId = message.MessageId },
+            cancellationToken: cancellationToken);
     }
 
     private async Task HandleVoiceAsync(

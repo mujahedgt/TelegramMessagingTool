@@ -41,6 +41,7 @@ TelegramMessagingTool Agent Commands
 /transcribe <id> - Transcribe a saved audio file when a trusted local provider is configured
 /transcriptinsights <id> - Summarize and extract tasks from a saved transcript document
 /speaktext <text> - Generate TTS audio into the sandbox without sending it automatically
+/sendaudio <id> - Send a saved sandboxed audio file back to Telegram
 
 Telegram voice messages are transcribed, answered by the local model, and replied to with synthesized voice/audio when trusted local transcription and TTS providers are configured.
 /readfile <id> - Read a saved text/PDF/DOCX/XLSX document
