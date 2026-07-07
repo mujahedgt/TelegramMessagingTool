@@ -440,7 +440,7 @@ git commit -m "Add plugin API version compatibility checks"
 
 ### Task 13.2: Add plugin command execution risk guidance
 
-**Objective:** The sample `dotnet_create_project` changes state without approval because plugin tools cannot currently plug into the app approval DB. Document and guard this more clearly.
+**Status:** Completed — `/tools` now marks state-changing plugin tools with `⚠ plugin state-changing tool runs directly today`, model tool instructions warn that these plugin tools currently bypass the pending-action approval database, and plugin docs/README explain reviewed+sandboxed use for medium/high or non-read-only plugin tools.
 
 **Files:**
 - Modify: `docs/plugin-authoring.md`

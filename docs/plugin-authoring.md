@@ -151,9 +151,22 @@ Expected output includes:
 Expected output includes registered tools and their source, for example:
 
 ```text
-- sample_echo: Sample trusted plugin tool that echoes its input. (safe/no approval; source: plugin:sample-plugin; risk: medium; can change state; safety: Includes sample_echo plus dotnet_create_project, which writes only inside the local GeneratedProjects sandbox and refuses overwrite/traversal paths.)
-- dotnet_create_project: Sample trusted plugin tool that creates a minimal .NET console project under GeneratedProjects. (safe/no approval; source: plugin:sample-plugin; risk: medium; can change state; safety: Includes sample_echo plus dotnet_create_project, which writes only inside the local GeneratedProjects sandbox and refuses overwrite/traversal paths.)
+- sample_echo: Sample trusted plugin tool that echoes its input. (safe/no approval; source: plugin:sample-plugin; risk: medium; can change state; safety: Includes sample_echo plus dotnet_create_project, which writes only inside the local GeneratedProjects sandbox and refuses overwrite/traversal paths.; ⚠ plugin state-changing tool runs directly today)
+- dotnet_create_project: Sample trusted plugin tool that creates a minimal .NET console project under GeneratedProjects. (safe/no approval; source: plugin:sample-plugin; risk: medium; can change state; safety: Includes sample_echo plus dotnet_create_project, which writes only inside the local GeneratedProjects sandbox and refuses overwrite/traversal paths.; ⚠ plugin state-changing tool runs directly today)
 ```
+
+## State-changing plugin risk
+
+State-changing plugin tools currently run **directly** when the model calls them. They do not yet create `PendingAction` rows and they do not pause for `/approve` through the app approval database.
+
+Use this rule for plugin authoring today:
+
+- Prefer `isReadOnly: true` whenever possible.
+- Keep medium/high or `isReadOnly: false` plugin tools disabled until you have reviewed the plugin source locally.
+- If a plugin must change state, constrain it to a narrow sandbox such as `GeneratedProjects/<name>`.
+- Refuse traversal paths, overwrites, arbitrary shell commands, arbitrary file paths, secrets, and network writes unless a future approval-backed plugin execution layer is added.
+- Write a precise `safetySummary`, because `/tools` displays it and model instructions use it as part of the execution guidance.
+- Treat the `/tools` warning `⚠ plugin state-changing tool runs directly today` as a reminder that the manifest's sandbox is the current safety boundary.
 
 ## Sample .NET project creation tool
 

@@ -58,7 +58,10 @@ public sealed class ToolRegistry
             string source = GetSource(tool.Name);
             ToolRegistration registration = _tools[tool.Name];
             string readOnly = registration.IsReadOnly ? "read-only" : "can change state";
-            builder.AppendLine($"- {tool.Name}: {tool.Description} ({approval}; source: {source}; risk: {registration.RiskLevel.ToString().ToLowerInvariant()}; {readOnly}; safety: {registration.SafetySummary})");
+            string pluginStateWarning = IsStateChangingPluginTool(registration)
+                ? "; ⚠ plugin state-changing tool runs directly today"
+                : string.Empty;
+            builder.AppendLine($"- {tool.Name}: {tool.Description} ({approval}; source: {source}; risk: {registration.RiskLevel.ToString().ToLowerInvariant()}; {readOnly}; safety: {registration.SafetySummary}{pluginStateWarning})");
         }
 
         return builder.ToString().TrimEnd();
@@ -97,6 +100,11 @@ public sealed class ToolRegistry
             builder.AppendLine("publish_release and restart_latest_bot create high-risk pending approval requests only. They do not publish, stop, or restart anything directly.");
         }
 
+        if (_tools.Values.Any(IsStateChangingPluginTool))
+        {
+            builder.AppendLine("State-changing plugin tools run directly today, outside the pending-action approval database. Use them only when the manifest safety summary describes a narrow sandbox and the plugin source has been reviewed locally.");
+        }
+
         if (TryGet("dotnet_create_project", out _))
         {
             builder.AppendLine("Use dotnet_create_project when the user asks you to create/generate a C#/.NET console project. Do not merely paste project code when this tool is available; request the tool with a safe project name.");
@@ -115,6 +123,12 @@ public sealed class ToolRegistry
         builder.AppendLine("If no tool is needed, answer normally with plain text.");
         builder.AppendLine("After a tool runs, the application will send you the tool output. In that final answer, use only the provided tool output. Do not invent prices, specs, source names, or facts that are not present in the tool output.");
         return builder.ToString().TrimEnd();
+    }
+
+    private static bool IsStateChangingPluginTool(ToolRegistration registration)
+    {
+        return registration.Source.StartsWith("plugin:", StringComparison.OrdinalIgnoreCase)
+            && !registration.IsReadOnly;
     }
 }
 

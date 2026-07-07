@@ -106,6 +106,8 @@ public static class PluginTests
         AssertTrue(pluginToolList.Contains("dotnet_create_project", StringComparison.OrdinalIgnoreCase), "ToolRegistry renders the sample .NET project plugin tool in /tools output");
         AssertTrue(pluginToolList.Contains("risk: medium", StringComparison.OrdinalIgnoreCase), "ToolRegistry renders plugin risk metadata in /tools output");
         AssertTrue(pluginToolList.Contains("can change state", StringComparison.OrdinalIgnoreCase), "ToolRegistry renders plugin state-changing metadata in /tools output");
+        AssertTrue(pluginToolList.Contains("⚠ plugin state-changing tool runs directly", StringComparison.OrdinalIgnoreCase), "ToolRegistry warns that state-changing plugin tools run directly today");
+        AssertTrue(pluginToolInstructions.Contains("State-changing plugin tools run directly", StringComparison.OrdinalIgnoreCase), "ToolRegistry model instructions warn about direct state-changing plugin execution");
         AssertTrue(pluginToolInstructions.Contains("dotnet_create_project", StringComparison.OrdinalIgnoreCase), "ToolRegistry model instructions include dotnet_create_project when the plugin is loaded");
         AssertTrue(pluginToolInstructions.Contains("nearest_friday", StringComparison.OrdinalIgnoreCase), "ToolRegistry instructions tell the model how to request the nearest-Friday console-project template");
     }
