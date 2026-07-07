@@ -103,6 +103,23 @@ Configuration is read from environment variables.
 
 Use `/riskconfig` from the admin chat to review high-risk local machine settings such as `ALLOW_PUBLIC_ACCESS=true`, `LOG_MESSAGE_CONTENT=true`, repo/GitHub write tools, trusted plugin loading, safe command tools, `SEARCH_ROUTING_MODE=llm`, and media provider gates with missing commands. The command reports only enabled/disabled/configured status and intentionally never prints token values, database connection strings, or provider secrets.
 
+### Optional local Windows User environment profiles
+
+For Mujahed's local development machine, the repository includes reversible PowerShell profile helpers. These scripts write **Windows User** environment variables only, never project defaults, and never write tokens, connection strings, provider command paths, or other secrets.
+
+```powershell
+# Enable non-secret local development feature flags for this Windows user.
+.\scripts\Set-LocalDevEnvironment.ps1
+
+# Optional, only if you intentionally want public/local test access or message-content logs:
+.\scripts\Set-LocalDevEnvironment.ps1 -EnablePublicAccess -EnableContentLogging
+
+# Revert risky feature flags to safer values.
+.\scripts\Set-SafeEnvironment.ps1
+```
+
+Restart the bot process or terminal after running either script so the updated User environment is loaded. Keep secrets such as `TELEGRAM_BOT_TOKEN`, `GITHUB_TOKEN`, `TELEGRAM_DB_CONNECTION`, `AUDIO_TRANSCRIPTION_COMMAND`, and `TEXT_TO_SPEECH_COMMAND` configured separately.
+
 Example Git Bash setup:
 
 ```bash

@@ -20,6 +20,23 @@ public static class ConfigurationTests
         AssertEqual("public override", BotAccessPolicy.DescribeAccessMode(emptyAllowlist, adminChatId: 0, allowPublicAccess: true), "DescribeAccessMode reports public override mode");
         AssertEqual("locked", BotAccessPolicy.DescribeAccessMode(emptyAllowlist, adminChatId: 0, allowPublicAccess: false), "DescribeAccessMode reports locked mode");
 
+        string scriptsDirectory = Path.Combine(Directory.GetCurrentDirectory(), "scripts");
+        string localDevEnvironmentScript = Path.Combine(scriptsDirectory, "Set-LocalDevEnvironment.ps1");
+        string safeEnvironmentScript = Path.Combine(scriptsDirectory, "Set-SafeEnvironment.ps1");
+        AssertTrue(File.Exists(localDevEnvironmentScript), "Set-LocalDevEnvironment.ps1 exists for local machine profile setup");
+        AssertTrue(File.Exists(safeEnvironmentScript), "Set-SafeEnvironment.ps1 exists for reverting risky local machine flags");
+        string localDevEnvironmentContent = File.ReadAllText(localDevEnvironmentScript);
+        string safeEnvironmentContent = File.ReadAllText(safeEnvironmentScript);
+        AssertTrue(localDevEnvironmentContent.Contains("User", StringComparison.OrdinalIgnoreCase), "Set-LocalDevEnvironment.ps1 writes User environment variables only");
+        AssertTrue(safeEnvironmentContent.Contains("User", StringComparison.OrdinalIgnoreCase), "Set-SafeEnvironment.ps1 writes User environment variables only");
+        AssertFalse(localDevEnvironmentContent.Contains("SetEnvironmentVariable('TELEGRAM_BOT_TOKEN'", StringComparison.OrdinalIgnoreCase) || localDevEnvironmentContent.Contains("SetEnvironmentVariable(\"TELEGRAM_BOT_TOKEN\"", StringComparison.OrdinalIgnoreCase), "Set-LocalDevEnvironment.ps1 does not write Telegram token secrets");
+        AssertFalse(localDevEnvironmentContent.Contains("SetEnvironmentVariable('GITHUB_TOKEN'", StringComparison.OrdinalIgnoreCase) || localDevEnvironmentContent.Contains("SetEnvironmentVariable(\"GITHUB_TOKEN\"", StringComparison.OrdinalIgnoreCase), "Set-LocalDevEnvironment.ps1 does not write GitHub token secrets");
+        AssertTrue(localDevEnvironmentContent.Contains("SEARCH_ROUTING_MODE", StringComparison.OrdinalIgnoreCase) && localDevEnvironmentContent.Contains("llm", StringComparison.OrdinalIgnoreCase), "Set-LocalDevEnvironment.ps1 enables LLM search routing for local dev");
+        AssertTrue(safeEnvironmentContent.Contains("ALLOW_PUBLIC_ACCESS", StringComparison.OrdinalIgnoreCase) && safeEnvironmentContent.Contains("false", StringComparison.OrdinalIgnoreCase), "Set-SafeEnvironment.ps1 disables public access");
+        AssertTrue(safeEnvironmentContent.Contains("LOG_MESSAGE_CONTENT", StringComparison.OrdinalIgnoreCase) && safeEnvironmentContent.Contains("false", StringComparison.OrdinalIgnoreCase), "Set-SafeEnvironment.ps1 disables content logging");
+        AssertTrue(safeEnvironmentContent.Contains("ENABLE_REPO_WRITE_TOOLS", StringComparison.OrdinalIgnoreCase) && safeEnvironmentContent.Contains("false", StringComparison.OrdinalIgnoreCase), "Set-SafeEnvironment.ps1 disables repo write tools");
+        AssertTrue(safeEnvironmentContent.Contains("ENABLE_GITHUB_WRITE_TOOLS", StringComparison.OrdinalIgnoreCase) && safeEnvironmentContent.Contains("false", StringComparison.OrdinalIgnoreCase), "Set-SafeEnvironment.ps1 disables GitHub write tools");
+
         AssertEqual(8, BotConfiguration.ParseClampedInt(null, defaultValue: 8, minValue: 1, maxValue: 50), "ParseClampedInt returns default for missing value");
         AssertEqual(12, BotConfiguration.ParseClampedInt("12", defaultValue: 8, minValue: 1, maxValue: 50), "ParseClampedInt parses valid value");
         AssertEqual(1, BotConfiguration.ParseClampedInt("0", defaultValue: 8, minValue: 1, maxValue: 50), "ParseClampedInt clamps below minimum");

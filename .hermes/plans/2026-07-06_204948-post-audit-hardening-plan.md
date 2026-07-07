@@ -466,7 +466,7 @@ git commit -m "Clarify state-changing plugin risk"
 
 ### Task 14.1: Add safe local profile scripts for Mujahed's machine
 
-**Objective:** Make machine-specific all-enabled settings explicit and reversible without changing project defaults.
+**Status:** Completed — added reversible PowerShell helpers that write Windows User environment variables only: `Set-LocalDevEnvironment.ps1` enables non-secret local dev feature flags and `SEARCH_ROUTING_MODE=llm` while leaving secrets/provider commands untouched; `Set-SafeEnvironment.ps1` resets risky flags such as public access, content logging, repo/GitHub writes, plugins, media gates, and direct search to safer values.
 
 **Files:**
 - Create: `scripts/Set-LocalDevEnvironment.ps1`
