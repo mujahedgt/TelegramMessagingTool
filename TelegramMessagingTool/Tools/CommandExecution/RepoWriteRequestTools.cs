@@ -879,7 +879,14 @@ public static class RepoPatchApplyExecutor
         }
 
         string patchFile = Path.Combine(Path.GetTempPath(), $"TelegramMessagingTool_RepoPatch_{Guid.NewGuid():N}.patch");
-        string normalizedPatch = payload.Patch.EndsWith('\n') ? payload.Patch : payload.Patch + Environment.NewLine;
+        string normalizedPatch = payload.Patch
+            .Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace("\r", "\n", StringComparison.Ordinal);
+        if (!normalizedPatch.EndsWith('\n'))
+        {
+            normalizedPatch += '\n';
+        }
+
         await File.WriteAllTextAsync(patchFile, normalizedPatch, cancellationToken);
         try
         {
