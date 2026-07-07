@@ -223,7 +223,7 @@ git commit -m "Show consolidated runtime risk warnings"
 
 ### Task 10.1: Split giant helper test runner into thematic files
 
-**Status:** In progress — assertion helpers extracted to `TestAssert.cs`; plugin tests extracted to `PluginTests.cs` in `Extract plugin helper tests`; configuration/environment tests extracted to `ConfigurationTests.cs`; command-router factory tests extracted to `CommandTests.cs`; agent behavior eval tests extracted to `AgentBehaviorEvalTests.cs` in current patch.
+**Status:** In progress — assertion helpers extracted to `TestAssert.cs`; plugin tests extracted to `PluginTests.cs` in `Extract plugin helper tests`; configuration/environment tests extracted to `ConfigurationTests.cs`; command-router factory tests extracted to `CommandTests.cs`; agent behavior eval tests extracted to `AgentBehaviorEvalTests.cs`; document/media command tests extracted to `DocumentTests.cs` in current patch.
 
 **Objective:** Reduce `TelegramMessagingTool.Tests/Program.cs` size and make future TDD safer.
 
