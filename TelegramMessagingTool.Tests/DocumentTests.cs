@@ -1,10 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 using Telegram.Bot.Types;
 using TelegramMessagingTool;
+using TelegramMessagingTool.Agent;
 using TelegramMessagingTool.Commands;
 using TelegramMessagingTool.Data;
 using TelegramMessagingTool.Models;
 using TelegramMessagingTool.Services;
+using TelegramMessagingTool.Tools;
 
 using static TestAssert;
 
@@ -257,6 +259,34 @@ static class DocumentTests
         AssertTrue(DocumentStorageService.IsAudioFileName(savedTtsFile.OriginalFileName), "/speaktext saved output is listed as audio-capable");
         AssertTrue(File.Exists(savedTtsFile.AbsolutePath), "/speaktext writes generated audio bytes into the sandbox");
         AssertEqual(3L, new FileInfo(savedTtsFile.AbsolutePath).Length, "/speaktext stores provider bytes without sending audio automatically");
+
+        var voiceReplyChatClient = new ScriptedChatClient(["This is my spoken reply."]);
+        var voiceMessageProcessor = new VoiceMessageProcessor(
+            adminTestSettings with { EnableAudioTranscription = true, EnableTextToSpeech = true },
+            documentStorage,
+            new ToolRegistry(Array.Empty<IAgentTool>()),
+            new AgentRunner(voiceReplyChatClient, new ToolRegistry(Array.Empty<IAgentTool>()), searchRoutingClassifier: new OffSearchRoutingClassifier()),
+            new ConversationService(),
+            new FakeAudioTranscriptionService("Please answer this voice note."),
+            new FakeTextToSpeechService([0x4F, 0x67, 0x67, 0x53], ".ogg"));
+        VoiceMessageProcessResult voiceReplyResult = await voiceMessageProcessor.ProcessAsync(
+            uploadedAudio,
+            testUser,
+            dbContext,
+            CancellationToken.None);
+        AssertTrue(voiceReplyResult.ReplyText.Contains("spoken reply", StringComparison.OrdinalIgnoreCase), "VoiceMessageProcessor returns the assistant text reply");
+        AssertTrue(voiceReplyResult.ReplyAudioFile is not null, "VoiceMessageProcessor creates a TTS reply audio file when configured");
+        AssertTrue(voiceReplyResult.SendReplyAudioAsVoice, "VoiceMessageProcessor marks OGG/Opus-compatible output for Telegram voice delivery");
+        AssertEqual("tts_voice_reply", voiceReplyResult.ReplyAudioFile!.Source, "VoiceMessageProcessor stores generated voice replies with source metadata");
+        List<UploadedFile> uploadedFilesAfterVoiceReply = await dbContext.UploadedFiles
+            .Where(x => x.ConnectedUserId == testUser.Id)
+            .ToListAsync(CancellationToken.None);
+        List<ChatMessage> messagesAfterVoiceReply = await dbContext.Messages
+            .Where(x => x.ConnectedUserId == testUser.Id)
+            .ToListAsync(CancellationToken.None);
+        AssertTrue(uploadedFilesAfterVoiceReply.Any(x => x.Source == "transcript" && x.OriginalFileName.Contains("voice-note.ogg-transcript", StringComparison.OrdinalIgnoreCase)), "VoiceMessageProcessor saves the inbound voice transcript as a sandboxed document");
+        AssertTrue(messagesAfterVoiceReply.Any(x => x.Role == ChatRoles.User && x.Content.Contains("Please answer this voice note", StringComparison.OrdinalIgnoreCase)), "VoiceMessageProcessor stores the voice transcript in chat history");
+        AssertTrue(messagesAfterVoiceReply.Any(x => x.Role == ChatRoles.Assistant && x.Content.Contains("spoken reply", StringComparison.OrdinalIgnoreCase)), "VoiceMessageProcessor stores the assistant reply in chat history");
 
         string transcriptScriptPath = Path.Combine(documentStorage.RootDirectory, "fake-transcribe.ps1");
         await File.WriteAllTextAsync(transcriptScriptPath, "param([string]$AudioPath)\nWrite-Output \"Transcript from local provider for $(Split-Path -Leaf $AudioPath)\"", CancellationToken.None);

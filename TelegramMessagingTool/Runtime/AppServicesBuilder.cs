@@ -82,6 +82,14 @@ public static class AppServicesBuilder
                 settings.TextToSpeechOutputExtension);
         var agentRunner = new AgentRunner(ollamaClient, toolRegistry, searchRoutingClassifier: searchRoutingClassifier, observability: observability);
         var conversationService = new ConversationService();
+        var voiceMessageProcessor = new VoiceMessageProcessor(
+            settings,
+            documentStorage,
+            toolRegistry,
+            agentRunner,
+            conversationService,
+            audioTranscriptionService,
+            textToSpeechService);
         var commandRouter = CommandRouterFactory.Create(
             settings,
             toolRegistry,
@@ -108,6 +116,7 @@ public static class AppServicesBuilder
             agentRunner,
             conversationService,
             commandRouter,
+            voiceMessageProcessor,
             writeConsoleEvent);
         var consoleInputHandler = new ConsoleInputHandler(
             settings,

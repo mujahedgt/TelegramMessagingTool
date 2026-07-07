@@ -345,7 +345,7 @@ git commit -m "Add metadata-only runtime errors command"
 
 ### Task 12.1: Add explicit generated-audio send command
 
-**Objective:** Generated TTS output is currently saved but not automatically sent. Add explicit delivery.
+**Status:** Partially superseded by current patch — inbound Telegram voice messages can now be saved, transcribed, answered by the agent, and replied to with generated voice/audio when trusted local transcription and TTS providers are configured. `/speaktext` remains storage-only; an explicit `/sendaudio <file-id>` command is still useful for manually sending already-generated sandbox audio.
 
 **Files:**
 - Create: `TelegramMessagingTool/Commands/SendVoiceFileCommand.cs` or `SendAudioFileCommand.cs`

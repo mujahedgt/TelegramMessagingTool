@@ -25,6 +25,7 @@ public sealed class TelegramUpdateHandler
     private readonly AgentRunner _agentRunner;
     private readonly ConversationService _conversationService;
     private readonly CommandRouter _commandRouter;
+    private readonly VoiceMessageProcessor _voiceMessageProcessor;
     private readonly Action<string, string, string, ConsoleEventLevel> _writeConsoleEvent;
 
     public TelegramUpdateHandler(
@@ -36,6 +37,7 @@ public sealed class TelegramUpdateHandler
         AgentRunner agentRunner,
         ConversationService conversationService,
         CommandRouter commandRouter,
+        VoiceMessageProcessor voiceMessageProcessor,
         Action<string, string, string, ConsoleEventLevel> writeConsoleEvent)
     {
         _settings = settings;
@@ -46,6 +48,7 @@ public sealed class TelegramUpdateHandler
         _agentRunner = agentRunner;
         _conversationService = conversationService;
         _commandRouter = commandRouter;
+        _voiceMessageProcessor = voiceMessageProcessor;
         _writeConsoleEvent = writeConsoleEvent;
     }
 
@@ -65,7 +68,7 @@ public sealed class TelegramUpdateHandler
             return;
         }
 
-        if (message.Text is null && message.Document is null)
+        if (message.Text is null && message.Document is null && message.Voice is null)
         {
             return;
         }
@@ -160,6 +163,12 @@ public sealed class TelegramUpdateHandler
                     text: "Bot Alert: New user connected\nInfo:\n" + user,
                     cancellationToken: cancellationToken
                 );
+            }
+
+            if (message.Voice is not null)
+            {
+                await HandleVoiceAsync(bot, message, user, dbContext, cancellationToken);
+                return;
             }
 
             if (message.Document is not null)
@@ -384,6 +393,110 @@ public sealed class TelegramUpdateHandler
                 callbackQuery.Id,
                 text: "Sorry, that button action failed.",
                 showAlert: true,
+                cancellationToken: cancellationToken);
+        }
+    }
+
+    private async Task HandleVoiceAsync(
+        ITelegramBotClient bot,
+        Message message,
+        ConnectedUser user,
+        TelegramDbContext dbContext,
+        CancellationToken cancellationToken)
+    {
+        if (message.Voice is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var telegramFile = await bot.GetFile(message.Voice.FileId, cancellationToken);
+            if (string.IsNullOrWhiteSpace(telegramFile.FilePath))
+            {
+                await bot.SendMessage(
+                    chatId: message.Chat.Id,
+                    text: "Telegram did not provide a downloadable path for this voice message. Please try again or upload it as an audio document.",
+                    replyParameters: new ReplyParameters { MessageId = message.MessageId },
+                    cancellationToken: cancellationToken);
+                return;
+            }
+
+            await using var stream = new MemoryStream();
+            await bot.DownloadFile(telegramFile.FilePath, stream, cancellationToken);
+            stream.Position = 0;
+
+            UploadedFile savedVoice = await _documentStorage.SaveUploadedFileAsync(
+                user,
+                $"telegram-voice-{message.MessageId}.ogg",
+                message.Voice.FileId,
+                "audio/ogg",
+                stream,
+                message.Voice.FileSize,
+                cancellationToken);
+            savedVoice.Source = "telegram_voice";
+            dbContext.UploadedFiles.Add(savedVoice);
+            await dbContext.SaveChangesAsync(cancellationToken);
+
+            _writeConsoleEvent("VOICE", message.Chat.Username ?? message.Chat.Id.ToString(), $"saved voice as #{savedVoice.Id}", ConsoleEventLevel.Success);
+
+            VoiceMessageProcessResult result = await _voiceMessageProcessor.ProcessAsync(
+                savedVoice,
+                user,
+                dbContext,
+                cancellationToken);
+
+            if (result.ReplyAudioFile is not null && File.Exists(result.ReplyAudioFile.AbsolutePath))
+            {
+                await using FileStream audioStream = File.OpenRead(result.ReplyAudioFile.AbsolutePath);
+                InputFile inputFile = InputFile.FromStream(audioStream, result.ReplyAudioFile.OriginalFileName);
+                if (result.SendReplyAudioAsVoice)
+                {
+                    await bot.SendVoice(
+                        chatId: message.Chat.Id,
+                        voice: inputFile,
+                        caption: "Voice reply",
+                        replyParameters: new ReplyParameters { MessageId = message.MessageId },
+                        cancellationToken: cancellationToken);
+                }
+                else
+                {
+                    await bot.SendAudio(
+                        chatId: message.Chat.Id,
+                        audio: inputFile,
+                        caption: "Voice reply audio",
+                        replyParameters: new ReplyParameters { MessageId = message.MessageId },
+                        cancellationToken: cancellationToken);
+                }
+
+                return;
+            }
+
+            foreach (string replyChunk in TelegramMessageFormatter.SplitForTelegram(result.ReplyText))
+            {
+                await bot.SendMessage(
+                    chatId: message.Chat.Id,
+                    text: replyChunk,
+                    replyParameters: new ReplyParameters { MessageId = message.MessageId },
+                    cancellationToken: cancellationToken);
+            }
+        }
+        catch (ApiRequestException ex) when (ex.Message.Contains("too large", StringComparison.OrdinalIgnoreCase)
+            || ex.Message.Contains("file is too big", StringComparison.OrdinalIgnoreCase)
+            || ex.Message.Contains("file_id", StringComparison.OrdinalIgnoreCase))
+        {
+            await bot.SendMessage(
+                chatId: message.Chat.Id,
+                text: "Telegram refused to provide this voice message through the Bot API. Please try again or upload it as an audio document.",
+                replyParameters: new ReplyParameters { MessageId = message.MessageId },
+                cancellationToken: cancellationToken);
+        }
+        catch (InvalidOperationException ex)
+        {
+            await bot.SendMessage(
+                chatId: message.Chat.Id,
+                text: ex.Message,
+                replyParameters: new ReplyParameters { MessageId = message.MessageId },
                 cancellationToken: cancellationToken);
         }
     }
