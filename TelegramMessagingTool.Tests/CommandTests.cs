@@ -43,7 +43,7 @@ public static class CommandTests
             textToSpeechService: null);
         string commandNames = string.Join(",", router.Commands.Select(x => x.Name));
         AssertEqual(
-            "/help,/systeminfo,/diskstatus,/processes,/status,/health,/riskconfig,/reset,/remember,/memory,/forget,/files,/images,/describeimage,/voicefiles,/transcribe,/transcriptinsights,/transcripttasks,/speaktext,/sendaudio,/readfile,/createfile,/importfiles,/importfile,/deletefile,/indexfile,/indexdocs,/docchunks,/askfile,/askdocs,/summarizefile,/summarizedocs,/embedfile,/embeddocs,/tools,/harnesses,/plugins,/killprocess,/action,/actions,/pending,/approve,/deny,/plan,/tasks,/task,/schedule,/schedulelist,/unschedule,/done,/cancel",
+            "/help,/systeminfo,/diskstatus,/processes,/status,/health,/errors,/riskconfig,/reset,/remember,/memory,/forget,/files,/images,/describeimage,/voicefiles,/transcribe,/transcriptinsights,/transcripttasks,/speaktext,/sendaudio,/readfile,/createfile,/importfiles,/importfile,/deletefile,/indexfile,/indexdocs,/docchunks,/askfile,/askdocs,/summarizefile,/summarizedocs,/embedfile,/embeddocs,/tools,/harnesses,/plugins,/killprocess,/action,/actions,/pending,/approve,/deny,/plan,/tasks,/task,/schedule,/schedulelist,/unschedule,/done,/cancel",
             commandNames,
             "CommandRouterFactory preserves Program command registration order");
     }

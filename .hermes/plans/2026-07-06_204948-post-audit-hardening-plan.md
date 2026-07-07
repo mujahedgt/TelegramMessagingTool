@@ -317,7 +317,7 @@ git commit -m "Add health diagnostics command"
 
 ### Task 11.2: Add `/errors [count]` metadata-only command
 
-**Objective:** Show recent runtime errors/warnings without exposing raw payloads.
+**Status:** Completed — added a bounded in-memory `RuntimeEventBuffer`, wired runtime console warning/error events into it, and added admin-only `/errors [count]` with count clamped to `1..50`, default `10`, metadata-only rendering, and secret/token redaction.
 
 **Files:**
 - Create: `TelegramMessagingTool/Services/RuntimeEventBuffer.cs`

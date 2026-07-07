@@ -46,13 +46,20 @@ public static class AppServicesBuilder
         };
 
         var botClient = new TelegramBotClient(settings.BotToken, telegramHttpClient, CancellationToken.None);
+        var runtimeEventBuffer = new RuntimeEventBuffer();
+        void BufferedConsoleEvent(string label, string actor, string detail, ConsoleEventLevel level)
+        {
+            runtimeEventBuffer.Record(level, label, $"{actor}: {detail}");
+            writeConsoleEvent(label, actor, detail, level);
+        }
+
         var taskReminderService = new TaskReminderService(new TelegramTaskReminderSender(botClient));
         var ollamaClient = new OllamaChatClient(qwenClient, settings);
         var ollamaEmbeddingClient = new OllamaEmbeddingClient(embeddingClient, settings);
         ITextEmbeddingService? retrievalEmbeddingService = settings.EnableDocumentEmbeddings ? ollamaEmbeddingClient : null;
         var documentStorage = new DocumentStorageService(Path.Combine(Environment.CurrentDirectory, "UserFiles"));
         string importDirectory = Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, "ImportInbox"));
-        var observability = new RuntimeObservabilityService(detail => writeConsoleEvent("OBSERVE", "runtime", detail, ConsoleEventLevel.Info));
+        var observability = new RuntimeObservabilityService(detail => BufferedConsoleEvent("OBSERVE", "runtime", detail, ConsoleEventLevel.Info));
         var pendingActionService = new PendingActionService(observability);
         var toolRegistry = ToolRegistryFactory.Create(settings, searchClient, pendingActionService);
         ISearchRoutingClassifier searchRoutingClassifier = SearchRoutingClassifierFactory.Create(settings.SearchRoutingMode, ollamaClient);
@@ -106,7 +113,8 @@ public static class AppServicesBuilder
             documentEmbeddingService,
             imageDescriptionService,
             audioTranscriptionService,
-            textToSpeechService);
+            textToSpeechService,
+            runtimeEventBuffer);
         var telegramUpdateHandler = new TelegramUpdateHandler(
             settings,
             documentStorage,
@@ -117,16 +125,16 @@ public static class AppServicesBuilder
             conversationService,
             commandRouter,
             voiceMessageProcessor,
-            writeConsoleEvent);
+            BufferedConsoleEvent);
         var consoleInputHandler = new ConsoleInputHandler(
             settings,
             toolRegistry,
             agentRunner,
             conversationService,
             commandRouter,
-            writeConsoleEvent,
+            BufferedConsoleEvent,
             requestShutdown);
-        var taskReminderLoop = new TaskReminderLoop(taskReminderService, writeConsoleEvent);
+        var taskReminderLoop = new TaskReminderLoop(taskReminderService, BufferedConsoleEvent);
 
         return new AppServices(
             [qwenClient, embeddingClient, searchClient, telegramHttpHandler, telegramHttpClient],

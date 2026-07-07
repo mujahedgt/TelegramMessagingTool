@@ -1023,6 +1023,11 @@ await using (var dbContext = new TelegramDbContext())
     };
 
     var pendingActionService = new PendingActionService();
+    var runtimeEventBuffer = new RuntimeEventBuffer(capacity: 3);
+    runtimeEventBuffer.Record(ConsoleEventLevel.Info, "COMMAND", "ignored info event");
+    runtimeEventBuffer.Record(ConsoleEventLevel.Warning, "REMINDER", "provider TOKEN=123456:abcdefghijklmnopqrstuv should redact");
+    runtimeEventBuffer.Record(ConsoleEventLevel.Error, "TELEGRAM", "socket reset ghp_secret_value_must_not_render");
+    runtimeEventBuffer.Record(ConsoleEventLevel.Warning, "SEARCH", "provider unavailable");
     var fakeProcessTerminator = new FakeProcessTerminator();
     var fakeLatestReleaseRestarter = new FakeLatestReleaseRestarter();
     var fakeGitHubIssueCreator = new FakeGitHubIssueCreator();
@@ -1228,6 +1233,7 @@ await using (var dbContext = new TelegramDbContext())
         new ProcessesCommand(),
         new StatusCommand(adminTestSettings),
         new HealthCommand(adminTestSettings, documentStorage, importDirectory),
+        new ErrorsCommand(adminTestSettings, runtimeEventBuffer),
         new RiskConfigCommand(adminTestSettings),
         new ResetCommand(),
         new RememberCommand(),
@@ -1823,6 +1829,26 @@ diff --git a/../outside.cs b/../outside.cs
     CommandResult healthMentionResult = await commandRouter.TryHandleAsync(TextMessage("/health@red_eye_ghost_bot"), testUser, dbContext, CancellationToken.None);
     AssertTrue(healthMentionResult.Handled, "/health@bot is handled");
     AssertFalse((await commandRouter.TryHandleAsync(TextMessage("/healthx"), testUser, dbContext, CancellationToken.None)).Handled, "/healthx is not treated as /health");
+
+    CommandResult errorsResult = await commandRouter.TryHandleAsync(TextMessage("/errors 2"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(errorsResult.Handled, "/errors is handled");
+    AssertTrue(errorsResult.ReplyText?.Contains("Recent runtime warnings/errors", StringComparison.OrdinalIgnoreCase) == true, "/errors reports heading");
+    AssertTrue(errorsResult.ReplyText?.Contains("SEARCH", StringComparison.OrdinalIgnoreCase) == true, "/errors includes recent warning category");
+    AssertTrue(errorsResult.ReplyText?.Contains("TELEGRAM", StringComparison.OrdinalIgnoreCase) == true, "/errors includes recent error category");
+    AssertFalse(errorsResult.ReplyText?.Contains("COMMAND", StringComparison.OrdinalIgnoreCase) == true, "/errors filters info events");
+    AssertFalse(errorsResult.ReplyText?.Contains("TOKEN=123456", StringComparison.OrdinalIgnoreCase) == true, "/errors redacts token assignments");
+    AssertFalse(errorsResult.ReplyText?.Contains("ghp_secret", StringComparison.OrdinalIgnoreCase) == true, "/errors redacts GitHub tokens");
+    CommandResult errorsDefaultResult = await commandRouter.TryHandleAsync(TextMessage("/errors"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(errorsDefaultResult.Handled, "/errors without count is handled");
+    AssertTrue(errorsDefaultResult.ReplyText?.Contains("showing 3", StringComparison.OrdinalIgnoreCase) == true, "/errors defaults to available recent warnings/errors");
+    CommandResult errorsClampResult = await commandRouter.TryHandleAsync(TextMessage("/errors 999"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(errorsClampResult.ReplyText?.Contains("limit 50", StringComparison.OrdinalIgnoreCase) == true, "/errors clamps high count to 50");
+    CommandResult nonAdminErrorsResult = await commandRouter.TryHandleAsync(TextMessage("/errors"), nonAdminUser, dbContext, CancellationToken.None);
+    AssertTrue(nonAdminErrorsResult.Handled, "/errors non-admin attempt is handled");
+    AssertTrue(nonAdminErrorsResult.ReplyText?.Contains("admin", StringComparison.OrdinalIgnoreCase) == true, "/errors requires admin");
+    CommandResult errorsMentionResult = await commandRouter.TryHandleAsync(TextMessage("/errors@red_eye_ghost_bot 1"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(errorsMentionResult.Handled, "/errors@bot is handled");
+    AssertFalse((await commandRouter.TryHandleAsync(TextMessage("/errorsx"), testUser, dbContext, CancellationToken.None)).Handled, "/errorsx is not treated as /errors");
 
     CommandResult toolsResult = await commandRouter.TryHandleAsync(TextMessage("/tools"), testUser, dbContext, CancellationToken.None);
     AssertTrue(toolsResult.Handled, "/tools is handled");

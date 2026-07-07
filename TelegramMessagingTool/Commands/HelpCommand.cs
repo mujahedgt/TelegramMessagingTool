@@ -30,6 +30,7 @@ TelegramMessagingTool Agent Commands
 /killprocess <pid> - Create approval request to terminate a process later
 /status - Show bot status
 /health - Show compact runtime health diagnostics
+/errors [count] - Admin-only: show recent metadata-only runtime warnings/errors
 /riskconfig - Admin-only: show risky runtime feature flags without secrets
 /reset - Clear your conversation history
 /memory - Show saved memories

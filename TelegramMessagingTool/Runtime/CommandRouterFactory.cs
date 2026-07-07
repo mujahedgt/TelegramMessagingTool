@@ -22,8 +22,10 @@ public static class CommandRouterFactory
         DocumentEmbeddingService documentEmbeddingService,
         IImageDescriptionService imageDescriptionService,
         IAudioTranscriptionService? audioTranscriptionService = null,
-        ITextToSpeechService? textToSpeechService = null)
+        ITextToSpeechService? textToSpeechService = null,
+        RuntimeEventBuffer? runtimeEventBuffer = null)
     {
+        runtimeEventBuffer ??= new RuntimeEventBuffer();
         return new CommandRouter([
             new HelpCommand(),
             new SystemInfoCommand(),
@@ -31,6 +33,7 @@ public static class CommandRouterFactory
             new ProcessesCommand(),
             new StatusCommand(settings),
             new HealthCommand(settings, documentStorage, importDirectory),
+            new ErrorsCommand(settings, runtimeEventBuffer),
             new RiskConfigCommand(settings),
             new ResetCommand(),
             new RememberCommand(),
