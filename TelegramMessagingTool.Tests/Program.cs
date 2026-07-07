@@ -807,6 +807,25 @@ AssertTrue(eventLine.Contains("MESSAGE"), "Console event includes label");
 AssertTrue(eventLine.Contains("tester"), "Console event includes actor");
 AssertTrue(eventLine.Contains("handled with tools"), "Console event includes detail");
 
+string dashboard = AgentConsoleRenderer.RenderDashboard(new RuntimeDashboardSnapshot(
+    ActiveTasks: 3,
+    PendingApprovals: 1,
+    IndexedDocs: 8,
+    SavedFiles: 9,
+    SavedImages: 4,
+    RecentWarnings: 2,
+    Uptime: TimeSpan.FromMinutes(5),
+    AccessMode: "admin-only",
+    DatabaseConnection: "Server=(localdb)\\MSSQLLocalDB;Database=TelegramMessagingTool;User Id=admin;Password=secret-password"));
+AssertTrue(dashboard.Contains("Runtime dashboard", StringComparison.OrdinalIgnoreCase), "Console dashboard has a title");
+AssertTrue(dashboard.Contains("Active tasks") && dashboard.Contains("3"), "Console dashboard shows active task count");
+AssertTrue(dashboard.Contains("Pending approvals") && dashboard.Contains("1"), "Console dashboard shows pending approval count");
+AssertTrue(dashboard.Contains("Indexed docs") && dashboard.Contains("8"), "Console dashboard shows indexed document count");
+AssertTrue(dashboard.Contains("Saved images") && dashboard.Contains("4"), "Console dashboard shows saved image count");
+AssertTrue(dashboard.Contains("START, MESSAGE, COMMAND, TOOL, DOCUMENT, IMAGE, TASK, APPROVAL, ERROR, NET"), "Console dashboard lists event categories");
+AssertFalse(dashboard.Contains("secret-password", StringComparison.OrdinalIgnoreCase), "Console dashboard masks database passwords");
+AssertFalse(dashboard.Contains("User Id=admin", StringComparison.OrdinalIgnoreCase), "Console dashboard hides database user ids");
+
 AssertEqual("1.5 GB", LocalDeviceInfoService.FormatBytes(1_610_612_736), "LocalDeviceInfoService formats byte counts safely");
 string systemInfoText = LocalDeviceInfoService.RenderSystemInfo();
 AssertTrue(systemInfoText.Contains("Operating system"), "LocalDeviceInfoService renders OS information");
@@ -1031,6 +1050,72 @@ await using (var dbContext = new TelegramDbContext())
     runtimeEventBuffer.Record(ConsoleEventLevel.Warning, "REMINDER", "provider TOKEN=123456:abcdefghijklmnopqrstuv should redact");
     runtimeEventBuffer.Record(ConsoleEventLevel.Error, "TELEGRAM", "socket reset ghp_secret_value_must_not_render");
     runtimeEventBuffer.Record(ConsoleEventLevel.Warning, "SEARCH", "provider unavailable");
+
+    var dashboardTask = new AgentTask
+    {
+        ConnectedUserId = testUser.Id,
+        ChatId = testUser.ChatId,
+        Goal = "Dashboard count test",
+        Status = AgentTaskStatuses.Active,
+        CreatedAt = DateTime.UtcNow,
+        UpdatedAt = DateTime.UtcNow
+    };
+    var dashboardAction = new PendingAction
+    {
+        ConnectedUserId = testUser.Id,
+        ChatId = testUser.ChatId,
+        ToolName = "dashboard_test",
+        Description = "Dashboard count test",
+        PayloadJson = "{}",
+        RiskLevel = "medium",
+        Status = PendingActionStatuses.Pending,
+        ExpiresAt = DateTime.UtcNow.AddMinutes(10)
+    };
+    var dashboardFile = new UploadedFile
+    {
+        ConnectedUserId = testUser.Id,
+        ChatId = testUser.ChatId,
+        OriginalFileName = "dashboard-image.png",
+        StoredFileName = "dashboard-image.png",
+        RelativePath = "dashboard-image.png",
+        AbsolutePath = Path.Combine(testFileRoot, "dashboard-image.png"),
+        ContentType = "image/png",
+        Source = "test",
+        SizeBytes = 10,
+        CreatedAt = DateTime.UtcNow
+    };
+    dbContext.AgentTasks.Add(dashboardTask);
+    dbContext.PendingActions.Add(dashboardAction);
+    dbContext.UploadedFiles.Add(dashboardFile);
+    await dbContext.SaveChangesAsync(CancellationToken.None);
+    var dashboardChunk = new DocumentChunk
+    {
+        ConnectedUserId = testUser.Id,
+        ChatId = testUser.ChatId,
+        UploadedFileId = dashboardFile.Id,
+        OriginalFileName = dashboardFile.OriginalFileName,
+        ChunkNumber = 1,
+        Text = "dashboard indexed text",
+        CharacterCount = "dashboard indexed text".Length,
+        CreatedAt = DateTime.UtcNow
+    };
+    dbContext.DocumentChunks.Add(dashboardChunk);
+    await dbContext.SaveChangesAsync(CancellationToken.None);
+    string runtimeDashboard = await new RuntimeDashboardService(adminTestSettings, runtimeEventBuffer, DateTimeOffset.UtcNow.AddMinutes(-7))
+        .RenderAsync(dbContext, CancellationToken.None);
+    AssertTrue(runtimeDashboard.Contains("Runtime dashboard", StringComparison.OrdinalIgnoreCase), "RuntimeDashboardService renders a dashboard");
+    AssertTrue(runtimeDashboard.Contains("Active tasks") && runtimeDashboard.Contains("1"), "RuntimeDashboardService counts active tasks");
+    AssertTrue(runtimeDashboard.Contains("Pending approvals") && runtimeDashboard.Contains("1"), "RuntimeDashboardService counts pending approvals");
+    AssertTrue(runtimeDashboard.Contains("Indexed docs") && runtimeDashboard.Contains("1"), "RuntimeDashboardService counts indexed documents");
+    AssertTrue(runtimeDashboard.Contains("Saved images") && runtimeDashboard.Contains("1"), "RuntimeDashboardService counts saved images");
+    AssertTrue(runtimeDashboard.Contains("Recent warnings") && runtimeDashboard.Contains("2"), "RuntimeDashboardService counts recent warning/error events within buffer capacity");
+    AssertFalse(runtimeDashboard.Contains(adminTestSettings.DatabaseConnectionString, StringComparison.OrdinalIgnoreCase), "RuntimeDashboardService does not expose full DB connection strings");
+    dbContext.DocumentChunks.Remove(dashboardChunk);
+    dbContext.UploadedFiles.Remove(dashboardFile);
+    dbContext.PendingActions.Remove(dashboardAction);
+    dbContext.AgentTasks.Remove(dashboardTask);
+    await dbContext.SaveChangesAsync(CancellationToken.None);
+
     var fakeProcessTerminator = new FakeProcessTerminator();
     var fakeLatestReleaseRestarter = new FakeLatestReleaseRestarter();
     var fakeGitHubIssueCreator = new FakeGitHubIssueCreator();

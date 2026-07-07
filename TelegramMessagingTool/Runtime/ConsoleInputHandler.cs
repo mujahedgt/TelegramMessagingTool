@@ -20,6 +20,7 @@ public sealed class ConsoleInputHandler
     private readonly AgentRunner _agentRunner;
     private readonly ConversationService _conversationService;
     private readonly CommandRouter _commandRouter;
+    private readonly RuntimeDashboardService _runtimeDashboardService;
     private readonly Action<string, string, string, ConsoleEventLevel> _writeConsoleEvent;
     private readonly Action _requestShutdown;
 
@@ -29,6 +30,7 @@ public sealed class ConsoleInputHandler
         AgentRunner agentRunner,
         ConversationService conversationService,
         CommandRouter commandRouter,
+        RuntimeDashboardService runtimeDashboardService,
         Action<string, string, string, ConsoleEventLevel> writeConsoleEvent,
         Action requestShutdown)
     {
@@ -37,6 +39,7 @@ public sealed class ConsoleInputHandler
         _agentRunner = agentRunner;
         _conversationService = conversationService;
         _commandRouter = commandRouter;
+        _runtimeDashboardService = runtimeDashboardService;
         _writeConsoleEvent = writeConsoleEvent;
         _requestShutdown = requestShutdown;
     }
@@ -90,6 +93,13 @@ public sealed class ConsoleInputHandler
     public async Task<string> ProcessInputAsync(string input, CancellationToken cancellationToken)
     {
         await using TelegramDbContext dbContext = new();
+        if (input.Equals("/dashboard", StringComparison.OrdinalIgnoreCase)
+            || input.Equals("dashboard", StringComparison.OrdinalIgnoreCase))
+        {
+            _writeConsoleEvent("COMMAND", "console", "/dashboard", ConsoleEventLevel.Success);
+            return await _runtimeDashboardService.RenderAsync(dbContext, cancellationToken);
+        }
+
         ConnectedUser consoleUser = await GetOrCreateConsoleUserAsync(dbContext, cancellationToken);
 
         var consoleMessage = new Message

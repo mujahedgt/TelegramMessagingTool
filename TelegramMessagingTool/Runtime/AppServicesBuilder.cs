@@ -45,8 +45,10 @@ public static class AppServicesBuilder
             Timeout = TimeSpan.FromSeconds(90)
         };
 
+        DateTimeOffset startedAt = DateTimeOffset.UtcNow;
         var botClient = new TelegramBotClient(settings.BotToken, telegramHttpClient, CancellationToken.None);
         var runtimeEventBuffer = new RuntimeEventBuffer();
+        var runtimeDashboardService = new RuntimeDashboardService(settings, runtimeEventBuffer, startedAt);
         void BufferedConsoleEvent(string label, string actor, string detail, ConsoleEventLevel level)
         {
             runtimeEventBuffer.Record(level, label, $"{actor}: {detail}");
@@ -134,6 +136,7 @@ public static class AppServicesBuilder
             agentRunner,
             conversationService,
             commandRouter,
+            runtimeDashboardService,
             BufferedConsoleEvent,
             requestShutdown);
         var taskReminderLoop = new TaskReminderLoop(taskReminderService, BufferedConsoleEvent);

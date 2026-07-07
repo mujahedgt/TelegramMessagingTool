@@ -415,6 +415,10 @@ Recommended staged rollout:
 
 # Phase 5: Console Improvements
 
+## Status
+
+- Task 5.1 is complete: the console now has a `/dashboard` local-only status view rendered through `RuntimeDashboardService`/`AgentConsoleRenderer`, including uptime, access mode, masked database summary, active tasks, pending approvals, indexed docs, saved files/images, recent warning/error count, and the standard event categories.
+
 ## Goal
 
 Make the console more colorful, visually appealing, responsive, and easier to monitor logs/task statuses.

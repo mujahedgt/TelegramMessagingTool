@@ -15,6 +15,17 @@ public sealed record AgentConsoleSnapshot(
     IReadOnlyList<string> Tools,
     IReadOnlyList<string>? RiskWarnings = null);
 
+public sealed record RuntimeDashboardSnapshot(
+    int ActiveTasks,
+    int PendingApprovals,
+    int IndexedDocs,
+    int SavedFiles,
+    int SavedImages,
+    int RecentWarnings,
+    TimeSpan Uptime,
+    string AccessMode,
+    string DatabaseConnection);
+
 public enum ConsoleEventLevel
 {
     Info,
@@ -107,6 +118,45 @@ public static class AgentConsoleRenderer
 
         string timestamp = DateTimeOffset.Now.ToString("HH:mm:ss");
         return $"[{timestamp}] [{marker}] {label,-10} {actor,-18} {detail}";
+    }
+
+    public static string RenderDashboard(RuntimeDashboardSnapshot snapshot)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("Runtime dashboard");
+        builder.AppendLine("=================");
+        builder.AppendLine($"Uptime             : {FormatUptime(snapshot.Uptime)}");
+        builder.AppendLine($"Access mode        : {snapshot.AccessMode}");
+        builder.AppendLine($"Database           : {SummarizeDatabaseConnection(snapshot.DatabaseConnection)}");
+        builder.AppendLine();
+        builder.AppendLine("Counters");
+        builder.AppendLine("--------");
+        builder.AppendLine($"Active tasks       : {snapshot.ActiveTasks}");
+        builder.AppendLine($"Pending approvals  : {snapshot.PendingApprovals}");
+        builder.AppendLine($"Indexed docs       : {snapshot.IndexedDocs}");
+        builder.AppendLine($"Saved files        : {snapshot.SavedFiles}");
+        builder.AppendLine($"Saved images       : {snapshot.SavedImages}");
+        builder.AppendLine($"Recent warnings    : {snapshot.RecentWarnings}");
+        builder.AppendLine();
+        builder.AppendLine("Event categories");
+        builder.AppendLine("----------------");
+        builder.AppendLine("START, MESSAGE, COMMAND, TOOL, DOCUMENT, IMAGE, TASK, APPROVAL, ERROR, NET");
+        return builder.ToString().TrimEnd();
+    }
+
+    private static string FormatUptime(TimeSpan uptime)
+    {
+        if (uptime.TotalDays >= 1)
+        {
+            return $"{(int)uptime.TotalDays}d {uptime.Hours}h {uptime.Minutes}m";
+        }
+
+        if (uptime.TotalHours >= 1)
+        {
+            return $"{(int)uptime.TotalHours}h {uptime.Minutes}m";
+        }
+
+        return $"{Math.Max(0, (int)uptime.TotalMinutes)}m";
     }
 
     public static string SummarizeDatabaseConnection(string connectionString)

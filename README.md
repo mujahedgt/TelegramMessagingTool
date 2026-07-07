@@ -19,7 +19,7 @@ TelegramMessagingTool is a C#/.NET console application that connects a Telegram 
 - Admin-only `/errors [count]` command shows a bounded, metadata-only in-memory history of recent runtime warnings/errors with secret/token redaction
 - Lightweight Telegram reactions are sent best-effort for successful `/approve`, `/deny`, `/done`, `/remember`, and `/reset` commands while still keeping normal text replies
 - Agent-style startup console panel with commands, model, safety, and tool status
-- Local console chat/command input using the same command router, memory, tools, and agent runner as Telegram
+- Local console chat/command input using the same command router, memory, tools, and agent runner as Telegram, plus a local-only `/dashboard` runtime status view with compact counters and secret-masked database details
 - Runtime composition now builds runtime services through `Runtime/AppServicesBuilder.cs`, command registration through `Runtime/CommandRouterFactory.cs`, Telegram update handling through `Runtime/TelegramUpdateHandler.cs`, local console input through `Runtime/ConsoleInputHandler.cs`, and reminder polling through `Runtime/TaskReminderLoop.cs`, keeping `Program.cs` thin while preserving behavior
 - Plugin/tool abstractions are shared from `TelegramMessagingTool.Abstractions` so future plugin assemblies can compile against stable `IAgentTool`, `ToolResult`, and `ToolRiskLevel` contracts with first-class risk/read-only/safety metadata
 - Trusted local plugin loading is available behind `ENABLE_PLUGINS=true`; plugin DLLs must live under `PLUGIN_DIRECTORY`, pass manifest validation including compatible `apiVersion`, expose allowlisted `IAgentTool` names, avoid duplicates, and appear in `/tools` with `source`, `risk`, read-only, and safety metadata. State-changing plugin tools currently run directly when called, so keep them reviewed, sandboxed, and disabled unless trusted.
@@ -440,6 +440,7 @@ Sensitive connection-string fields such as passwords and user IDs are not printe
 ## Runtime notes
 
 - Type normal messages or slash commands directly in the console to use the same local agent without Telegram.
+- Use `/dashboard` in the local console to refresh compact runtime counters: active tasks, pending approvals, indexed docs, saved files/images, recent warning/error count, uptime, access mode, and secret-masked database summary.
 - Use `/exit` in the console to stop the bot gracefully.
 - `Ctrl+C` also requests graceful shutdown.
 - By default, the bot fails closed for Telegram access. Configure `ADMIN_CHAT_ID` or `ALLOWED_CHAT_IDS`. Use `ALLOW_PUBLIC_ACCESS=true` only for intentional local/public testing.
