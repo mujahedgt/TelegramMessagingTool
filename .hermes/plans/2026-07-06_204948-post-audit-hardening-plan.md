@@ -282,7 +282,7 @@ git commit -m "Add focused sample plugin tool tests"
 
 ### Task 11.1: Add `/health` command
 
-**Objective:** Give Mujahed a single runtime command for checking bot health from Telegram.
+**Status:** Completed — `/health` reports compact runtime diagnostics including uptime, database connectivity and migration status, model route summary, online search/search routing mode, plugin manifest counts/diagnostics, document storage/import inbox presence, and risk warning count without rendering bot tokens, GitHub tokens, connection strings, or raw message content.
 
 **Files:**
 - Create: `TelegramMessagingTool/Commands/HealthCommand.cs`

@@ -15,6 +15,7 @@ TelegramMessagingTool is a C#/.NET console application that connects a Telegram 
 - Built-in tools: `datetime`, `calculator`, `status`, optional `online_search` when `ENABLE_ONLINE_SEARCH=true`, optional read-only GitHub tools when `ENABLE_GITHUB_TOOLS=true`, and optional fixed safe command tools when `ENABLE_SAFE_COMMAND_TOOLS=true`
 - `/tools` command to show available tools
 - Admin-only `/riskconfig` command summarizes risky runtime feature flags without printing tokens, database connection strings, or provider credentials
+- `/health` command reports compact runtime diagnostics including uptime, DB/migration status, model routes, search mode, plugin manifest counts, storage roots, and risk warning count without secrets
 - Agent-style startup console panel with commands, model, safety, and tool status
 - Local console chat/command input using the same command router, memory, tools, and agent runner as Telegram
 - Runtime composition now builds runtime services through `Runtime/AppServicesBuilder.cs`, command registration through `Runtime/CommandRouterFactory.cs`, Telegram update handling through `Runtime/TelegramUpdateHandler.cs`, local console input through `Runtime/ConsoleInputHandler.cs`, and reminder polling through `Runtime/TaskReminderLoop.cs`, keeping `Program.cs` thin while preserving behavior

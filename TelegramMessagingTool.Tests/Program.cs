@@ -1227,6 +1227,7 @@ await using (var dbContext = new TelegramDbContext())
         new DiskStatusCommand(),
         new ProcessesCommand(),
         new StatusCommand(adminTestSettings),
+        new HealthCommand(adminTestSettings, documentStorage, importDirectory),
         new RiskConfigCommand(adminTestSettings),
         new ResetCommand(),
         new RememberCommand(),
@@ -1805,6 +1806,23 @@ diff --git a/../outside.cs b/../outside.cs
 
     CommandResult statusPrefixResult = await commandRouter.TryHandleAsync(TextMessage("/statusx"), testUser, dbContext, CancellationToken.None);
     AssertFalse(statusPrefixResult.Handled, "/statusx is not treated as /status");
+
+    CommandResult healthResult = await commandRouter.TryHandleAsync(TextMessage("/health"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(healthResult.Handled, "/health is handled");
+    AssertTrue(healthResult.ReplyText?.Contains("Health", StringComparison.OrdinalIgnoreCase) == true, "/health reports heading");
+    AssertTrue(healthResult.ReplyText?.Contains("Database: OK", StringComparison.OrdinalIgnoreCase) == true, "/health reports database OK");
+    AssertTrue(healthResult.ReplyText?.Contains("Uptime:", StringComparison.OrdinalIgnoreCase) == true, "/health reports process uptime");
+    AssertTrue(healthResult.ReplyText?.Contains("Model routes:", StringComparison.OrdinalIgnoreCase) == true, "/health reports model route summary");
+    AssertTrue(healthResult.ReplyText?.Contains("Search routing: heuristic", StringComparison.OrdinalIgnoreCase) == true, "/health reports search routing mode");
+    AssertTrue(healthResult.ReplyText?.Contains("Plugins:", StringComparison.OrdinalIgnoreCase) == true, "/health reports plugin status");
+    AssertTrue(healthResult.ReplyText?.Contains("Document storage:", StringComparison.OrdinalIgnoreCase) == true, "/health reports document storage status");
+    AssertTrue(healthResult.ReplyText?.Contains("Import inbox:", StringComparison.OrdinalIgnoreCase) == true, "/health reports import inbox status");
+    AssertTrue(healthResult.ReplyText?.Contains("Risk warnings:", StringComparison.OrdinalIgnoreCase) == true, "/health reports risk warning count");
+    AssertFalse(healthResult.ReplyText?.Contains("test-token", StringComparison.OrdinalIgnoreCase) == true, "/health does not render bot token");
+    AssertFalse(healthResult.ReplyText?.Contains("ghp_secret", StringComparison.OrdinalIgnoreCase) == true, "/health does not render GitHub token markers");
+    CommandResult healthMentionResult = await commandRouter.TryHandleAsync(TextMessage("/health@red_eye_ghost_bot"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(healthMentionResult.Handled, "/health@bot is handled");
+    AssertFalse((await commandRouter.TryHandleAsync(TextMessage("/healthx"), testUser, dbContext, CancellationToken.None)).Handled, "/healthx is not treated as /health");
 
     CommandResult toolsResult = await commandRouter.TryHandleAsync(TextMessage("/tools"), testUser, dbContext, CancellationToken.None);
     AssertTrue(toolsResult.Handled, "/tools is handled");
