@@ -44,6 +44,6 @@ public sealed class DoneCommand : IBotCommand
 
         TaskUpdateResult result = await _agentTaskService.MarkDoneAsync(dbContext, user, taskId, stepNumber, cancellationToken);
         string details = result.Task is null ? string.Empty : "\n\n" + AgentTaskService.RenderTask(result.Task);
-        return new CommandResult(true, result.Message + details);
+        return new CommandResult(true, result.Message + details, ReactionEmoji: result.Success ? "👍" : null);
     }
 }

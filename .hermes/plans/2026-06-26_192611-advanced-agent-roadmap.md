@@ -330,6 +330,10 @@ Telegram callback data has size limits; do not put secrets or large payloads in 
 
 ## 3B: Message Reactions
 
+### Status
+
+- Task 3B.1 is complete: command results can carry optional reaction emoji metadata, `/approve`, `/deny`, `/done`, `/remember`, and `/reset` set lightweight reaction hints, and Telegram runtime sends best-effort message reactions without replacing important text replies.
+
 ### Goal
 
 Use Telegram reaction API for lightweight acknowledgements.

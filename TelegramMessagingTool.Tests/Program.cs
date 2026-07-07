@@ -439,6 +439,9 @@ AssertFalse(CommandParser.Matches("/statusx", "/status"), "CommandParser does no
 AssertFalse(CommandParser.Matches("/status-extra", "/status"), "CommandParser does not match command names with extra suffixes");
 AssertTrue(CommandParser.Matches("/status@red_eye_ghost_bot", "/status"), "CommandParser matches bot-addressed commands");
 AssertEqual("hello world", CommandParser.GetArguments("/remember@red_eye_ghost_bot hello world", "/remember"), "CommandParser extracts arguments from bot-addressed command");
+AssertTrue(TelegramReactionService.IsSupportedReactionEmoji("✅"), "TelegramReactionService accepts configured success reaction");
+AssertTrue(TelegramReactionService.IsSupportedReactionEmoji("🧹"), "TelegramReactionService accepts configured reset reaction");
+AssertFalse(TelegramReactionService.IsSupportedReactionEmoji("not-an-emoji"), "TelegramReactionService rejects unsupported reaction metadata");
 
 string validOllamaJson = """
 {
@@ -1884,6 +1887,7 @@ diff --git a/../outside.cs b/../outside.cs
 
     CommandResult approveKillProcessResult = await commandRouter.TryHandleAsync(TextMessage($"/approve {killProcessPendingAction.Id}"), testUser, dbContext, CancellationToken.None);
     AssertTrue(approveKillProcessResult.Handled, "/approve kill_process is handled");
+    AssertEqual("✅", approveKillProcessResult.ReactionEmoji, "/approve requests success reaction metadata");
     AssertTrue(approveKillProcessResult.ReplyText?.Contains("Execution result", StringComparison.OrdinalIgnoreCase) == true, "/approve kill_process reports execution result");
     AssertEqual(12345, fakeProcessTerminator.LastRequestedPid, "/approve kill_process executes approved PID through safe terminator");
     AssertEqual(1, fakeProcessTerminator.KillCallCount, "/approve kill_process executes once");
@@ -2005,6 +2009,7 @@ diff --git a/../outside.cs b/../outside.cs
 
     CommandResult denyResult = await commandRouter.TryHandleAsync(TextMessage($"/deny {secondPendingAction.Id}"), testUser, dbContext, CancellationToken.None);
     AssertTrue(denyResult.Handled, "/deny is handled");
+    AssertEqual("👎", denyResult.ReactionEmoji, "/deny requests negative reaction metadata");
     AssertEqual(PendingActionStatuses.Denied, (await dbContext.PendingActions.FindAsync([secondPendingAction.Id], CancellationToken.None))!.Status, "/deny marks action denied");
 
     PendingAction thirdPendingAction = await pendingActionService.CreateAsync(
@@ -2130,6 +2135,7 @@ diff --git a/../outside.cs b/../outside.cs
 
     CommandResult doneStepResult = await commandRouter.TryHandleAsync(TextMessage($"/done {taskId} 1"), testUser, dbContext, CancellationToken.None);
     AssertTrue(doneStepResult.Handled, "/done step is handled");
+    AssertEqual("👍", doneStepResult.ReactionEmoji, "/done requests thumbs-up reaction metadata");
     AssertTrue((await dbContext.AgentTaskSteps.FirstAsync(x => x.AgentTaskId == taskId && x.StepNumber == 1)).IsDone, "/done marks step done");
 
     CommandResult cancelTaskResult = await commandRouter.TryHandleAsync(TextMessage($"/cancel {taskId}"), testUser, dbContext, CancellationToken.None);
@@ -2159,10 +2165,12 @@ diff --git a/../outside.cs b/../outside.cs
 
     CommandResult resetResult = await commandRouter.TryHandleAsync(TextMessage("/reset"), testUser, dbContext, CancellationToken.None);
     AssertTrue(resetResult.Handled, "/reset is handled");
+    AssertEqual("🧹", resetResult.ReactionEmoji, "/reset requests broom reaction metadata");
     AssertEqual(0, await dbContext.Messages.CountAsync(x => x.ConnectedUserId == testUser.Id), "/reset deletes user messages");
 
     CommandResult rememberResult = await commandRouter.TryHandleAsync(TextMessage("/remember User prefers concise answers"), testUser, dbContext, CancellationToken.None);
     AssertTrue(rememberResult.Handled, "/remember is handled");
+    AssertEqual("✅", rememberResult.ReactionEmoji, "/remember requests success reaction metadata");
     AssertEqual(1, await dbContext.Memories.CountAsync(x => x.ConnectedUserId == testUser.Id), "/remember saves memory");
 
     CommandResult mentionRememberResult = await commandRouter.TryHandleAsync(TextMessage("/remember@red_eye_ghost_bot User likes exact commands"), testUser, dbContext, CancellationToken.None);

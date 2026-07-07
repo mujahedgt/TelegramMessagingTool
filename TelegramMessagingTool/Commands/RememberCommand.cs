@@ -43,6 +43,6 @@ public sealed class RememberCommand : IBotCommand
         dbContext.Memories.Add(memory);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        return new CommandResult(true, $"Memory saved as #{memory.Id}.");
+        return new CommandResult(true, $"Memory saved as #{memory.Id}.", ReactionEmoji: "✅");
     }
 }

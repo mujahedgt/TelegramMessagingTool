@@ -42,7 +42,7 @@ public sealed class DenyCommand : IBotCommand
         }
 
         PendingActionDecision decision = await _pendingActionService.DenyAsync(dbContext, user, actionId, cancellationToken);
-        return new CommandResult(true, decision.Message);
+        return new CommandResult(true, decision.Message, ReactionEmoji: decision.Success ? "👎" : null);
     }
 
     private static bool TryParseActionId(string messageText, string commandName, out int actionId)

@@ -26,6 +26,7 @@ public sealed class TelegramUpdateHandler
     private readonly ConversationService _conversationService;
     private readonly CommandRouter _commandRouter;
     private readonly VoiceMessageProcessor _voiceMessageProcessor;
+    private readonly TelegramReactionService _reactionService;
     private readonly Action<string, string, string, ConsoleEventLevel> _writeConsoleEvent;
 
     public TelegramUpdateHandler(
@@ -38,6 +39,7 @@ public sealed class TelegramUpdateHandler
         ConversationService conversationService,
         CommandRouter commandRouter,
         VoiceMessageProcessor voiceMessageProcessor,
+        TelegramReactionService reactionService,
         Action<string, string, string, ConsoleEventLevel> writeConsoleEvent)
     {
         _settings = settings;
@@ -49,6 +51,7 @@ public sealed class TelegramUpdateHandler
         _conversationService = conversationService;
         _commandRouter = commandRouter;
         _voiceMessageProcessor = voiceMessageProcessor;
+        _reactionService = reactionService;
         _writeConsoleEvent = writeConsoleEvent;
     }
 
@@ -203,6 +206,8 @@ public sealed class TelegramUpdateHandler
                 {
                     await SendAudioFileAsync(bot, message, commandResult.AudioFile, commandResult.SendAudioAsVoice, cancellationToken);
                 }
+
+                await _reactionService.TrySendReactionAsync(bot, message.Chat.Id, message.MessageId, commandResult.ReactionEmoji, cancellationToken);
 
                 return;
             }

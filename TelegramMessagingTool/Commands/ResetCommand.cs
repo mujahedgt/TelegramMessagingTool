@@ -25,6 +25,6 @@ public sealed class ResetCommand : IBotCommand
             .Where(x => x.ConnectedUserId == user.Id)
             .ExecuteDeleteAsync(cancellationToken);
 
-        return new CommandResult(true, $"Conversation reset. Deleted {deleted} stored messages.");
+        return new CommandResult(true, $"Conversation reset. Deleted {deleted} stored messages.", ReactionEmoji: "🧹");
     }
 }

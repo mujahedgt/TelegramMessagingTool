@@ -8,4 +8,5 @@ public sealed record CommandResult(
     string? ReplyText,
     InlineKeyboardMarkup? ReplyMarkup = null,
     UploadedFile? AudioFile = null,
-    bool SendAudioAsVoice = false);
+    bool SendAudioAsVoice = false,
+    string? ReactionEmoji = null);

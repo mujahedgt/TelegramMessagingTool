@@ -57,7 +57,7 @@ Approved action #{decision.Action.Id}: {decision.Action.ToolName}
 
 {executionHeading}:
 {executionResult.Message}
-""");
+""", ReactionEmoji: "✅");
     }
 
     private static bool TryParseActionId(string messageText, string commandName, out int actionId)
