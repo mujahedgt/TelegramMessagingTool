@@ -41,6 +41,7 @@ public static class CommandRouterFactory
             new VoiceFilesCommand(),
             new TranscribeCommand(settings, documentStorage, audioTranscriptionService),
             new TranscriptInsightsCommand(documentStorage, transcriptInsightsService),
+            new TranscriptTasksCommand(documentStorage, transcriptInsightsService),
             new SpeakTextCommand(settings, documentStorage, textToSpeechService),
             new SendAudioCommand(documentStorage),
             new ReadFileCommand(documentStorage),

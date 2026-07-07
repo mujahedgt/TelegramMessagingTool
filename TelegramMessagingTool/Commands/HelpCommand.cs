@@ -40,6 +40,7 @@ TelegramMessagingTool Agent Commands
 /voicefiles - List saved sandboxed audio files
 /transcribe <id> - Transcribe a saved audio file when a trusted local provider is configured
 /transcriptinsights <id> - Summarize and extract tasks from a saved transcript document
+/transcripttasks <id> - Draft tasks and a suggested /plan command from a saved transcript
 /speaktext <text> - Generate TTS audio into the sandbox without sending it automatically
 /sendaudio <id> - Send a saved sandboxed audio file back to Telegram
 

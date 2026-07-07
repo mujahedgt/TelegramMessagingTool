@@ -229,6 +229,43 @@ static class DocumentTests
         AssertTrue(transcriptInsightsResult.ReplyText?.Contains("Voice summary", StringComparison.OrdinalIgnoreCase) == true, "/transcriptinsights returns voice summary output");
         AssertTrue(transcriptInsightsResult.ReplyText?.Contains("Tasks", StringComparison.OrdinalIgnoreCase) == true, "/transcriptinsights returns task extraction output");
         AssertEqual(ModelTaskKind.Voice, transcriptInsightsChatClient.ModelTaskKinds.Single(), "/transcriptinsights uses the voice model route");
+
+        var transcriptTasksChatClient = new ScriptedChatClient([
+            "Proposed title: Follow up on fixture transcript\nDraft task list:\n- Review the action item\nSuggested /plan command: /plan Follow up on fixture transcript action item\nMissing information: deadline"
+        ]);
+        var transcriptTasksCommand = new TranscriptTasksCommand(
+            documentStorage,
+            new TranscriptInsightsService(transcriptTasksChatClient));
+        CommandResult transcriptTasksResult = await transcriptTasksCommand.TryHandleAsync(
+            TextMessage($"/transcripttasks {savedTranscriptFile.Id}"),
+            testUser,
+            dbContext,
+            CancellationToken.None);
+        AssertTrue(transcriptTasksResult.Handled, "/transcripttasks is handled");
+        AssertTrue(transcriptTasksResult.ReplyText?.Contains("Proposed title", StringComparison.OrdinalIgnoreCase) == true, "/transcripttasks returns proposed title output");
+        AssertTrue(transcriptTasksResult.ReplyText?.Contains("Suggested /plan command", StringComparison.OrdinalIgnoreCase) == true, "/transcripttasks returns suggested plan command output");
+        AssertTrue(transcriptTasksResult.ReplyText?.Contains("No task was created automatically", StringComparison.OrdinalIgnoreCase) == true, "/transcripttasks makes draft-only behavior explicit");
+        AssertEqual(ModelTaskKind.Voice, transcriptTasksChatClient.ModelTaskKinds.Single(), "/transcripttasks uses the voice model route");
+        List<AgentTask> tasksAfterTranscriptDraft = await dbContext.AgentTasks
+            .Where(x => x.ConnectedUserId == testUser.Id)
+            .ToListAsync(CancellationToken.None);
+        AssertFalse(tasksAfterTranscriptDraft.Any(x => x.Goal.Contains("fixture transcript", StringComparison.OrdinalIgnoreCase)), "/transcripttasks does not create database tasks automatically");
+        CommandResult invalidTranscriptTasksResult = await transcriptTasksCommand.TryHandleAsync(
+            TextMessage("/transcripttasks nope"),
+            testUser,
+            dbContext,
+            CancellationToken.None);
+        AssertTrue(invalidTranscriptTasksResult.Handled, "/transcripttasks invalid input is handled");
+        AssertTrue(invalidTranscriptTasksResult.ReplyText?.Contains("Usage: /transcripttasks <transcript-file-id>") == true, "/transcripttasks validates transcript file id input");
+        CommandResult nonTranscriptTasksResult = await transcriptTasksCommand.TryHandleAsync(
+            TextMessage($"/transcripttasks {uploadedAudio.Id}"),
+            testUser,
+            dbContext,
+            CancellationToken.None);
+        AssertTrue(nonTranscriptTasksResult.Handled, "/transcripttasks handles non-transcript file ids");
+        AssertTrue(nonTranscriptTasksResult.ReplyText?.Contains("transcript", StringComparison.OrdinalIgnoreCase) == true, "/transcripttasks rejects non-transcript files clearly");
+        AssertFalse((await transcriptTasksCommand.TryHandleAsync(TextMessage("/transcripttasksx 1"), testUser, dbContext, CancellationToken.None)).Handled, "/transcripttasksx is not treated as /transcripttasks");
+
         CommandResult nonTranscriptInsightsResult = await transcriptInsightsCommand.TryHandleAsync(
             TextMessage($"/transcriptinsights {uploadedAudio.Id}"),
             testUser,

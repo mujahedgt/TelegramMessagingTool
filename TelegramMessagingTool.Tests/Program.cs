@@ -1233,6 +1233,7 @@ await using (var dbContext = new TelegramDbContext())
         new VoiceFilesCommand(),
         new TranscribeCommand(adminTestSettings, documentStorage),
         new TranscriptInsightsCommand(documentStorage, new TranscriptInsightsService(new ScriptedChatClient(["Voice summary: command router transcript insight fixture."]))),
+        new TranscriptTasksCommand(documentStorage, new TranscriptInsightsService(new ScriptedChatClient(["Proposed title: command router transcript task fixture\nDraft task list:\n- Follow up\nSuggested /plan command: /plan Follow up\nMissing information: none"]))),
         new SpeakTextCommand(adminTestSettings, documentStorage),
         new SendAudioCommand(documentStorage),
         new ReadFileCommand(documentStorage),

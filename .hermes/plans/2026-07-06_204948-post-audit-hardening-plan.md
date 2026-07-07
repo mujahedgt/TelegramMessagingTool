@@ -376,7 +376,7 @@ git commit -m "Add explicit audio file delivery command"
 
 ### Task 12.2: Add transcript-to-task draft flow
 
-**Objective:** Convert transcribed voice notes into draft task plans without executing changes.
+**Status:** Completed — `/transcripttasks <transcript-file-id>` validates saved transcript ownership, uses the voice model route to draft a proposed title, task list, suggested `/plan ...` command, and missing information, and explicitly creates no database task automatically.
 
 **Files:**
 - Create: `TelegramMessagingTool/Commands/TranscriptTaskDraftCommand.cs`
