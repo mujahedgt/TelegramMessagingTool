@@ -90,6 +90,7 @@ Configuration is read from environment variables.
 | `TEXT_TO_SPEECH_TIMEOUT_SECONDS` | No | `120` | Local TTS timeout, clamped from `5` to `300` seconds. |
 | `TEXT_TO_SPEECH_OUTPUT_EXTENSION` | No | `.mp3` | Expected provider output extension: `.mp3`, `.wav`, `.m4a`, `.ogg`, `.oga`, `.opus`, or `.flac`. Use `.ogg`/`.oga`/`.opus` from an Opus-capable provider when you want Telegram voice-note bubbles; other audio formats are sent as normal audio files for voice-message replies. |
 | `ENABLE_TELEGRAM_TYPING_INDICATOR` | No | `false` | If true, normal Telegram chat messages send best-effort `typing...` chat actions while the local agent is generating a reply. Slash commands, file commands, document handling, and voice handling are not wrapped. This is the safe first rollout step before streamed responses. |
+| `ENABLE_STREAMING_RESPONSES` | No | `false` | Reserved rollout flag for future Telegram edit-in-place streamed responses. Current implementation includes Ollama streaming parsing/client support, but normal runtime replies still use the non-streaming path until the streaming response service is enabled in a later phase. |
 | `ENABLE_SAFE_COMMAND_TOOLS` | No | `false` | If true, registers fixed safe command tools: `git_status`, `git_diff`, `git_log_recent`, `run_dotnet_tests`, `publish_release`, and `restart_latest_bot`. No arbitrary shell access is exposed. `run_dotnet_tests` accepts only `{"target":"helper-tests"}` and runs the helper test project. `publish_release` and `restart_latest_bot` only create high-risk pending approval requests; they do not execute release/restart directly. |
 | `SAFE_COMMAND_PROJECT_ROOT` | No | current working directory | Project root used by safe command tools and repo write approval tools. Commands run with fixed executable/argument lists under this directory. |
 | `ENABLE_REPO_WRITE_TOOLS` | No | `false` | If true, registers approval-backed repository write tools such as `repo_replace_text`. These tools require admin use, create pending actions first, validate paths under `SAFE_COMMAND_PROJECT_ROOT`, and execute only after `/approve`. |
@@ -156,6 +157,7 @@ export ENABLE_TEXT_TO_SPEECH='false'
 export TEXT_TO_SPEECH_TIMEOUT_SECONDS='120'
 export TEXT_TO_SPEECH_OUTPUT_EXTENSION='.mp3'
 export ENABLE_TELEGRAM_TYPING_INDICATOR='false'
+export ENABLE_STREAMING_RESPONSES='false'
 export ENABLE_SAFE_COMMAND_TOOLS='false'
 export SAFE_COMMAND_PROJECT_ROOT='/c/temp/TelegramMessagingTool'
 export ENABLE_REPO_WRITE_TOOLS='false'

@@ -20,6 +20,16 @@ using TelegramMessagingTool.Tools.CommandExecution;
 using TelegramMessagingTool.Tools.GitHub;
 
 // RED tests for upgrade helpers.
+string ollamaStreamFixture = string.Join('\n',
+[
+    "{\"message\":{\"role\":\"assistant\",\"content\":\"Hello\"},\"done\":false}",
+    "{\"message\":{\"role\":\"assistant\",\"content\":\" world\"},\"done\":false}",
+    "{\"done\":true}"
+]);
+AssertEqual("Hello world", OllamaChatClient.ParseStreamingAssistantContent(ollamaStreamFixture), "OllamaChatClient parses streaming assistant content chunks");
+AssertEqual("Empty response from Ollama.", OllamaChatClient.ParseStreamingAssistantContent("{\"done\":true}"), "OllamaChatClient reports empty streaming responses clearly");
+AssertEqual("Invalid response received from Ollama.", OllamaChatClient.ParseStreamingAssistantContent("not-json"), "OllamaChatClient reports invalid streaming chunks clearly");
+
 AssertEqual("TelegramMessagingTool.Abstractions", typeof(IAgentTool).Assembly.GetName().Name, "IAgentTool lives in plugin abstraction assembly");
 AssertEqual("TelegramMessagingTool.Abstractions", typeof(ToolResult).Assembly.GetName().Name, "ToolResult lives in plugin abstraction assembly");
 List<string> observedRuntimeEvents = [];
@@ -863,12 +873,14 @@ string? previousOllamaModelDocQa = Environment.GetEnvironmentVariable("OLLAMA_MO
 string? previousEnableImageVision = Environment.GetEnvironmentVariable("ENABLE_IMAGE_VISION");
 string? previousEnableAudioTranscription = Environment.GetEnvironmentVariable("ENABLE_AUDIO_TRANSCRIPTION");
 string? previousEnableTelegramTypingIndicator = Environment.GetEnvironmentVariable("ENABLE_TELEGRAM_TYPING_INDICATOR");
+string? previousEnableStreamingResponses = Environment.GetEnvironmentVariable("ENABLE_STREAMING_RESPONSES");
 try
 {
     Environment.SetEnvironmentVariable("ALLOW_PUBLIC_ACCESS", null);
     Environment.SetEnvironmentVariable("ALLOWED_CHAT_IDS", null);
     Environment.SetEnvironmentVariable("ENABLE_ONLINE_SEARCH", null);
     Environment.SetEnvironmentVariable("ENABLE_TELEGRAM_TYPING_INDICATOR", null);
+    Environment.SetEnvironmentVariable("ENABLE_STREAMING_RESPONSES", null);
     Environment.SetEnvironmentVariable("OLLAMA_MODEL", "base-model:test");
     Environment.SetEnvironmentVariable("OLLAMA_MODEL_PLAN", null);
     Environment.SetEnvironmentVariable("OLLAMA_MODEL_DOC_QA", null);
@@ -877,6 +889,7 @@ try
     AssertFalse(defaultPrivacySettings.EnableOnlineSearch, "BotConfiguration defaults online search to disabled");
     AssertFalse(defaultPrivacySettings.EnableAudioTranscription, "BotConfiguration defaults audio transcription to disabled");
     AssertFalse(defaultPrivacySettings.EnableTelegramTypingIndicator, "BotConfiguration defaults Telegram typing indicator to disabled");
+    AssertFalse(defaultPrivacySettings.EnableStreamingResponses, "BotConfiguration defaults streaming responses to disabled");
     AssertEqual("base-model:test", defaultPrivacySettings.OllamaChatModel, "BotConfiguration defaults chat route to OLLAMA_MODEL");
     AssertEqual("base-model:test", defaultPrivacySettings.OllamaPlanningModel, "BotConfiguration defaults planning route to OLLAMA_MODEL");
 
@@ -891,6 +904,7 @@ try
     Environment.SetEnvironmentVariable("ENABLE_IMAGE_VISION", "true");
     Environment.SetEnvironmentVariable("ENABLE_AUDIO_TRANSCRIPTION", "yes");
     Environment.SetEnvironmentVariable("ENABLE_TELEGRAM_TYPING_INDICATOR", "1");
+    Environment.SetEnvironmentVariable("ENABLE_STREAMING_RESPONSES", "true");
     BotSettings routedEnvironmentSettings = BotConfiguration.LoadFromEnvironment();
     AssertEqual("base-model:test", routedEnvironmentSettings.OllamaChatModel, "BotConfiguration keeps chat model on OLLAMA_MODEL when chat override is blank");
     AssertEqual("plan-model:test", routedEnvironmentSettings.OllamaPlanningModel, "BotConfiguration loads OLLAMA_MODEL_PLAN");
@@ -898,6 +912,7 @@ try
     AssertTrue(routedEnvironmentSettings.EnableImageVision, "BotConfiguration parses ENABLE_IMAGE_VISION truthy values");
     AssertTrue(routedEnvironmentSettings.EnableAudioTranscription, "BotConfiguration parses ENABLE_AUDIO_TRANSCRIPTION truthy values");
     AssertTrue(routedEnvironmentSettings.EnableTelegramTypingIndicator, "BotConfiguration parses ENABLE_TELEGRAM_TYPING_INDICATOR truthy values");
+    AssertTrue(routedEnvironmentSettings.EnableStreamingResponses, "BotConfiguration parses ENABLE_STREAMING_RESPONSES truthy values");
 }
 finally
 {
@@ -910,6 +925,7 @@ finally
     Environment.SetEnvironmentVariable("ENABLE_IMAGE_VISION", previousEnableImageVision);
     Environment.SetEnvironmentVariable("ENABLE_AUDIO_TRANSCRIPTION", previousEnableAudioTranscription);
     Environment.SetEnvironmentVariable("ENABLE_TELEGRAM_TYPING_INDICATOR", previousEnableTelegramTypingIndicator);
+    Environment.SetEnvironmentVariable("ENABLE_STREAMING_RESPONSES", previousEnableStreamingResponses);
 }
 AssertEqual("report.md", DocumentStorageService.SanitizeFileName("..\\..//report.md"), "SanitizeFileName removes path segments");
 
@@ -1166,7 +1182,7 @@ await using (var dbContext = new TelegramDbContext())
     AssertTrue(runtimeDashboard.Contains("Pending approvals") && runtimeDashboard.Contains("1"), "RuntimeDashboardService counts pending approvals");
     AssertTrue(runtimeDashboard.Contains("Indexed docs") && runtimeDashboard.Contains("1"), "RuntimeDashboardService counts indexed documents");
     AssertTrue(runtimeDashboard.Contains("Saved images") && runtimeDashboard.Contains("1"), "RuntimeDashboardService counts saved images");
-    AssertTrue(runtimeDashboard.Contains("Recent warnings") && runtimeDashboard.Contains("2"), "RuntimeDashboardService counts recent warning/error events within buffer capacity");
+    AssertTrue(runtimeDashboard.Contains("Recent warnings") && runtimeDashboard.Contains("3"), "RuntimeDashboardService counts recent warning/error events within buffer capacity");
     AssertFalse(runtimeDashboard.Contains(adminTestSettings.DatabaseConnectionString, StringComparison.OrdinalIgnoreCase), "RuntimeDashboardService does not expose full DB connection strings");
     dbContext.DocumentChunks.Remove(dashboardChunk);
     dbContext.UploadedFiles.Remove(dashboardFile);

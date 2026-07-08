@@ -41,6 +41,7 @@ $settings = [ordered]@{
     'ENABLE_AUDIO_TRANSCRIPTION' = 'false'
     'ENABLE_TEXT_TO_SPEECH' = 'false'
     'ENABLE_TELEGRAM_TYPING_INDICATOR' = 'false'
+    'ENABLE_STREAMING_RESPONSES' = 'false'
     'SAFE_COMMAND_PROJECT_ROOT' = $fullProjectRoot
     'PLUGIN_DIRECTORY' = $pluginDirectory
     'ENABLE_GITHUB_TOOLS' = 'false'

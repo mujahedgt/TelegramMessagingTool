@@ -471,7 +471,8 @@ Saved images: 4
 
 ## Status
 
-- Task 6.1 is complete: normal Telegram chat messages can send best-effort `typing...` chat actions while the local agent is generating a reply when `ENABLE_TELEGRAM_TYPING_INDICATOR=true`. Commands, file/document handling, and voice handling remain unwrapped. True streamed response chunks and edit-in-place behavior are still pending.
+- Task 6.1 is complete: normal Telegram chat messages can send best-effort `typing...` chat actions while the local agent is generating a reply when `ENABLE_TELEGRAM_TYPING_INDICATOR=true`. Commands, file/document handling, and voice handling remain unwrapped.
+- Task 6.2 is complete: `OllamaChatClient` can parse newline-delimited Ollama streaming chunks and exposes a streaming client method with per-delta callbacks. Runtime Telegram replies still use the non-streaming path until the streaming response service/edit-in-place rollout is added.
 
 ## Goal
 
