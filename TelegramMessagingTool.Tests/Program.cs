@@ -73,7 +73,9 @@ AssertEqual(0, deletedVectorResults.Count, "LocalJsonVectorStore deletes vectors
 
 AssertEqual("embedding_json", BotConfiguration.NormalizeVectorStoreProvider(null), "Vector store provider defaults to embedding_json");
 AssertEqual("local_json", BotConfiguration.NormalizeVectorStoreProvider(" LOCAL_JSON "), "Vector store provider accepts local_json");
-AssertEqual("embedding_json", BotConfiguration.NormalizeVectorStoreProvider("qdrant"), "Vector store provider keeps qdrant reserved until implemented");
+AssertEqual("qdrant", BotConfiguration.NormalizeVectorStoreProvider(" QDRANT "), "Vector store provider accepts qdrant");
+AssertEqual("http://localhost:6333", BotConfiguration.NormalizeQdrantUrl(null), "Qdrant URL defaults to localhost");
+AssertEqual("telegram_documents", BotConfiguration.NormalizeQdrantCollection(null), "Qdrant collection defaults to telegram_documents");
 string defaultVectorStorePath = BotConfiguration.NormalizeVectorStorePath(null, "C:\\BotRoot");
 AssertTrue(defaultVectorStorePath.EndsWith(Path.Combine("VectorStore", "vectors.json"), StringComparison.OrdinalIgnoreCase), "Vector store path defaults under VectorStore/vectors.json");
 VectorStoreFactoryResult disabledVectorStore = VectorStoreFactory.Create("embedding_json", vectorStorePath);
@@ -82,6 +84,22 @@ AssertTrue(disabledVectorStore.VectorStore is null, "VectorStoreFactory returns 
 VectorStoreFactoryResult localJsonVectorStore = VectorStoreFactory.Create("local_json", vectorStorePath);
 AssertEqual("local_json", localJsonVectorStore.Provider, "VectorStoreFactory records local_json provider");
 AssertTrue(localJsonVectorStore.VectorStore is LocalJsonVectorStore, "VectorStoreFactory creates LocalJsonVectorStore for local_json provider");
+var qdrantHandler = new FakeHttpMessageHandler("{\"result\":{\"points\":[]}}");
+using var qdrantHttpClient = new HttpClient(qdrantHandler);
+VectorStoreFactoryResult qdrantVectorStore = VectorStoreFactory.Create("qdrant", vectorStorePath, "http://qdrant.local:6333", "telegram_documents", qdrantHttpClient);
+AssertEqual("qdrant", qdrantVectorStore.Provider, "VectorStoreFactory records qdrant provider");
+AssertTrue(qdrantVectorStore.VectorStore is QdrantVectorStore, "VectorStoreFactory creates QdrantVectorStore for qdrant provider");
+await qdrantVectorStore.VectorStore!.UpsertAsync(new DocumentVector(
+    Id: "chunk-99",
+    ChatId: 101,
+    ConnectedUserId: 1,
+    UploadedFileId: 7,
+    ChunkId: 99,
+    ChunkNumber: 1,
+    OriginalFileName: "qdrant.txt",
+    Text: "qdrant content",
+    Embedding: [0.1f, 0.2f]), CancellationToken.None);
+AssertTrue(qdrantHandler.LastRequestUri?.ToString().Contains("/collections/telegram_documents/points", StringComparison.OrdinalIgnoreCase) == true, "QdrantVectorStore upserts to collection points endpoint");
 
 var vectorStatusCommand = new VectorStatusCommand(TestSettings() with
 {

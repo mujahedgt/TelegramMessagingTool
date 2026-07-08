@@ -67,6 +67,10 @@ public sealed record BotSettings(
 
     public string VectorStorePath { get; init; } = string.Empty;
 
+    public string QdrantUrl { get; init; } = "http://localhost:6333";
+
+    public string QdrantCollection { get; init; } = "telegram_documents";
+
     public string ImageDescriptionPrompt { get; init; } = BotConfiguration.DefaultImageDescriptionPrompt;
 
     public GitHubSettings GitHub { get; init; } = GitHubSettings.Disabled;
@@ -141,6 +145,8 @@ public static class BotConfiguration
             EnableRepoWriteTools = IsEnabled(Environment.GetEnvironmentVariable("ENABLE_REPO_WRITE_TOOLS"), defaultValue: false),
             VectorStoreProvider = NormalizeVectorStoreProvider(Environment.GetEnvironmentVariable("VECTOR_STORE_PROVIDER")),
             VectorStorePath = NormalizeVectorStorePath(Environment.GetEnvironmentVariable("VECTOR_STORE_PATH"), Environment.CurrentDirectory),
+            QdrantUrl = NormalizeQdrantUrl(Environment.GetEnvironmentVariable("QDRANT_URL")),
+            QdrantCollection = NormalizeQdrantCollection(Environment.GetEnvironmentVariable("QDRANT_COLLECTION")),
             ImageDescriptionPrompt = NormalizeImageDescriptionPrompt(Environment.GetEnvironmentVariable("IMAGE_DESCRIPTION_PROMPT")),
             GitHub = GitHubSettings.LoadFromEnvironment()
         };
@@ -154,9 +160,34 @@ public static class BotConfiguration
         }
 
         string normalized = value.Trim().ToLowerInvariant();
-        return normalized is "embedding_json" or "local_json"
+        return normalized is "embedding_json" or "local_json" or "qdrant"
             ? normalized
             : "embedding_json";
+    }
+
+    public static string NormalizeQdrantUrl(string? value)
+    {
+        string normalized = string.IsNullOrWhiteSpace(value)
+            ? "http://localhost:6333"
+            : value.Trim().TrimEnd('/');
+
+        return Uri.TryCreate(normalized, UriKind.Absolute, out Uri? uri)
+            && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
+            ? normalized
+            : "http://localhost:6333";
+    }
+
+    public static string NormalizeQdrantCollection(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "telegram_documents";
+        }
+
+        string normalized = value.Trim();
+        return normalized.All(static c => char.IsLetterOrDigit(c) || c is '_' or '-')
+            ? normalized
+            : "telegram_documents";
     }
 
     public static string NormalizeVectorStorePath(string? value, string appRoot)

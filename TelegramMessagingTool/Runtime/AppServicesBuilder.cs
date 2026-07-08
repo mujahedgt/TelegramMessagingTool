@@ -59,7 +59,12 @@ public static class AppServicesBuilder
         var taskReminderService = new TaskReminderService(new TelegramTaskReminderSender(botClient));
         var ollamaClient = new OllamaChatClient(qwenClient, settings);
         var ollamaEmbeddingClient = new OllamaEmbeddingClient(embeddingClient, settings);
-        VectorStoreFactoryResult vectorStoreFactoryResult = VectorStoreFactory.Create(settings.VectorStoreProvider, settings.VectorStorePath);
+        VectorStoreFactoryResult vectorStoreFactoryResult = VectorStoreFactory.Create(
+            settings.VectorStoreProvider,
+            settings.VectorStorePath,
+            settings.QdrantUrl,
+            settings.QdrantCollection,
+            embeddingClient);
         IVectorStore? vectorStore = vectorStoreFactoryResult.VectorStore;
         ITextEmbeddingService? retrievalEmbeddingService = settings.EnableDocumentEmbeddings ? ollamaEmbeddingClient : null;
         var documentStorage = new DocumentStorageService(Path.Combine(Environment.CurrentDirectory, "UserFiles"));
