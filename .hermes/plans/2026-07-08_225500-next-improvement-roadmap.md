@@ -4,7 +4,7 @@
 
 1. Fix GitHub push credentials. Status: blocked until a usable token/SSH key is configured.
 2. Add production vector provider: Qdrant. Status: foundation started.
-3. Add vector maintenance commands: `/vectorsync`, `/vectorclear`, `/vectorrepair`.
+3. Add vector maintenance commands: `/vectorsync`, `/vectorclear`, `/vectorrepair`. Status: complete.
 4. Add admin-only bot self-update command.
 5. Improve runtime health and diagnostics.
 6. Improve voice/image agent harnesses.
@@ -16,7 +16,7 @@
 
 1. GitHub push credentials. Checked HTTPS, SSH, and environment token paths.
 2. Qdrant provider foundation. Added provider config, factory path, and HTTP upsert/search/delete store foundation.
-3. Vector maintenance commands.
+3. Vector maintenance commands. Added `/vectorsync`, `/vectorclear`, and `/vectorrepair` with tests.
 4. Runtime health.
 5. Voice/image harnesses.
 6. Backup/export.

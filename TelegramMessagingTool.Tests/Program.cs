@@ -114,6 +114,31 @@ CommandResult vectorStatusResult = await vectorStatusCommand.TryHandleAsync(
 AssertTrue(vectorStatusResult.Handled, "/vectorstatus is handled");
 AssertTrue(vectorStatusResult.ReplyText?.Contains("local_json", StringComparison.OrdinalIgnoreCase) == true, "/vectorstatus reports provider");
 
+var vectorMaintenanceService = new VectorMaintenanceService(
+    new DocumentIndexingService(new DocumentStorageService(Path.Combine(Path.GetTempPath(), $"VectorMaintenance_{Guid.NewGuid():N}"))),
+    new DocumentEmbeddingService(new DeterministicEmbeddingService(), "test-model"),
+    localVectorStore);
+await using TelegramDbContext vectorCommandDbContext = EmptyDbContext();
+CommandResult vectorSyncNoFilesResult = await new VectorSyncCommand(vectorMaintenanceService).TryHandleAsync(
+    TextMessage("/vectorsync"),
+    new ConnectedUser { Id = 1, ChatId = 101 },
+    vectorCommandDbContext,
+    CancellationToken.None);
+AssertTrue(vectorSyncNoFilesResult.Handled, "/vectorsync is handled");
+AssertTrue(vectorSyncNoFilesResult.ReplyText?.Contains("No saved files", StringComparison.OrdinalIgnoreCase) == true, "/vectorsync reports no files");
+CommandResult vectorClearResult = await new VectorClearCommand(vectorMaintenanceService).TryHandleAsync(
+    TextMessage("/vectorclear"),
+    new ConnectedUser { Id = 1, ChatId = 101 },
+    vectorCommandDbContext,
+    CancellationToken.None);
+AssertTrue(vectorClearResult.Handled, "/vectorclear is handled");
+CommandResult vectorRepairNoFilesResult = await new VectorRepairCommand(vectorMaintenanceService).TryHandleAsync(
+    TextMessage("/vectorrepair"),
+    new ConnectedUser { Id = 1, ChatId = 101 },
+    vectorCommandDbContext,
+    CancellationToken.None);
+AssertTrue(vectorRepairNoFilesResult.Handled, "/vectorrepair is handled");
+
 var streamingClient = new ScriptedStreamingChatClient("Hello world", ["Hello", " world"]);
 var streamingFallbackClient = new ScriptedChatClient(["fallback response"]);
 var streamingResponseService = new StreamingResponseService(streamingClient, streamingFallbackClient);
@@ -2646,6 +2671,17 @@ static BotSettings TestSettings()
         SafeCommandProjectRoot: Environment.CurrentDirectory,
         EnablePlugins: false,
         PluginDirectory: Path.Combine(Environment.CurrentDirectory, "plugins"));
+}
+
+static TelegramDbContext EmptyDbContext()
+{
+    string databaseName = $"TelegramMessagingTool_VectorCommand_{Guid.NewGuid():N}";
+    string connection = $@"Server=(localdb)\MSSQLLocalDB;Database={databaseName};Trusted_Connection=True;TrustServerCertificate=True";
+    Environment.SetEnvironmentVariable("TELEGRAM_DB_CONNECTION", connection);
+    var dbContext = new TelegramDbContext();
+    dbContext.Database.EnsureDeleted();
+    dbContext.Database.EnsureCreated();
+    return dbContext;
 }
 
 sealed class DeterministicEmbeddingService : ITextEmbeddingService

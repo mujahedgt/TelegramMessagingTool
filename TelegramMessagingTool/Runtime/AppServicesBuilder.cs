@@ -79,6 +79,7 @@ public static class AppServicesBuilder
         var taskCallbackService = new TaskCallbackService(agentTaskService, settings, observability);
         var documentIndexingService = new DocumentIndexingService(documentStorage);
         var documentEmbeddingService = new DocumentEmbeddingService(ollamaEmbeddingClient, settings.OllamaEmbeddingModel, vectorStore);
+        var vectorMaintenanceService = new VectorMaintenanceService(documentIndexingService, documentEmbeddingService, vectorStore);
         var documentRetrievalService = new DocumentRetrievalService(retrievalEmbeddingService, vectorStore);
         var documentQuestionAnsweringService = new DocumentQuestionAnsweringService(ollamaClient);
         var documentSummaryService = new DocumentSummaryService(ollamaClient);
@@ -129,6 +130,7 @@ public static class AppServicesBuilder
             documentSummaryService,
             transcriptInsightsService,
             documentEmbeddingService,
+            vectorMaintenanceService,
             imageDescriptionService,
             audioTranscriptionService,
             textToSpeechService,

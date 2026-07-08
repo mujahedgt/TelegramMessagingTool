@@ -1,5 +1,6 @@
 using TelegramMessagingTool.Commands;
 using TelegramMessagingTool.Services;
+using TelegramMessagingTool.Services.Vector;
 using TelegramMessagingTool.Tools;
 
 namespace TelegramMessagingTool.Runtime;
@@ -20,6 +21,7 @@ public static class CommandRouterFactory
         DocumentSummaryService documentSummaryService,
         TranscriptInsightsService transcriptInsightsService,
         DocumentEmbeddingService documentEmbeddingService,
+        VectorMaintenanceService vectorMaintenanceService,
         IImageDescriptionService imageDescriptionService,
         IAudioTranscriptionService? audioTranscriptionService = null,
         ITextToSpeechService? textToSpeechService = null,
@@ -65,6 +67,9 @@ public static class CommandRouterFactory
             new EmbedDocsCommand(documentIndexingService, documentEmbeddingService),
             new ReembedDocsCommand(documentIndexingService, documentEmbeddingService),
             new VectorStatusCommand(settings),
+            new VectorSyncCommand(vectorMaintenanceService),
+            new VectorClearCommand(vectorMaintenanceService),
+            new VectorRepairCommand(vectorMaintenanceService),
             new ToolsCommand(toolRegistry),
             new HarnessesCommand(settings),
             new PluginsCommand(settings),
