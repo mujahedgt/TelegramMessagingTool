@@ -8,7 +8,7 @@
 4. Add admin-only bot self-update command.
 5. Improve runtime health and diagnostics. Status: complete.
 6. Improve voice/image agent harnesses. Status: complete.
-7. Add backup/export tools.
+7. Add backup/export tools. Status: complete.
 8. Run final hardening pass.
 9. Add better reasoning features.
 
@@ -19,7 +19,7 @@
 3. Vector maintenance commands. Added `/vectorsync`, `/vectorclear`, and `/vectorrepair` with tests.
 4. Runtime health. Added compact `/health` diagnostics for vector/Qdrant, media providers, reasoning/runtime flags, and GitHub push readiness.
 5. Voice/image harnesses. Added readiness status, provider gates, command coverage, and next safe command candidates to `/harnesses`.
-6. Backup/export.
+6. Backup/export. Added `/exportdata [json]` for current chat/user data backups with secret-safe metadata and attachment delivery.
 7. Self-update.
 8. Better reasoning.
 9. Hardening/release.

@@ -51,6 +51,7 @@ public static class CommandRouterFactory
             new SpeakTextCommand(settings, documentStorage, textToSpeechService),
             new SendAudioCommand(documentStorage),
             new ExportChatCommand(documentStorage),
+            new ExportDataCommand(new BackupExportService(documentStorage)),
             new ReadFileCommand(documentStorage),
             new CreateFileCommand(documentStorage),
             new ImportFilesCommand(importDirectory, documentStorage, settings),
