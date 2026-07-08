@@ -2285,6 +2285,15 @@ diff --git a/../outside.cs b/../outside.cs
     AssertTrue(healthMentionResult.Handled, "/health@bot is handled");
     AssertFalse((await commandRouter.TryHandleAsync(TextMessage("/healthx"), testUser, dbContext, CancellationToken.None)).Handled, "/healthx is not treated as /health");
 
+    CommandResult harnessesResult = await commandRouter.TryHandleAsync(TextMessage("/harnesses"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(harnessesResult.Handled, "/harnesses is handled");
+    AssertTrue(harnessesResult.ReplyText?.Contains("Readiness:", StringComparison.OrdinalIgnoreCase) == true, "/harnesses reports readiness per harness");
+    AssertTrue(harnessesResult.ReplyText?.Contains("Provider gates:", StringComparison.OrdinalIgnoreCase) == true, "/harnesses reports provider gates per harness");
+    AssertTrue(harnessesResult.ReplyText?.Contains("Command coverage:", StringComparison.OrdinalIgnoreCase) == true, "/harnesses reports implemented command coverage");
+    AssertTrue(harnessesResult.ReplyText?.Contains("Next safe commands:", StringComparison.OrdinalIgnoreCase) == true, "/harnesses reports next safe command roadmap");
+    AssertFalse(harnessesResult.ReplyText?.Contains("test-token", StringComparison.OrdinalIgnoreCase) == true, "/harnesses does not render bot token");
+    AssertFalse((await commandRouter.TryHandleAsync(TextMessage("/harnessesx"), testUser, dbContext, CancellationToken.None)).Handled, "/harnessesx is not treated as /harnesses");
+
     CommandResult errorsResult = await commandRouter.TryHandleAsync(TextMessage("/errors 2"), testUser, dbContext, CancellationToken.None);
     AssertTrue(errorsResult.Handled, "/errors is handled");
     AssertTrue(errorsResult.ReplyText?.Contains("Recent runtime warnings/errors", StringComparison.OrdinalIgnoreCase) == true, "/errors reports heading");

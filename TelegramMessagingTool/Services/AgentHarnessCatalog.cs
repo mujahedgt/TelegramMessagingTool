@@ -97,6 +97,14 @@ public static class AgentHarnessCatalog
             builder.AppendLine();
             builder.AppendLine($"## {harness.Name} ({harness.Status})");
             builder.AppendLine(harness.Purpose);
+            if (settings is not null)
+            {
+                builder.AppendLine($"Readiness: {RenderReadiness(harness.Name, settings)}");
+                AppendList(builder, "Provider gates", RenderProviderGates(harness.Name, settings));
+                AppendList(builder, "Command coverage", RenderCommandCoverage(harness.Name));
+                AppendList(builder, "Next safe commands", RenderNextSafeCommands(harness.Name));
+            }
+
             AppendList(builder, "Implemented gates", harness.ImplementedGates);
             AppendList(builder, "Later gated work", harness.LaterGatedWork);
             AppendList(builder, "Safety rules", harness.SafetyRules);
@@ -112,5 +120,85 @@ public static class AgentHarnessCatalog
         {
             builder.AppendLine($"- {value}");
         }
+    }
+
+    private static string RenderReadiness(string harnessName, BotSettings settings)
+    {
+        if (string.Equals(harnessName, "image_agent", StringComparison.OrdinalIgnoreCase))
+        {
+            return settings.EnableImageVision
+                ? "ready for sandboxed image description"
+                : "metadata-only; enable ENABLE_IMAGE_VISION for local image understanding";
+        }
+
+        if (string.Equals(harnessName, "voice_agent", StringComparison.OrdinalIgnoreCase))
+        {
+            bool transcriptionReady = settings.EnableAudioTranscription && !string.IsNullOrWhiteSpace(settings.AudioTranscriptionCommand);
+            bool ttsReady = settings.EnableTextToSpeech && !string.IsNullOrWhiteSpace(settings.TextToSpeechCommand);
+            return (transcriptionReady, ttsReady) switch
+            {
+                (true, true) => "ready for sandboxed transcription and stored TTS output",
+                (true, false) => "transcription ready; TTS blocked by provider gate",
+                (false, true) => "TTS ready; transcription blocked by provider gate",
+                _ => "file listing only; enable trusted local STT/TTS providers for voice workflows"
+            };
+        }
+
+        return "unknown harness";
+    }
+
+    private static IReadOnlyList<string> RenderProviderGates(string harnessName, BotSettings settings)
+    {
+        if (string.Equals(harnessName, "image_agent", StringComparison.OrdinalIgnoreCase))
+        {
+            return
+            [
+                $"ENABLE_IMAGE_VISION={(settings.EnableImageVision ? "true" : "false")}",
+                $"OLLAMA_MODEL_IMAGE={settings.OllamaImageModel}",
+                $"IMAGE_DESCRIPTION_PROMPT={(settings.ImageDescriptionPrompt == BotConfiguration.DefaultImageDescriptionPrompt ? "default" : "custom")}"
+            ];
+        }
+
+        if (string.Equals(harnessName, "voice_agent", StringComparison.OrdinalIgnoreCase))
+        {
+            return
+            [
+                $"ENABLE_AUDIO_TRANSCRIPTION={(settings.EnableAudioTranscription ? "true" : "false")}; provider={(string.IsNullOrWhiteSpace(settings.AudioTranscriptionCommand) ? "missing" : "configured")}",
+                $"ENABLE_TEXT_TO_SPEECH={(settings.EnableTextToSpeech ? "true" : "false")}; provider={(string.IsNullOrWhiteSpace(settings.TextToSpeechCommand) ? "missing" : "configured")}",
+                $"OLLAMA_MODEL_VOICE={settings.OllamaVoiceModel}"
+            ];
+        }
+
+        return ["No provider gates defined."];
+    }
+
+    private static IReadOnlyList<string> RenderCommandCoverage(string harnessName)
+    {
+        if (string.Equals(harnessName, "image_agent", StringComparison.OrdinalIgnoreCase))
+        {
+            return ["/images", "/describeimage <id>"];
+        }
+
+        if (string.Equals(harnessName, "voice_agent", StringComparison.OrdinalIgnoreCase))
+        {
+            return ["/voicefiles", "/transcribe <id>", "/transcriptinsights <id>", "/transcripttasks <id>", "/speaktext <text>", "/sendaudio <id>"];
+        }
+
+        return ["No commands registered."];
+    }
+
+    private static IReadOnlyList<string> RenderNextSafeCommands(string harnessName)
+    {
+        if (string.Equals(harnessName, "image_agent", StringComparison.OrdinalIgnoreCase))
+        {
+            return ["/ocrimage <id>", "/imageprompt <idea>"];
+        }
+
+        if (string.Equals(harnessName, "voice_agent", StringComparison.OrdinalIgnoreCase))
+        {
+            return ["/voiceplan <transcript-file-id>", "/voicebrief <audio-file-id>"];
+        }
+
+        return ["No next command candidates defined."];
     }
 }

@@ -39,7 +39,7 @@ TelegramMessagingTool is a C#/.NET console application that connects a Telegram 
 - Approval commands: `/pending`, `/approve <id>`, `/deny <id>`, `/action <id>`, and `/actions [count]` with structured previews/history showing exact risk, target file/repository, diff or git command summaries, GitHub issue/comment targets, and compact decision notes without dumping raw edit payloads
 - Repo safety scanning before approved commits, pushes, and releases: blocks token-like diff additions, `.env`/secret config files, local DB/certificate/backup binaries, release outputs, and generated/runtime paths
 - Task planner commands: `/plan <goal>`, `/tasks`, `/task <id>`, `/done <task-id> [step-number]`, and `/cancel <task-id>`
-- `/harnesses` shows the `image_agent` and `voice_agent` safety roadmap plus current feature-gate readiness for image vision, audio transcription, transcript insights, and TTS output storage
+- `/harnesses` shows the `image_agent` and `voice_agent` safety roadmap, readiness status, provider gates, implemented command coverage, and next safe command candidates for image/voice workflows
 - Plugin manifest inspection and trusted plugin loading via `/plugins`/`/tools`; manifests show paths and entry assembly presence, and enabled trusted DLLs can be loaded from `PLUGIN_DIRECTORY` when `ENABLE_PLUGINS=true`
 - Plugin authoring starter docs/templates in `docs/plugin-authoring.md` and `plugins/SamplePlugin/plugin.json.example`
 
