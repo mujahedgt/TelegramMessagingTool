@@ -10,6 +10,7 @@ public sealed class AgentRunner
     public const int DefaultMaxToolIterations = 3;
 
     private readonly IChatClient _chatClient;
+    private readonly IStreamingChatClient? _streamingChatClient;
     private readonly ToolRegistry _toolRegistry;
     private readonly ISearchRoutingClassifier _searchRoutingClassifier;
     private readonly RuntimeObservabilityService _observability;
@@ -20,13 +21,48 @@ public sealed class AgentRunner
         ToolRegistry toolRegistry,
         int maxToolIterations = DefaultMaxToolIterations,
         ISearchRoutingClassifier? searchRoutingClassifier = null,
-        RuntimeObservabilityService? observability = null)
+        RuntimeObservabilityService? observability = null,
+        IStreamingChatClient? streamingChatClient = null)
     {
         _chatClient = chatClient;
+        _streamingChatClient = streamingChatClient;
         _toolRegistry = toolRegistry;
         _searchRoutingClassifier = searchRoutingClassifier ?? new HeuristicSearchRoutingClassifier();
         _observability = observability ?? new RuntimeObservabilityService();
         _maxToolIterations = Math.Max(1, maxToolIterations);
+    }
+
+    public async Task<string> RunStreamingSafeAsync(
+        List<OllamaMessageDto> conversationContext,
+        Func<string, CancellationToken, Task>? onDeltaAsync,
+        CancellationToken cancellationToken,
+        TelegramDbContext? dbContext = null,
+        ConnectedUser? user = null)
+    {
+        if (!CanStreamFirstAssistantResponse())
+        {
+            return await RunAsync(conversationContext, cancellationToken, dbContext, user);
+        }
+
+        if (_streamingChatClient is null)
+        {
+            return await RunAsync(conversationContext, cancellationToken, dbContext, user);
+        }
+
+        string streamedAnswer = await _streamingChatClient.AskStreamingAsync(
+            conversationContext,
+            onDeltaAsync,
+            cancellationToken,
+            ModelTaskKind.Chat);
+
+        return ToolCallParser.Parse(streamedAnswer).IsToolCall
+            ? await RunAsync(conversationContext, cancellationToken, dbContext, user)
+            : streamedAnswer;
+    }
+
+    public bool CanStreamFirstAssistantResponse()
+    {
+        return _streamingChatClient is not null && _toolRegistry.Tools.Count == 0;
     }
 
     public async Task<string> RunAsync(

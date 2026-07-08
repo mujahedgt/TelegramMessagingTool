@@ -93,6 +93,41 @@ AssertEqual("101:Hello|101:Hello world", string.Join('|', editedDrafts), "Telegr
 string longEditText = TelegramStreamEditService.TrimForTelegramEdit(new string('x', TelegramMessageFormatter.TelegramMessageLimit + 50));
 AssertEqual(TelegramMessageFormatter.TelegramMessageLimit, longEditText.Length, "TelegramStreamEditService trims edits to Telegram message limit");
 
+var safeStreamingDeltas = new List<string>();
+var safeStreamingRunner = new AgentRunner(
+    new ScriptedChatClient(["non-stream fallback should not be used"]),
+    new ToolRegistry(Array.Empty<IAgentTool>()),
+    streamingChatClient: new ScriptedStreamingChatClient("streamed plain answer", ["streamed ", "plain answer"]));
+string safeStreamingAnswer = await safeStreamingRunner.RunStreamingSafeAsync(
+    [new OllamaMessageDto("user", "hello")],
+    (delta, token) =>
+    {
+        safeStreamingDeltas.Add(delta);
+        return Task.CompletedTask;
+    },
+    CancellationToken.None);
+AssertEqual("streamed plain answer", safeStreamingAnswer, "AgentRunner streams when no tools are available");
+AssertEqual("streamed |plain answer", string.Join('|', safeStreamingDeltas), "AgentRunner forwards safe streaming deltas");
+
+var unsafeStreamingClient = new ScriptedStreamingChatClient("{\"type\":\"tool_call\",\"tool\":\"datetime\",\"input\":\"\"}", ["{\"type\":"]);
+var unsafeFallbackClient = new ScriptedChatClient(["safe non-streamed answer"]);
+var unsafeStreamingRunner = new AgentRunner(
+    unsafeFallbackClient,
+    new ToolRegistry([new DateTimeTool()]),
+    streamingChatClient: unsafeStreamingClient);
+var unsafeDeltas = new List<string>();
+string unsafeStreamingAnswer = await unsafeStreamingRunner.RunStreamingSafeAsync(
+    [new OllamaMessageDto("user", "hello")],
+    (delta, token) =>
+    {
+        unsafeDeltas.Add(delta);
+        return Task.CompletedTask;
+    },
+    CancellationToken.None);
+AssertEqual("safe non-streamed answer", unsafeStreamingAnswer, "AgentRunner falls back to non-streaming when tools are available");
+AssertEqual(0, unsafeStreamingClient.Calls, "AgentRunner does not stream possible tool-call JSON when tools are available");
+AssertEqual("", string.Join('|', unsafeDeltas), "AgentRunner emits no unsafe streaming deltas when tools are available");
+
 AssertEqual("TelegramMessagingTool.Abstractions", typeof(IAgentTool).Assembly.GetName().Name, "IAgentTool lives in plugin abstraction assembly");
 AssertEqual("TelegramMessagingTool.Abstractions", typeof(ToolResult).Assembly.GetName().Name, "ToolResult lives in plugin abstraction assembly");
 List<string> observedRuntimeEvents = [];
