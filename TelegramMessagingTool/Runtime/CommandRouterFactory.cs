@@ -63,6 +63,8 @@ public static class CommandRouterFactory
             new SummarizeDocsCommand(documentRetrievalService, documentSummaryService),
             new EmbedFileCommand(documentIndexingService, documentEmbeddingService),
             new EmbedDocsCommand(documentIndexingService, documentEmbeddingService),
+            new ReembedDocsCommand(documentIndexingService, documentEmbeddingService),
+            new VectorStatusCommand(settings),
             new ToolsCommand(toolRegistry),
             new HarnessesCommand(settings),
             new PluginsCommand(settings),

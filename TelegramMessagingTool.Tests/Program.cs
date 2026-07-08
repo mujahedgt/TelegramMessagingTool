@@ -71,6 +71,31 @@ await localVectorStore.DeleteByUploadedFileIdAsync(7, CancellationToken.None);
 IReadOnlyList<VectorSearchResult> deletedVectorResults = await localVectorStore.SearchAsync(101, [1.0f, 0.0f], 5, CancellationToken.None);
 AssertEqual(0, deletedVectorResults.Count, "LocalJsonVectorStore deletes vectors by uploaded file id");
 
+AssertEqual("embedding_json", BotConfiguration.NormalizeVectorStoreProvider(null), "Vector store provider defaults to embedding_json");
+AssertEqual("local_json", BotConfiguration.NormalizeVectorStoreProvider(" LOCAL_JSON "), "Vector store provider accepts local_json");
+AssertEqual("embedding_json", BotConfiguration.NormalizeVectorStoreProvider("qdrant"), "Vector store provider keeps qdrant reserved until implemented");
+string defaultVectorStorePath = BotConfiguration.NormalizeVectorStorePath(null, "C:\\BotRoot");
+AssertTrue(defaultVectorStorePath.EndsWith(Path.Combine("VectorStore", "vectors.json"), StringComparison.OrdinalIgnoreCase), "Vector store path defaults under VectorStore/vectors.json");
+VectorStoreFactoryResult disabledVectorStore = VectorStoreFactory.Create("embedding_json", vectorStorePath);
+AssertEqual("embedding_json", disabledVectorStore.Provider, "VectorStoreFactory records embedding_json provider");
+AssertTrue(disabledVectorStore.VectorStore is null, "VectorStoreFactory returns no external store for embedding_json provider");
+VectorStoreFactoryResult localJsonVectorStore = VectorStoreFactory.Create("local_json", vectorStorePath);
+AssertEqual("local_json", localJsonVectorStore.Provider, "VectorStoreFactory records local_json provider");
+AssertTrue(localJsonVectorStore.VectorStore is LocalJsonVectorStore, "VectorStoreFactory creates LocalJsonVectorStore for local_json provider");
+
+var vectorStatusCommand = new VectorStatusCommand(TestSettings() with
+{
+    VectorStoreProvider = "local_json",
+    VectorStorePath = vectorStorePath
+});
+CommandResult vectorStatusResult = await vectorStatusCommand.TryHandleAsync(
+    TextMessage("/vectorstatus"),
+    new ConnectedUser { Id = 1, ChatId = 101 },
+    null!,
+    CancellationToken.None);
+AssertTrue(vectorStatusResult.Handled, "/vectorstatus is handled");
+AssertTrue(vectorStatusResult.ReplyText?.Contains("local_json", StringComparison.OrdinalIgnoreCase) == true, "/vectorstatus reports provider");
+
 var streamingClient = new ScriptedStreamingChatClient("Hello world", ["Hello", " world"]);
 var streamingFallbackClient = new ScriptedChatClient(["fallback response"]);
 var streamingResponseService = new StreamingResponseService(streamingClient, streamingFallbackClient);

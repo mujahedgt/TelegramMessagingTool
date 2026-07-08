@@ -2,12 +2,14 @@ using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using TelegramMessagingTool.Data;
 using TelegramMessagingTool.Models;
+using TelegramMessagingTool.Services.Vector;
 
 namespace TelegramMessagingTool.Services;
 
 public sealed class DocumentRetrievalService
 {
     private readonly ITextEmbeddingService? _embeddingService;
+    private readonly IVectorStore? _vectorStore;
 
     private static readonly HashSet<string> StopWords = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -16,9 +18,10 @@ public sealed class DocumentRetrievalService
         "where", "which", "who", "why", "with", "you", "do", "does", "did", "have", "has"
     };
 
-    public DocumentRetrievalService(ITextEmbeddingService? embeddingService = null)
+    public DocumentRetrievalService(ITextEmbeddingService? embeddingService = null, IVectorStore? vectorStore = null)
     {
         _embeddingService = embeddingService;
+        _vectorStore = vectorStore;
     }
 
     public async Task<IReadOnlyList<DocumentChunk>> SearchAsync(
@@ -41,6 +44,34 @@ public sealed class DocumentRetrievalService
             .OrderByDescending(x => x.CreatedAt)
             .Take(1000)
             .ToListAsync(cancellationToken);
+
+        if (_embeddingService is not null && _vectorStore is not null)
+        {
+            try
+            {
+                IReadOnlyList<float> questionEmbedding = await _embeddingService.EmbedAsync(question, cancellationToken);
+                IReadOnlyList<VectorSearchResult> vectorResults = await _vectorStore.SearchAsync(user.ChatId, questionEmbedding, limit, cancellationToken);
+                if (vectorResults.Count > 0)
+                {
+                    Dictionary<int, DocumentChunk> chunksById = chunks.ToDictionary(x => x.Id);
+                    List<DocumentChunk> matchedChunks = vectorResults
+                        .Select(x => chunksById.TryGetValue(x.Vector.ChunkId, out DocumentChunk? chunk) ? chunk : null)
+                        .Where(x => x is not null)
+                        .Cast<DocumentChunk>()
+                        .Where(x => !fileId.HasValue || x.UploadedFileId == fileId.Value)
+                        .Take(limit)
+                        .ToList();
+                    if (matchedChunks.Count > 0)
+                    {
+                        return matchedChunks;
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // Keep Q&A reliable: vector-store errors fall back to local SQL retrieval.
+            }
+        }
 
         if (_embeddingService is not null && chunks.Any(x => !string.IsNullOrWhiteSpace(x.EmbeddingJson)))
         {

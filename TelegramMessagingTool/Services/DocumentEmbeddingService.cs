@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using TelegramMessagingTool.Data;
 using TelegramMessagingTool.Models;
+using TelegramMessagingTool.Services.Vector;
 
 namespace TelegramMessagingTool.Services;
 
@@ -8,13 +9,15 @@ public sealed class DocumentEmbeddingService
 {
     private readonly ITextEmbeddingService _embeddingService;
     private readonly string _embeddingModel;
+    private readonly IVectorStore? _vectorStore;
 
-    public DocumentEmbeddingService(ITextEmbeddingService embeddingService, string embeddingModel)
+    public DocumentEmbeddingService(ITextEmbeddingService embeddingService, string embeddingModel, IVectorStore? vectorStore = null)
     {
         _embeddingService = embeddingService;
         _embeddingModel = string.IsNullOrWhiteSpace(embeddingModel)
             ? BotConfiguration.DefaultEmbeddingModel
             : embeddingModel.Trim();
+        _vectorStore = vectorStore;
     }
 
     public async Task<int> EmbedFileAsync(
@@ -40,6 +43,11 @@ public sealed class DocumentEmbeddingService
             chunk.EmbeddingJson = EmbeddingMath.Serialize(embedding);
             chunk.EmbeddingModel = _embeddingModel;
             chunk.EmbeddingUpdatedAt = DateTime.UtcNow;
+            if (_vectorStore is not null)
+            {
+                await _vectorStore.UpsertAsync(ToDocumentVector(chunk, embedding), cancellationToken);
+            }
+
             updated++;
         }
 
@@ -72,5 +80,19 @@ public sealed class DocumentEmbeddingService
         }
 
         return (filesEmbedded, chunksEmbedded);
+    }
+
+    private static DocumentVector ToDocumentVector(DocumentChunk chunk, IReadOnlyList<float> embedding)
+    {
+        return new DocumentVector(
+            Id: $"chunk-{chunk.Id}",
+            ChatId: chunk.ChatId,
+            ConnectedUserId: chunk.ConnectedUserId,
+            UploadedFileId: chunk.UploadedFileId,
+            ChunkId: chunk.Id,
+            ChunkNumber: chunk.ChunkNumber,
+            OriginalFileName: chunk.OriginalFileName,
+            Text: chunk.Text,
+            Embedding: embedding);
     }
 }

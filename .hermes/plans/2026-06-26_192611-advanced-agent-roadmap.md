@@ -520,6 +520,9 @@ Start with typing indicator only, then add edit-in-place streaming.
 ## Status
 
 - Task 7.1 foundation is complete: added `IVectorStore`, `DocumentVector`, `VectorSearchResult`, and a tested `LocalJsonVectorStore` fallback that can upsert, chat-scope search by cosine similarity, and delete vectors by uploaded file id. Current runtime document Q&A still uses `DocumentChunk.EmbeddingJson` until provider wiring is added.
+- Task 7.2 is complete: added `VECTOR_STORE_PROVIDER`, `VECTOR_STORE_PATH`, config normalization, and `VectorStoreFactory`. Supported runtime providers are `embedding_json` and `local_json`; external providers remain reserved.
+- Task 7.3 is complete: `DocumentEmbeddingService` mirrors embeddings to the configured vector store, and `DocumentRetrievalService` tries vector search first when both embeddings and a vector store are enabled, then falls back to SQL `EmbeddingJson`/lexical retrieval on errors or no matches.
+- Task 7.4 is complete: added `/vectorstatus` and `/reembeddocs`, and registered them in command routing. `/reembeddocs` rebuilds SQL embeddings and mirrors to `local_json` when configured.
 
 ## Goal
 
@@ -621,12 +624,9 @@ dotnet list TelegramMessagingTool/TelegramMessagingTool.csproj package --vulnera
 
 ---
 
-# Suggested Immediate Next Patch
+# Plan Completion Status
 
-Implement **Phase 3A Task 2** only:
+The roadmap phases in this plan are now implemented or safely staged with feature flags/fallbacks:
 
-- Add a compact `CallbackDataParser` for callback strings like `act:approve:<id>`, `act:deny:<id>`, and `act:details:<id>`.
-- Add tests for valid callbacks, invalid prefixes, non-numeric IDs, and unknown verbs.
-- Do not execute callbacks or edit Telegram messages yet.
-
-This keeps callback parsing reviewable before wiring approve/deny/details actions.
+- Core commands, memory, safe tools, approvals, tasks, callbacks, file/document/media handling, plugins, local dashboard/logs, typing/streaming response rollout, and vector-store foundation are complete.
+- Remaining future work should be tracked in a new roadmap rather than this historical plan, especially production-grade external vector providers (`qdrant`, `chroma`, `pgvector`), stronger plugin isolation, and GitHub credential setup for successful non-interactive pushes.

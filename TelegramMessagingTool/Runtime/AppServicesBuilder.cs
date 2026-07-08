@@ -3,6 +3,7 @@ using Telegram.Bot;
 using TelegramMessagingTool.Agent;
 using TelegramMessagingTool.ConsoleUi;
 using TelegramMessagingTool.Services;
+using TelegramMessagingTool.Services.Vector;
 using TelegramMessagingTool.Telegram;
 using TelegramMessagingTool.Tools;
 
@@ -58,6 +59,8 @@ public static class AppServicesBuilder
         var taskReminderService = new TaskReminderService(new TelegramTaskReminderSender(botClient));
         var ollamaClient = new OllamaChatClient(qwenClient, settings);
         var ollamaEmbeddingClient = new OllamaEmbeddingClient(embeddingClient, settings);
+        VectorStoreFactoryResult vectorStoreFactoryResult = VectorStoreFactory.Create(settings.VectorStoreProvider, settings.VectorStorePath);
+        IVectorStore? vectorStore = vectorStoreFactoryResult.VectorStore;
         ITextEmbeddingService? retrievalEmbeddingService = settings.EnableDocumentEmbeddings ? ollamaEmbeddingClient : null;
         var documentStorage = new DocumentStorageService(Path.Combine(Environment.CurrentDirectory, "UserFiles"));
         string importDirectory = Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, "ImportInbox"));
@@ -70,8 +73,8 @@ public static class AppServicesBuilder
         var agentTaskService = new AgentTaskService();
         var taskCallbackService = new TaskCallbackService(agentTaskService, settings, observability);
         var documentIndexingService = new DocumentIndexingService(documentStorage);
-        var documentEmbeddingService = new DocumentEmbeddingService(ollamaEmbeddingClient, settings.OllamaEmbeddingModel);
-        var documentRetrievalService = new DocumentRetrievalService(retrievalEmbeddingService);
+        var documentEmbeddingService = new DocumentEmbeddingService(ollamaEmbeddingClient, settings.OllamaEmbeddingModel, vectorStore);
+        var documentRetrievalService = new DocumentRetrievalService(retrievalEmbeddingService, vectorStore);
         var documentQuestionAnsweringService = new DocumentQuestionAnsweringService(ollamaClient);
         var documentSummaryService = new DocumentSummaryService(ollamaClient);
         var transcriptInsightsService = new TranscriptInsightsService(ollamaClient);

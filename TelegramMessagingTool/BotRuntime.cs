@@ -63,6 +63,10 @@ public sealed record BotSettings(
 
     public bool EnableRepoWriteTools { get; init; }
 
+    public string VectorStoreProvider { get; init; } = "embedding_json";
+
+    public string VectorStorePath { get; init; } = string.Empty;
+
     public string ImageDescriptionPrompt { get; init; } = BotConfiguration.DefaultImageDescriptionPrompt;
 
     public GitHubSettings GitHub { get; init; } = GitHubSettings.Disabled;
@@ -135,9 +139,34 @@ public static class BotConfiguration
             TextToSpeechTimeoutSeconds = ParseClampedInt(Environment.GetEnvironmentVariable("TEXT_TO_SPEECH_TIMEOUT_SECONDS"), defaultValue: 120, minValue: 5, maxValue: 300),
             TextToSpeechOutputExtension = NormalizeTextToSpeechOutputExtension(Environment.GetEnvironmentVariable("TEXT_TO_SPEECH_OUTPUT_EXTENSION")),
             EnableRepoWriteTools = IsEnabled(Environment.GetEnvironmentVariable("ENABLE_REPO_WRITE_TOOLS"), defaultValue: false),
+            VectorStoreProvider = NormalizeVectorStoreProvider(Environment.GetEnvironmentVariable("VECTOR_STORE_PROVIDER")),
+            VectorStorePath = NormalizeVectorStorePath(Environment.GetEnvironmentVariable("VECTOR_STORE_PATH"), Environment.CurrentDirectory),
             ImageDescriptionPrompt = NormalizeImageDescriptionPrompt(Environment.GetEnvironmentVariable("IMAGE_DESCRIPTION_PROMPT")),
             GitHub = GitHubSettings.LoadFromEnvironment()
         };
+    }
+
+    public static string NormalizeVectorStoreProvider(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "embedding_json";
+        }
+
+        string normalized = value.Trim().ToLowerInvariant();
+        return normalized is "embedding_json" or "local_json"
+            ? normalized
+            : "embedding_json";
+    }
+
+    public static string NormalizeVectorStorePath(string? value, string appRoot)
+    {
+        string root = string.IsNullOrWhiteSpace(appRoot) ? Environment.CurrentDirectory : appRoot;
+        string path = string.IsNullOrWhiteSpace(value)
+            ? Path.Combine(root, "VectorStore", "vectors.json")
+            : value.Trim();
+
+        return Path.GetFullPath(path);
     }
 
     public static string NormalizeEmbeddingModel(string? value)
