@@ -128,6 +128,21 @@ AssertEqual("safe non-streamed answer", unsafeStreamingAnswer, "AgentRunner fall
 AssertEqual(0, unsafeStreamingClient.Calls, "AgentRunner does not stream possible tool-call JSON when tools are available");
 AssertEqual("", string.Join('|', unsafeDeltas), "AgentRunner emits no unsafe streaming deltas when tools are available");
 
+BotSettings streamingEnabledSettings = TestSettings() with { EnableStreamingResponses = true };
+BotSettings streamingDisabledSettings = TestSettings() with { EnableStreamingResponses = false };
+AssertTrue(
+    TelegramUpdateHandler.ShouldUseStreamingResponse(streamingEnabledSettings, safeStreamingRunner, isCommand: false),
+    "TelegramUpdateHandler enables streaming for normal messages when flag and agent safety allow it");
+AssertFalse(
+    TelegramUpdateHandler.ShouldUseStreamingResponse(streamingDisabledSettings, safeStreamingRunner, isCommand: false),
+    "TelegramUpdateHandler keeps streaming disabled when the feature flag is false");
+AssertFalse(
+    TelegramUpdateHandler.ShouldUseStreamingResponse(streamingEnabledSettings, safeStreamingRunner, isCommand: true),
+    "TelegramUpdateHandler does not stream slash-command flows");
+AssertFalse(
+    TelegramUpdateHandler.ShouldUseStreamingResponse(streamingEnabledSettings, unsafeStreamingRunner, isCommand: false),
+    "TelegramUpdateHandler does not stream when the agent safety boundary blocks streaming");
+
 AssertEqual("TelegramMessagingTool.Abstractions", typeof(IAgentTool).Assembly.GetName().Name, "IAgentTool lives in plugin abstraction assembly");
 AssertEqual("TelegramMessagingTool.Abstractions", typeof(ToolResult).Assembly.GetName().Name, "ToolResult lives in plugin abstraction assembly");
 List<string> observedRuntimeEvents = [];
@@ -2524,6 +2539,30 @@ await using (var cleanupContext = new TelegramDbContext())
 Environment.SetEnvironmentVariable("TELEGRAM_DB_CONNECTION", previousConnection);
 
 Console.WriteLine("All TelegramMessagingTool helper tests passed.");
+
+static BotSettings TestSettings()
+{
+    return new BotSettings(
+        BotToken: "test-token",
+        OllamaUrl: "http://localhost:11434/api/chat",
+        OllamaModel: "test-model",
+        OllamaEmbeddingUrl: "http://localhost:11434/api/embed",
+        OllamaEmbeddingModel: "nomic-embed-text",
+        EnableDocumentEmbeddings: false,
+        EnableOnlineSearch: false,
+        AdminChatId: 0,
+        AllowedChatIds: new HashSet<long>(),
+        AllowPublicAccess: false,
+        DatabaseConnectionString: "Server=(localdb)\\MSSQLLocalDB;Database=Test;Trusted_Connection=True;TrustServerCertificate=True",
+        ApplyMigrations: false,
+        LogMessageContent: false,
+        ConversationMaxHistory: 8,
+        SearchRoutingMode: "heuristic",
+        EnableSafeCommandTools: false,
+        SafeCommandProjectRoot: Environment.CurrentDirectory,
+        EnablePlugins: false,
+        PluginDirectory: Path.Combine(Environment.CurrentDirectory, "plugins"));
+}
 
 sealed class DeterministicEmbeddingService : ITextEmbeddingService
 {

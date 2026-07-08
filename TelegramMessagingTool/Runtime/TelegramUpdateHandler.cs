@@ -28,6 +28,7 @@ public sealed class TelegramUpdateHandler
     private readonly VoiceMessageProcessor _voiceMessageProcessor;
     private readonly TelegramReactionService _reactionService;
     private readonly TelegramTypingService _typingService;
+    private readonly TelegramStreamEditService _streamEditService;
     private readonly Action<string, string, string, ConsoleEventLevel> _writeConsoleEvent;
 
     public TelegramUpdateHandler(
@@ -42,6 +43,7 @@ public sealed class TelegramUpdateHandler
         VoiceMessageProcessor voiceMessageProcessor,
         TelegramReactionService reactionService,
         TelegramTypingService typingService,
+        TelegramStreamEditService streamEditService,
         Action<string, string, string, ConsoleEventLevel> writeConsoleEvent)
     {
         _settings = settings;
@@ -55,7 +57,15 @@ public sealed class TelegramUpdateHandler
         _voiceMessageProcessor = voiceMessageProcessor;
         _reactionService = reactionService;
         _typingService = typingService;
+        _streamEditService = streamEditService;
         _writeConsoleEvent = writeConsoleEvent;
+    }
+
+    public static bool ShouldUseStreamingResponse(BotSettings settings, AgentRunner agentRunner, bool isCommand)
+    {
+        return settings.EnableStreamingResponses
+            && !isCommand
+            && agentRunner.CanStreamFirstAssistantResponse();
     }
 
     public async Task HandleUpdateAsync(
@@ -239,21 +249,55 @@ public sealed class TelegramUpdateHandler
                     cancellationToken: cancellationToken,
                     toolInstructions: _toolRegistry.RenderToolInstructions());
 
-            string finalAnswer = TelegramTypingService.ShouldSendTypingIndicator(_settings, isCommand: false)
-                ? await _typingService.RunWithTypingAsync(
-                    bot,
-                    message.Chat.Id,
-                    token => _agentRunner.RunAsync(
+            bool usedStreamingResponse = ShouldUseStreamingResponse(_settings, _agentRunner, isCommand: false);
+            string finalAnswer;
+            if (usedStreamingResponse)
+            {
+                finalAnswer = await _streamEditService.RunAsync(
+                    async token =>
+                    {
+                        Message draftMessage = await bot.SendMessage(
+                            chatId: message.Chat.Id,
+                            text: "Generating response...",
+                            replyParameters: new ReplyParameters
+                            {
+                                MessageId = message.MessageId
+                            },
+                            cancellationToken: token);
+                        return draftMessage.MessageId;
+                    },
+                    (draftMessageId, text, token) => bot.EditMessageText(
+                        chatId: message.Chat.Id,
+                        messageId: draftMessageId,
+                        text: text,
+                        cancellationToken: token),
+                    (onDeltaAsync, token) => _agentRunner.RunStreamingSafeAsync(
                         conversationContext,
+                        onDeltaAsync,
                         token,
                         dbContext,
                         user),
-                    cancellationToken)
-                : await _agentRunner.RunAsync(
-                    conversationContext,
-                    cancellationToken,
-                    dbContext,
-                    user);
+                    TimeSpan.FromSeconds(2),
+                    cancellationToken);
+            }
+            else
+            {
+                finalAnswer = TelegramTypingService.ShouldSendTypingIndicator(_settings, isCommand: false)
+                    ? await _typingService.RunWithTypingAsync(
+                        bot,
+                        message.Chat.Id,
+                        token => _agentRunner.RunAsync(
+                            conversationContext,
+                            token,
+                            dbContext,
+                            user),
+                        cancellationToken)
+                    : await _agentRunner.RunAsync(
+                        conversationContext,
+                        cancellationToken,
+                        dbContext,
+                        user);
+            }
             _writeConsoleEvent("MESSAGE", message.Chat.Username ?? message.Chat.Id.ToString(), $"answered {finalAnswer.Length} chars", ConsoleEventLevel.Success);
 
             dbContext.Messages.Add(new ChatMessage
@@ -274,7 +318,12 @@ public sealed class TelegramUpdateHandler
                 _settings.LogMessageContent ? finalAnswer : "[response content logging disabled]",
                 LogType.Info);
 
-            foreach (string replyChunk in TelegramMessageFormatter.SplitForTelegram(finalAnswer))
+            List<string> finalReplyChunks = TelegramMessageFormatter.SplitForTelegram(finalAnswer).ToList();
+            IEnumerable<string> chunksToSend = usedStreamingResponse
+                ? finalReplyChunks.Skip(1)
+                : finalReplyChunks;
+
+            foreach (string replyChunk in chunksToSend)
             {
                 await bot.SendMessage(
                     chatId: message.Chat.Id,

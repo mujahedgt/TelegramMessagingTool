@@ -89,7 +89,12 @@ public static class AppServicesBuilder
                 settings.TextToSpeechArguments,
                 TimeSpan.FromSeconds(settings.TextToSpeechTimeoutSeconds),
                 settings.TextToSpeechOutputExtension);
-        var agentRunner = new AgentRunner(ollamaClient, toolRegistry, searchRoutingClassifier: searchRoutingClassifier, observability: observability);
+        var agentRunner = new AgentRunner(
+            ollamaClient,
+            toolRegistry,
+            searchRoutingClassifier: searchRoutingClassifier,
+            observability: observability,
+            streamingChatClient: ollamaClient);
         var conversationService = new ConversationService();
         var voiceMessageProcessor = new VoiceMessageProcessor(
             settings,
@@ -101,6 +106,7 @@ public static class AppServicesBuilder
             textToSpeechService);
         var reactionService = new TelegramReactionService(BufferedConsoleEvent);
         var typingService = new TelegramTypingService(BufferedConsoleEvent);
+        var streamEditService = new TelegramStreamEditService();
         var commandRouter = CommandRouterFactory.Create(
             settings,
             toolRegistry,
@@ -131,6 +137,7 @@ public static class AppServicesBuilder
             voiceMessageProcessor,
             reactionService,
             typingService,
+            streamEditService,
             BufferedConsoleEvent);
         var consoleInputHandler = new ConsoleInputHandler(
             settings,
