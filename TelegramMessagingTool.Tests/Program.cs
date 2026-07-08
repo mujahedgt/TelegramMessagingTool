@@ -66,6 +66,33 @@ string failedStreamingAnswer = await new StreamingResponseService(failingStreami
     CancellationToken.None);
 AssertEqual("fallback after stream failure", failedStreamingAnswer, "StreamingResponseService falls back when streaming returns an invalid response marker");
 
+var editClock = new ManualClock(new DateTimeOffset(2026, 7, 8, 10, 10, 0, TimeSpan.Zero));
+var editedDrafts = new List<string>();
+var telegramEditService = new TelegramStreamEditService(() => editClock.UtcNow);
+string finalizedStream = await telegramEditService.RunAsync(
+    sendDraftAsync: token => Task.FromResult(101),
+    editDraftAsync: (messageId, text, token) =>
+    {
+        editedDrafts.Add($"{messageId}:{text}");
+        return Task.CompletedTask;
+    },
+    generateAsync: async (onDeltaAsync, token) =>
+    {
+        await onDeltaAsync("Hello", token);
+        editClock.Advance(TimeSpan.FromMilliseconds(500));
+        await onDeltaAsync(" ", token);
+        editClock.Advance(TimeSpan.FromSeconds(2));
+        await onDeltaAsync("world", token);
+        return "Hello world";
+    },
+    editInterval: TimeSpan.FromSeconds(1.5),
+    CancellationToken.None);
+AssertEqual("Hello world", finalizedStream, "TelegramStreamEditService returns final generated text");
+AssertEqual("101:Hello|101:Hello world", string.Join('|', editedDrafts), "TelegramStreamEditService throttles intermediate edits and always finalizes");
+
+string longEditText = TelegramStreamEditService.TrimForTelegramEdit(new string('x', TelegramMessageFormatter.TelegramMessageLimit + 50));
+AssertEqual(TelegramMessageFormatter.TelegramMessageLimit, longEditText.Length, "TelegramStreamEditService trims edits to Telegram message limit");
+
 AssertEqual("TelegramMessagingTool.Abstractions", typeof(IAgentTool).Assembly.GetName().Name, "IAgentTool lives in plugin abstraction assembly");
 AssertEqual("TelegramMessagingTool.Abstractions", typeof(ToolResult).Assembly.GetName().Name, "ToolResult lives in plugin abstraction assembly");
 List<string> observedRuntimeEvents = [];
@@ -2665,6 +2692,21 @@ sealed class ScriptedChatClient : IChatClient
         Calls++;
         ModelTaskKinds.Add(taskKind);
         return Task.FromResult(_responses.Count > 0 ? _responses.Dequeue() : "No scripted response left.");
+    }
+}
+
+sealed class ManualClock
+{
+    public ManualClock(DateTimeOffset utcNow)
+    {
+        UtcNow = utcNow;
+    }
+
+    public DateTimeOffset UtcNow { get; private set; }
+
+    public void Advance(TimeSpan offset)
+    {
+        UtcNow += offset;
     }
 }
 
