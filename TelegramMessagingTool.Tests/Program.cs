@@ -14,6 +14,7 @@ using TelegramMessagingTool.Models;
 using TelegramMessagingTool.Plugins;
 using TelegramMessagingTool.Runtime;
 using TelegramMessagingTool.Services;
+using TelegramMessagingTool.Services.Vector;
 using TelegramMessagingTool.Telegram;
 using TelegramMessagingTool.Tools;
 using TelegramMessagingTool.Tools.CommandExecution;
@@ -29,6 +30,46 @@ string ollamaStreamFixture = string.Join('\n',
 AssertEqual("Hello world", OllamaChatClient.ParseStreamingAssistantContent(ollamaStreamFixture), "OllamaChatClient parses streaming assistant content chunks");
 AssertEqual("Empty response from Ollama.", OllamaChatClient.ParseStreamingAssistantContent("{\"done\":true}"), "OllamaChatClient reports empty streaming responses clearly");
 AssertEqual("Invalid response received from Ollama.", OllamaChatClient.ParseStreamingAssistantContent("not-json"), "OllamaChatClient reports invalid streaming chunks clearly");
+
+string vectorStorePath = Path.Combine(Path.GetTempPath(), "telegram-vector-store-tests", Guid.NewGuid().ToString("N"), "vectors.json");
+var localVectorStore = new LocalJsonVectorStore(vectorStorePath);
+await localVectorStore.UpsertAsync(new DocumentVector(
+    Id: "chunk-1",
+    ChatId: 101,
+    ConnectedUserId: 1,
+    UploadedFileId: 7,
+    ChunkId: 1,
+    ChunkNumber: 1,
+    OriginalFileName: "alpha.txt",
+    Text: "alpha content",
+    Embedding: [1.0f, 0.0f]), CancellationToken.None);
+await localVectorStore.UpsertAsync(new DocumentVector(
+    Id: "chunk-2",
+    ChatId: 101,
+    ConnectedUserId: 1,
+    UploadedFileId: 7,
+    ChunkId: 2,
+    ChunkNumber: 2,
+    OriginalFileName: "beta.txt",
+    Text: "beta content",
+    Embedding: [0.0f, 1.0f]), CancellationToken.None);
+await localVectorStore.UpsertAsync(new DocumentVector(
+    Id: "other-chat",
+    ChatId: 202,
+    ConnectedUserId: 2,
+    UploadedFileId: 9,
+    ChunkId: 3,
+    ChunkNumber: 1,
+    OriginalFileName: "other.txt",
+    Text: "other content",
+    Embedding: [1.0f, 0.0f]), CancellationToken.None);
+IReadOnlyList<VectorSearchResult> vectorResults = await localVectorStore.SearchAsync(101, [0.9f, 0.1f], 5, CancellationToken.None);
+AssertEqual(2, vectorResults.Count, "LocalJsonVectorStore searches only vectors for the requested chat");
+AssertEqual("chunk-1", vectorResults[0].Vector.Id, "LocalJsonVectorStore ranks nearest vector first");
+AssertTrue(vectorResults[0].Score > vectorResults[1].Score, "LocalJsonVectorStore returns descending similarity scores");
+await localVectorStore.DeleteByUploadedFileIdAsync(7, CancellationToken.None);
+IReadOnlyList<VectorSearchResult> deletedVectorResults = await localVectorStore.SearchAsync(101, [1.0f, 0.0f], 5, CancellationToken.None);
+AssertEqual(0, deletedVectorResults.Count, "LocalJsonVectorStore deletes vectors by uploaded file id");
 
 var streamingClient = new ScriptedStreamingChatClient("Hello world", ["Hello", " world"]);
 var streamingFallbackClient = new ScriptedChatClient(["fallback response"]);

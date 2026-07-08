@@ -517,6 +517,10 @@ Start with typing indicator only, then add edit-in-place streaming.
 
 # Phase 7: Vector DB Support
 
+## Status
+
+- Task 7.1 foundation is complete: added `IVectorStore`, `DocumentVector`, `VectorSearchResult`, and a tested `LocalJsonVectorStore` fallback that can upsert, chat-scope search by cosine similarity, and delete vectors by uploaded file id. Current runtime document Q&A still uses `DocumentChunk.EmbeddingJson` until provider wiring is added.
+
 ## Goal
 
 Move from `DocumentChunk.EmbeddingJson` to a scalable vector store.
