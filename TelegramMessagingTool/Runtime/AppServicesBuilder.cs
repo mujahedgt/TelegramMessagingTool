@@ -100,6 +100,7 @@ public static class AppServicesBuilder
             audioTranscriptionService,
             textToSpeechService);
         var reactionService = new TelegramReactionService(BufferedConsoleEvent);
+        var typingService = new TelegramTypingService(BufferedConsoleEvent);
         var commandRouter = CommandRouterFactory.Create(
             settings,
             toolRegistry,
@@ -129,6 +130,7 @@ public static class AppServicesBuilder
             commandRouter,
             voiceMessageProcessor,
             reactionService,
+            typingService,
             BufferedConsoleEvent);
         var consoleInputHandler = new ConsoleInputHandler(
             settings,

@@ -469,6 +469,10 @@ Saved images: 4
 
 # Phase 6: Streamed Responses
 
+## Status
+
+- Task 6.1 is complete: normal Telegram chat messages can send best-effort `typing...` chat actions while the local agent is generating a reply when `ENABLE_TELEGRAM_TYPING_INDICATOR=true`. Commands, file/document handling, and voice handling remain unwrapped. True streamed response chunks and edit-in-place behavior are still pending.
+
 ## Goal
 
 Stream Ollama completions while showing Telegram typing indicator and optionally editing a placeholder message.

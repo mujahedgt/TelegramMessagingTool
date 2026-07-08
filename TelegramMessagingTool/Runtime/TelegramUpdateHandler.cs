@@ -27,6 +27,7 @@ public sealed class TelegramUpdateHandler
     private readonly CommandRouter _commandRouter;
     private readonly VoiceMessageProcessor _voiceMessageProcessor;
     private readonly TelegramReactionService _reactionService;
+    private readonly TelegramTypingService _typingService;
     private readonly Action<string, string, string, ConsoleEventLevel> _writeConsoleEvent;
 
     public TelegramUpdateHandler(
@@ -40,6 +41,7 @@ public sealed class TelegramUpdateHandler
         CommandRouter commandRouter,
         VoiceMessageProcessor voiceMessageProcessor,
         TelegramReactionService reactionService,
+        TelegramTypingService typingService,
         Action<string, string, string, ConsoleEventLevel> writeConsoleEvent)
     {
         _settings = settings;
@@ -52,6 +54,7 @@ public sealed class TelegramUpdateHandler
         _commandRouter = commandRouter;
         _voiceMessageProcessor = voiceMessageProcessor;
         _reactionService = reactionService;
+        _typingService = typingService;
         _writeConsoleEvent = writeConsoleEvent;
     }
 
@@ -236,11 +239,21 @@ public sealed class TelegramUpdateHandler
                     cancellationToken: cancellationToken,
                     toolInstructions: _toolRegistry.RenderToolInstructions());
 
-            string finalAnswer = await _agentRunner.RunAsync(
-                conversationContext,
-                cancellationToken,
-                dbContext,
-                user);
+            string finalAnswer = TelegramTypingService.ShouldSendTypingIndicator(_settings, isCommand: false)
+                ? await _typingService.RunWithTypingAsync(
+                    bot,
+                    message.Chat.Id,
+                    token => _agentRunner.RunAsync(
+                        conversationContext,
+                        token,
+                        dbContext,
+                        user),
+                    cancellationToken)
+                : await _agentRunner.RunAsync(
+                    conversationContext,
+                    cancellationToken,
+                    dbContext,
+                    user);
             _writeConsoleEvent("MESSAGE", message.Chat.Username ?? message.Chat.Id.ToString(), $"answered {finalAnswer.Length} chars", ConsoleEventLevel.Success);
 
             dbContext.Messages.Add(new ChatMessage

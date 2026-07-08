@@ -49,6 +49,8 @@ public sealed record BotSettings(
 
     public bool EnableTextToSpeech { get; init; }
 
+    public bool EnableTelegramTypingIndicator { get; init; }
+
     public string TextToSpeechCommand { get; init; } = string.Empty;
 
     public string TextToSpeechArguments { get; init; } = "{text} {output}";
@@ -124,6 +126,7 @@ public static class BotConfiguration
             AudioTranscriptionArguments = NormalizeAudioTranscriptionArguments(Environment.GetEnvironmentVariable("AUDIO_TRANSCRIPTION_ARGUMENTS")),
             AudioTranscriptionTimeoutSeconds = ParseClampedInt(Environment.GetEnvironmentVariable("AUDIO_TRANSCRIPTION_TIMEOUT_SECONDS"), defaultValue: 120, minValue: 5, maxValue: 300),
             EnableTextToSpeech = IsEnabled(Environment.GetEnvironmentVariable("ENABLE_TEXT_TO_SPEECH"), defaultValue: false),
+            EnableTelegramTypingIndicator = IsEnabled(Environment.GetEnvironmentVariable("ENABLE_TELEGRAM_TYPING_INDICATOR"), defaultValue: false),
             TextToSpeechCommand = NormalizeOptionalText(Environment.GetEnvironmentVariable("TEXT_TO_SPEECH_COMMAND")),
             TextToSpeechArguments = NormalizeTextToSpeechArguments(Environment.GetEnvironmentVariable("TEXT_TO_SPEECH_ARGUMENTS")),
             TextToSpeechTimeoutSeconds = ParseClampedInt(Environment.GetEnvironmentVariable("TEXT_TO_SPEECH_TIMEOUT_SECONDS"), defaultValue: 120, minValue: 5, maxValue: 300),

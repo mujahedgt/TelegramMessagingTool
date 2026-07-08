@@ -862,11 +862,13 @@ string? previousOllamaModelPlan = Environment.GetEnvironmentVariable("OLLAMA_MOD
 string? previousOllamaModelDocQa = Environment.GetEnvironmentVariable("OLLAMA_MODEL_DOC_QA");
 string? previousEnableImageVision = Environment.GetEnvironmentVariable("ENABLE_IMAGE_VISION");
 string? previousEnableAudioTranscription = Environment.GetEnvironmentVariable("ENABLE_AUDIO_TRANSCRIPTION");
+string? previousEnableTelegramTypingIndicator = Environment.GetEnvironmentVariable("ENABLE_TELEGRAM_TYPING_INDICATOR");
 try
 {
     Environment.SetEnvironmentVariable("ALLOW_PUBLIC_ACCESS", null);
     Environment.SetEnvironmentVariable("ALLOWED_CHAT_IDS", null);
     Environment.SetEnvironmentVariable("ENABLE_ONLINE_SEARCH", null);
+    Environment.SetEnvironmentVariable("ENABLE_TELEGRAM_TYPING_INDICATOR", null);
     Environment.SetEnvironmentVariable("OLLAMA_MODEL", "base-model:test");
     Environment.SetEnvironmentVariable("OLLAMA_MODEL_PLAN", null);
     Environment.SetEnvironmentVariable("OLLAMA_MODEL_DOC_QA", null);
@@ -874,6 +876,7 @@ try
     AssertFalse(defaultPrivacySettings.AllowPublicAccess, "BotConfiguration defaults public access override to false");
     AssertFalse(defaultPrivacySettings.EnableOnlineSearch, "BotConfiguration defaults online search to disabled");
     AssertFalse(defaultPrivacySettings.EnableAudioTranscription, "BotConfiguration defaults audio transcription to disabled");
+    AssertFalse(defaultPrivacySettings.EnableTelegramTypingIndicator, "BotConfiguration defaults Telegram typing indicator to disabled");
     AssertEqual("base-model:test", defaultPrivacySettings.OllamaChatModel, "BotConfiguration defaults chat route to OLLAMA_MODEL");
     AssertEqual("base-model:test", defaultPrivacySettings.OllamaPlanningModel, "BotConfiguration defaults planning route to OLLAMA_MODEL");
 
@@ -887,12 +890,14 @@ try
     Environment.SetEnvironmentVariable("OLLAMA_MODEL_DOC_QA", "docqa-model:test");
     Environment.SetEnvironmentVariable("ENABLE_IMAGE_VISION", "true");
     Environment.SetEnvironmentVariable("ENABLE_AUDIO_TRANSCRIPTION", "yes");
+    Environment.SetEnvironmentVariable("ENABLE_TELEGRAM_TYPING_INDICATOR", "1");
     BotSettings routedEnvironmentSettings = BotConfiguration.LoadFromEnvironment();
     AssertEqual("base-model:test", routedEnvironmentSettings.OllamaChatModel, "BotConfiguration keeps chat model on OLLAMA_MODEL when chat override is blank");
     AssertEqual("plan-model:test", routedEnvironmentSettings.OllamaPlanningModel, "BotConfiguration loads OLLAMA_MODEL_PLAN");
     AssertEqual("docqa-model:test", routedEnvironmentSettings.OllamaDocumentQuestionAnsweringModel, "BotConfiguration loads OLLAMA_MODEL_DOC_QA");
     AssertTrue(routedEnvironmentSettings.EnableImageVision, "BotConfiguration parses ENABLE_IMAGE_VISION truthy values");
     AssertTrue(routedEnvironmentSettings.EnableAudioTranscription, "BotConfiguration parses ENABLE_AUDIO_TRANSCRIPTION truthy values");
+    AssertTrue(routedEnvironmentSettings.EnableTelegramTypingIndicator, "BotConfiguration parses ENABLE_TELEGRAM_TYPING_INDICATOR truthy values");
 }
 finally
 {
@@ -904,8 +909,51 @@ finally
     Environment.SetEnvironmentVariable("OLLAMA_MODEL_DOC_QA", previousOllamaModelDocQa);
     Environment.SetEnvironmentVariable("ENABLE_IMAGE_VISION", previousEnableImageVision);
     Environment.SetEnvironmentVariable("ENABLE_AUDIO_TRANSCRIPTION", previousEnableAudioTranscription);
+    Environment.SetEnvironmentVariable("ENABLE_TELEGRAM_TYPING_INDICATOR", previousEnableTelegramTypingIndicator);
 }
 AssertEqual("report.md", DocumentStorageService.SanitizeFileName("..\\..//report.md"), "SanitizeFileName removes path segments");
+
+BotSettings typingTestSettings = new(
+    BotToken: "test-token",
+    OllamaUrl: "http://localhost:11434/api/chat",
+    OllamaModel: "qwen3:0.6b",
+    OllamaEmbeddingUrl: "http://localhost:11434/api/embed",
+    OllamaEmbeddingModel: "nomic-embed-text",
+    EnableDocumentEmbeddings: false,
+    EnableOnlineSearch: false,
+    AdminChatId: 123456789,
+    AllowedChatIds: new HashSet<long>(),
+    AllowPublicAccess: false,
+    DatabaseConnectionString: "Server=(localdb)\\MSSQLLocalDB;Database=TelegramMessagingTool;Trusted_Connection=True;TrustServerCertificate=True",
+    ApplyMigrations: true,
+    LogMessageContent: false,
+    ConversationMaxHistory: 8,
+    SearchRoutingMode: "heuristic",
+    EnableSafeCommandTools: false,
+    SafeCommandProjectRoot: Directory.GetCurrentDirectory(),
+    EnablePlugins: false,
+    PluginDirectory: Path.Combine(Directory.GetCurrentDirectory(), "plugins"));
+
+int typingSignalCount = 0;
+string typingResult = await TelegramTypingService.RunWithTypingLoopAsync(
+    async token =>
+    {
+        Interlocked.Increment(ref typingSignalCount);
+        await Task.CompletedTask;
+    },
+    async token =>
+    {
+        await Task.Delay(35, token);
+        return "typed result";
+    },
+    TimeSpan.FromMilliseconds(10),
+    CancellationToken.None);
+AssertEqual("typed result", typingResult, "TelegramTypingService returns the wrapped operation result");
+AssertTrue(typingSignalCount >= 2, "TelegramTypingService sends repeated typing signals while work is running");
+AssertFalse(TelegramTypingService.ShouldSendTypingIndicator(typingTestSettings with { EnableTelegramTypingIndicator = false }, isCommand: false), "TelegramTypingService is disabled by default/config");
+AssertTrue(TelegramTypingService.ShouldSendTypingIndicator(typingTestSettings with { EnableTelegramTypingIndicator = true }, isCommand: false), "TelegramTypingService allows normal messages when enabled");
+AssertFalse(TelegramTypingService.ShouldSendTypingIndicator(typingTestSettings with { EnableTelegramTypingIndicator = true }, isCommand: true), "TelegramTypingService does not send typing indicators for commands");
+
 AssertTrue(documentStorage.IsAllowedFileName("notes.txt"), "DocumentStorageService allows txt files");
 AssertTrue(documentStorage.IsAllowedFileName("report.md"), "DocumentStorageService allows markdown files");
 AssertTrue(documentStorage.IsAllowedFileName("manual.pdf"), "DocumentStorageService allows PDF files");

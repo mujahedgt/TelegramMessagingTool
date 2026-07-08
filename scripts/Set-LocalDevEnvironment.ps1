@@ -38,6 +38,7 @@ $settings = [ordered]@{
     'ENABLE_IMAGE_VISION' = 'true'
     'ENABLE_AUDIO_TRANSCRIPTION' = 'true'
     'ENABLE_TEXT_TO_SPEECH' = 'true'
+    'ENABLE_TELEGRAM_TYPING_INDICATOR' = 'true'
     'ENABLE_SAFE_COMMAND_TOOLS' = 'true'
     'SAFE_COMMAND_PROJECT_ROOT' = $fullProjectRoot
     'ENABLE_REPO_WRITE_TOOLS' = 'true'

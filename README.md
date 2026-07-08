@@ -18,6 +18,7 @@ TelegramMessagingTool is a C#/.NET console application that connects a Telegram 
 - `/health` command reports compact runtime diagnostics including uptime, DB/migration status, model routes, search mode, plugin manifest counts, storage roots, and risk warning count without secrets
 - Admin-only `/errors [count]` command shows a bounded, metadata-only in-memory history of recent runtime warnings/errors with secret/token redaction
 - Lightweight Telegram reactions are sent best-effort for successful `/approve`, `/deny`, `/done`, `/remember`, and `/reset` commands while still keeping normal text replies
+- Optional Telegram typing indicators for normal chat replies when `ENABLE_TELEGRAM_TYPING_INDICATOR=true`; commands and file/voice handling skip the indicator to avoid noisy UX
 - Agent-style startup console panel with commands, model, safety, and tool status
 - Local console chat/command input using the same command router, memory, tools, and agent runner as Telegram, plus local-only `/dashboard` and `/logs [count]` runtime views with compact counters, recent redacted events, and secret-masked database details
 - Runtime composition now builds runtime services through `Runtime/AppServicesBuilder.cs`, command registration through `Runtime/CommandRouterFactory.cs`, Telegram update handling through `Runtime/TelegramUpdateHandler.cs`, local console input through `Runtime/ConsoleInputHandler.cs`, and reminder polling through `Runtime/TaskReminderLoop.cs`, keeping `Program.cs` thin while preserving behavior
@@ -88,6 +89,7 @@ Configuration is read from environment variables.
 | `TEXT_TO_SPEECH_ARGUMENTS` | No | `{text} {output}` | Argument template for the local TTS command. `{text}` is replaced with the requested text and `{output}` with a temporary output audio path. |
 | `TEXT_TO_SPEECH_TIMEOUT_SECONDS` | No | `120` | Local TTS timeout, clamped from `5` to `300` seconds. |
 | `TEXT_TO_SPEECH_OUTPUT_EXTENSION` | No | `.mp3` | Expected provider output extension: `.mp3`, `.wav`, `.m4a`, `.ogg`, `.oga`, `.opus`, or `.flac`. Use `.ogg`/`.oga`/`.opus` from an Opus-capable provider when you want Telegram voice-note bubbles; other audio formats are sent as normal audio files for voice-message replies. |
+| `ENABLE_TELEGRAM_TYPING_INDICATOR` | No | `false` | If true, normal Telegram chat messages send best-effort `typing...` chat actions while the local agent is generating a reply. Slash commands, file commands, document handling, and voice handling are not wrapped. This is the safe first rollout step before streamed responses. |
 | `ENABLE_SAFE_COMMAND_TOOLS` | No | `false` | If true, registers fixed safe command tools: `git_status`, `git_diff`, `git_log_recent`, `run_dotnet_tests`, `publish_release`, and `restart_latest_bot`. No arbitrary shell access is exposed. `run_dotnet_tests` accepts only `{"target":"helper-tests"}` and runs the helper test project. `publish_release` and `restart_latest_bot` only create high-risk pending approval requests; they do not execute release/restart directly. |
 | `SAFE_COMMAND_PROJECT_ROOT` | No | current working directory | Project root used by safe command tools and repo write approval tools. Commands run with fixed executable/argument lists under this directory. |
 | `ENABLE_REPO_WRITE_TOOLS` | No | `false` | If true, registers approval-backed repository write tools such as `repo_replace_text`. These tools require admin use, create pending actions first, validate paths under `SAFE_COMMAND_PROJECT_ROOT`, and execute only after `/approve`. |
@@ -153,6 +155,7 @@ export ENABLE_TEXT_TO_SPEECH='false'
 # export TEXT_TO_SPEECH_ARGUMENTS='--text "{text}" --out "{output}"'
 export TEXT_TO_SPEECH_TIMEOUT_SECONDS='120'
 export TEXT_TO_SPEECH_OUTPUT_EXTENSION='.mp3'
+export ENABLE_TELEGRAM_TYPING_INDICATOR='false'
 export ENABLE_SAFE_COMMAND_TOOLS='false'
 export SAFE_COMMAND_PROJECT_ROOT='/c/temp/TelegramMessagingTool'
 export ENABLE_REPO_WRITE_TOOLS='false'

@@ -50,6 +50,7 @@ Audio provider: {(string.IsNullOrWhiteSpace(_settings.AudioTranscriptionCommand)
 Text-to-speech: {(_settings.EnableTextToSpeech ? "enabled" : "disabled")}
 TTS provider: {(string.IsNullOrWhiteSpace(_settings.TextToSpeechCommand) ? "not configured" : "local command configured")}
 TTS output: {_settings.TextToSpeechOutputExtension}
+Telegram typing indicator: {(_settings.EnableTelegramTypingIndicator ? "enabled" : "disabled")}
 Safe command tools: {(_settings.EnableSafeCommandTools ? "enabled" : "disabled")}
 Repo write tools: {(_settings.EnableRepoWriteTools ? "enabled" : "disabled")}
 Plugins: {(_settings.EnablePlugins ? "enabled" : "disabled")} ({_settings.PluginDirectory})
