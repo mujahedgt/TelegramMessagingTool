@@ -62,6 +62,11 @@ Model routes: {modelRoutingService.RenderSummary()}
 Online search: {(_settings.EnableOnlineSearch ? "enabled" : "disabled")}
 Search routing: {_settings.SearchRoutingMode}
 Plugins: {(_settings.EnablePlugins ? "enabled" : "disabled")}; valid manifests {pluginScanResult.Manifests.Count}, enabled {pluginScanResult.EnabledCount}, diagnostics {pluginScanResult.Diagnostics.Count}
+Vector store: {_settings.VectorStoreProvider}; embeddings {(_settings.EnableDocumentEmbeddings ? "enabled" : "disabled")}
+Qdrant: {RenderQdrantSummary(_settings)}
+Media providers: image={(_settings.EnableImageVision ? "enabled" : "disabled")}, stt={RenderLocalProvider(_settings.EnableAudioTranscription, _settings.AudioTranscriptionCommand)}, tts={RenderLocalProvider(_settings.EnableTextToSpeech, _settings.TextToSpeechCommand)}
+Reasoning/runtime: streaming={(_settings.EnableStreamingResponses ? "enabled" : "disabled")}, typing={(_settings.EnableTelegramTypingIndicator ? "enabled" : "disabled")}, history={_settings.ConversationMaxHistory}
+GitHub push: {RenderGitHubPushSummary(_settings)}
 Document storage: {(Directory.Exists(_documentStorage.RootDirectory) ? "OK" : "missing")} ({_documentStorage.RootDirectory})
 Import inbox: {(Directory.Exists(_importDirectory) ? "OK" : "missing")} ({_importDirectory})
 Risk warnings: {riskWarnings.Count}
@@ -117,5 +122,37 @@ Secrets: not shown.
         }
 
         return $"{Math.Max(0, (int)duration.TotalSeconds)}s";
+    }
+
+    private static string RenderQdrantSummary(BotSettings settings)
+    {
+        return string.Equals(settings.VectorStoreProvider, "qdrant", StringComparison.OrdinalIgnoreCase)
+            ? $"enabled; url={settings.QdrantUrl}; collection={settings.QdrantCollection}"
+            : "not active";
+    }
+
+    private static string RenderLocalProvider(bool enabled, string command)
+    {
+        if (!enabled)
+        {
+            return "disabled";
+        }
+
+        return string.IsNullOrWhiteSpace(command) ? "enabled but command missing" : "configured";
+    }
+
+    private static string RenderGitHubPushSummary(BotSettings settings)
+    {
+        if (!settings.GitHub.EnableGitHubWriteTools)
+        {
+            return "write tools disabled";
+        }
+
+        if (string.IsNullOrWhiteSpace(settings.GitHub.Token))
+        {
+            return "write tools enabled; token missing";
+        }
+
+        return "write tools enabled; token configured";
     }
 }

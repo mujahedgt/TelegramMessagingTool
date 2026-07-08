@@ -2274,6 +2274,11 @@ diff --git a/../outside.cs b/../outside.cs
     AssertTrue(healthResult.ReplyText?.Contains("Document storage:", StringComparison.OrdinalIgnoreCase) == true, "/health reports document storage status");
     AssertTrue(healthResult.ReplyText?.Contains("Import inbox:", StringComparison.OrdinalIgnoreCase) == true, "/health reports import inbox status");
     AssertTrue(healthResult.ReplyText?.Contains("Risk warnings:", StringComparison.OrdinalIgnoreCase) == true, "/health reports risk warning count");
+    AssertTrue(healthResult.ReplyText?.Contains("Vector store:", StringComparison.OrdinalIgnoreCase) == true, "/health reports vector store provider");
+    AssertTrue(healthResult.ReplyText?.Contains("Qdrant:", StringComparison.OrdinalIgnoreCase) == true, "/health reports Qdrant status/config summary");
+    AssertTrue(healthResult.ReplyText?.Contains("Media providers:", StringComparison.OrdinalIgnoreCase) == true, "/health reports voice/image provider summary");
+    AssertTrue(healthResult.ReplyText?.Contains("Reasoning/runtime:", StringComparison.OrdinalIgnoreCase) == true, "/health reports reasoning/runtime response summary");
+    AssertTrue(healthResult.ReplyText?.Contains("GitHub push:", StringComparison.OrdinalIgnoreCase) == true, "/health reports GitHub push readiness summary");
     AssertFalse(healthResult.ReplyText?.Contains("test-token", StringComparison.OrdinalIgnoreCase) == true, "/health does not render bot token");
     AssertFalse(healthResult.ReplyText?.Contains("ghp_secret", StringComparison.OrdinalIgnoreCase) == true, "/health does not render GitHub token markers");
     CommandResult healthMentionResult = await commandRouter.TryHandleAsync(TextMessage("/health@red_eye_ghost_bot"), testUser, dbContext, CancellationToken.None);
