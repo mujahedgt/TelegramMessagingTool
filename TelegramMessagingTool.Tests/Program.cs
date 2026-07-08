@@ -30,6 +30,42 @@ AssertEqual("Hello world", OllamaChatClient.ParseStreamingAssistantContent(ollam
 AssertEqual("Empty response from Ollama.", OllamaChatClient.ParseStreamingAssistantContent("{\"done\":true}"), "OllamaChatClient reports empty streaming responses clearly");
 AssertEqual("Invalid response received from Ollama.", OllamaChatClient.ParseStreamingAssistantContent("not-json"), "OllamaChatClient reports invalid streaming chunks clearly");
 
+var streamingClient = new ScriptedStreamingChatClient("Hello world", ["Hello", " world"]);
+var streamingFallbackClient = new ScriptedChatClient(["fallback response"]);
+var streamingResponseService = new StreamingResponseService(streamingClient, streamingFallbackClient);
+var observedDeltas = new List<string>();
+string streamedAnswer = await streamingResponseService.GenerateAsync(
+    [new OllamaMessageDto("user", "stream please")],
+    streamingEnabled: true,
+    (delta, token) =>
+    {
+        observedDeltas.Add(delta);
+        return Task.CompletedTask;
+    },
+    CancellationToken.None);
+AssertEqual("Hello world", streamedAnswer, "StreamingResponseService returns streaming answer when enabled");
+AssertEqual(1, streamingClient.Calls, "StreamingResponseService calls streaming client when enabled");
+AssertEqual("Hello| world", string.Join('|', observedDeltas), "StreamingResponseService forwards streaming deltas");
+
+var disabledStreamingClient = new ScriptedStreamingChatClient("should not stream", ["should not stream"]);
+var disabledFallbackClient = new ScriptedChatClient(["fallback when disabled"]);
+string disabledStreamingAnswer = await new StreamingResponseService(disabledStreamingClient, disabledFallbackClient).GenerateAsync(
+    [new OllamaMessageDto("user", "normal please")],
+    streamingEnabled: false,
+    onDeltaAsync: null,
+    CancellationToken.None);
+AssertEqual("fallback when disabled", disabledStreamingAnswer, "StreamingResponseService uses non-streaming fallback when disabled");
+AssertEqual(0, disabledStreamingClient.Calls, "StreamingResponseService does not call streaming client when disabled");
+
+var failingStreamingClient = new ScriptedStreamingChatClient("Invalid response received from Ollama.", []);
+var failureFallbackClient = new ScriptedChatClient(["fallback after stream failure"]);
+string failedStreamingAnswer = await new StreamingResponseService(failingStreamingClient, failureFallbackClient).GenerateAsync(
+    [new OllamaMessageDto("user", "fallback please")],
+    streamingEnabled: true,
+    onDeltaAsync: null,
+    CancellationToken.None);
+AssertEqual("fallback after stream failure", failedStreamingAnswer, "StreamingResponseService falls back when streaming returns an invalid response marker");
+
 AssertEqual("TelegramMessagingTool.Abstractions", typeof(IAgentTool).Assembly.GetName().Name, "IAgentTool lives in plugin abstraction assembly");
 AssertEqual("TelegramMessagingTool.Abstractions", typeof(ToolResult).Assembly.GetName().Name, "ToolResult lives in plugin abstraction assembly");
 List<string> observedRuntimeEvents = [];
@@ -2629,6 +2665,38 @@ sealed class ScriptedChatClient : IChatClient
         Calls++;
         ModelTaskKinds.Add(taskKind);
         return Task.FromResult(_responses.Count > 0 ? _responses.Dequeue() : "No scripted response left.");
+    }
+}
+
+sealed class ScriptedStreamingChatClient : IStreamingChatClient
+{
+    private readonly string _response;
+    private readonly IReadOnlyList<string> _deltas;
+
+    public ScriptedStreamingChatClient(string response, IReadOnlyList<string> deltas)
+    {
+        _response = response;
+        _deltas = deltas;
+    }
+
+    public int Calls { get; private set; }
+
+    public Task<string> AskStreamingAsync(
+        List<OllamaMessageDto> conversationContext,
+        Func<string, CancellationToken, Task>? onDeltaAsync,
+        CancellationToken cancellationToken,
+        ModelTaskKind taskKind = ModelTaskKind.Chat)
+    {
+        Calls++;
+        if (onDeltaAsync is not null)
+        {
+            foreach (string delta in _deltas)
+            {
+                onDeltaAsync(delta, cancellationToken).GetAwaiter().GetResult();
+            }
+        }
+
+        return Task.FromResult(_response);
     }
 }
 
