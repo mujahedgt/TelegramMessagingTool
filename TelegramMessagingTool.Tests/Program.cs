@@ -826,6 +826,16 @@ AssertTrue(dashboard.Contains("START, MESSAGE, COMMAND, TOOL, DOCUMENT, IMAGE, T
 AssertFalse(dashboard.Contains("secret-password", StringComparison.OrdinalIgnoreCase), "Console dashboard masks database passwords");
 AssertFalse(dashboard.Contains("User Id=admin", StringComparison.OrdinalIgnoreCase), "Console dashboard hides database user ids");
 
+string eventLog = AgentConsoleRenderer.RenderEventLog([
+    new RuntimeEventEntry(DateTimeOffset.Parse("2026-07-08T00:00:00Z"), ConsoleEventLevel.Warning, "NET", "provider TOKEN=[REDACTED] failed"),
+    new RuntimeEventEntry(DateTimeOffset.Parse("2026-07-08T00:01:00Z"), ConsoleEventLevel.Error, "ERROR", "socket reset")
+]);
+AssertTrue(eventLog.Contains("Recent runtime events", StringComparison.OrdinalIgnoreCase), "Console event log has a title");
+AssertTrue(eventLog.Contains("WARN") && eventLog.Contains("NET"), "Console event log renders warning events");
+AssertTrue(eventLog.Contains("ERR") && eventLog.Contains("ERROR"), "Console event log renders error events");
+AssertFalse(eventLog.Contains("TOKEN=123", StringComparison.OrdinalIgnoreCase), "Console event log does not reintroduce secrets");
+AssertTrue(AgentConsoleRenderer.RenderEventLog([]).Contains("No recent runtime events", StringComparison.OrdinalIgnoreCase), "Console event log handles empty history");
+
 AssertEqual("1.5 GB", LocalDeviceInfoService.FormatBytes(1_610_612_736), "LocalDeviceInfoService formats byte counts safely");
 string systemInfoText = LocalDeviceInfoService.RenderSystemInfo();
 AssertTrue(systemInfoText.Contains("Operating system"), "LocalDeviceInfoService renders OS information");

@@ -45,6 +45,18 @@ public sealed partial class RuntimeEventBuffer
         }
     }
 
+    public IReadOnlyList<RuntimeEventEntry> RecentEvents(int count)
+    {
+        int limit = Math.Clamp(count, 1, 100);
+        lock (_gate)
+        {
+            return _entries
+                .Reverse()
+                .Take(limit)
+                .ToList();
+        }
+    }
+
     private static string SanitizeToken(string value)
     {
         if (string.IsNullOrWhiteSpace(value))

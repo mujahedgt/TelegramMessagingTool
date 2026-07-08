@@ -418,6 +418,7 @@ Recommended staged rollout:
 ## Status
 
 - Task 5.1 is complete: the console now has a `/dashboard` local-only status view rendered through `RuntimeDashboardService`/`AgentConsoleRenderer`, including uptime, access mode, masked database summary, active tasks, pending approvals, indexed docs, saved files/images, recent warning/error count, and the standard event categories.
+- Task 5.2 is complete: the console now has `/logs [count]` for local-only recent runtime events, rendered newest-first from the in-memory `RuntimeEventBuffer` with count clamping and existing token/secret redaction.
 
 ## Goal
 

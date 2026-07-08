@@ -1,4 +1,5 @@
 using System.Text;
+using TelegramMessagingTool.Services;
 
 namespace TelegramMessagingTool.ConsoleUi;
 
@@ -98,6 +99,7 @@ public static class AgentConsoleRenderer
         builder.AppendLine("Runtime keys");
         builder.AppendLine("------------");
         builder.AppendLine("Type a message or command in the console to use the same local agent as Telegram.");
+        builder.AppendLine("Use /dashboard for counters and /logs 20 for recent runtime events.");
         builder.AppendLine("Use /exit or Ctrl+C to stop gracefully.");
         builder.AppendLine();
         builder.AppendLine("Live events");
@@ -141,6 +143,32 @@ public static class AgentConsoleRenderer
         builder.AppendLine("Event categories");
         builder.AppendLine("----------------");
         builder.AppendLine("START, MESSAGE, COMMAND, TOOL, DOCUMENT, IMAGE, TASK, APPROVAL, ERROR, NET");
+        return builder.ToString().TrimEnd();
+    }
+
+    public static string RenderEventLog(IReadOnlyList<RuntimeEventEntry> entries)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("Recent runtime events");
+        builder.AppendLine("=====================");
+        if (entries.Count == 0)
+        {
+            builder.AppendLine("No recent runtime events.");
+            return builder.ToString().TrimEnd();
+        }
+
+        foreach (RuntimeEventEntry entry in entries)
+        {
+            string marker = entry.Level switch
+            {
+                ConsoleEventLevel.Success => "OK",
+                ConsoleEventLevel.Warning => "WARN",
+                ConsoleEventLevel.Error => "ERR",
+                _ => "INFO"
+            };
+            builder.AppendLine($"[{entry.TimestampUtc:HH:mm:ss}] [{marker}] {entry.Category,-10} {entry.Detail}");
+        }
+
         return builder.ToString().TrimEnd();
     }
 

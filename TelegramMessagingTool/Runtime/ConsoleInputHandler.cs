@@ -21,6 +21,7 @@ public sealed class ConsoleInputHandler
     private readonly ConversationService _conversationService;
     private readonly CommandRouter _commandRouter;
     private readonly RuntimeDashboardService _runtimeDashboardService;
+    private readonly RuntimeEventBuffer _runtimeEventBuffer;
     private readonly Action<string, string, string, ConsoleEventLevel> _writeConsoleEvent;
     private readonly Action _requestShutdown;
 
@@ -31,6 +32,7 @@ public sealed class ConsoleInputHandler
         ConversationService conversationService,
         CommandRouter commandRouter,
         RuntimeDashboardService runtimeDashboardService,
+        RuntimeEventBuffer runtimeEventBuffer,
         Action<string, string, string, ConsoleEventLevel> writeConsoleEvent,
         Action requestShutdown)
     {
@@ -40,6 +42,7 @@ public sealed class ConsoleInputHandler
         _conversationService = conversationService;
         _commandRouter = commandRouter;
         _runtimeDashboardService = runtimeDashboardService;
+        _runtimeEventBuffer = runtimeEventBuffer;
         _writeConsoleEvent = writeConsoleEvent;
         _requestShutdown = requestShutdown;
     }
@@ -98,6 +101,12 @@ public sealed class ConsoleInputHandler
         {
             _writeConsoleEvent("COMMAND", "console", "/dashboard", ConsoleEventLevel.Success);
             return await _runtimeDashboardService.RenderAsync(dbContext, cancellationToken);
+        }
+
+        if (TryParseLogsCommand(input, out int eventCount))
+        {
+            _writeConsoleEvent("COMMAND", "console", "/logs", ConsoleEventLevel.Success);
+            return AgentConsoleRenderer.RenderEventLog(_runtimeEventBuffer.RecentEvents(eventCount));
         }
 
         ConnectedUser consoleUser = await GetOrCreateConsoleUserAsync(dbContext, cancellationToken);
@@ -183,5 +192,22 @@ public sealed class ConsoleInputHandler
         dbContext.Users.Add(user);
         await dbContext.SaveChangesAsync(cancellationToken);
         return user;
+    }
+
+    private static bool TryParseLogsCommand(string input, out int count)
+    {
+        count = 20;
+        string[] parts = input.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length == 0 || !parts[0].Equals("/logs", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (parts.Length >= 2 && int.TryParse(parts[1], out int requestedCount))
+        {
+            count = Math.Clamp(requestedCount, 1, 100);
+        }
+
+        return true;
     }
 }

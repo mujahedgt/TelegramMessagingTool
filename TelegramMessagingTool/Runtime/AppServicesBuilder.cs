@@ -137,6 +137,7 @@ public static class AppServicesBuilder
             conversationService,
             commandRouter,
             runtimeDashboardService,
+            runtimeEventBuffer,
             BufferedConsoleEvent,
             requestShutdown);
         var taskReminderLoop = new TaskReminderLoop(taskReminderService, BufferedConsoleEvent);
