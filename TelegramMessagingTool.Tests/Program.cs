@@ -38,6 +38,14 @@ AssertEqual(string.Empty, ReasoningGuidanceService.BuildGuidance("thanks"), "Rea
 string reasoningSystemPrompt = ConversationService.BuildSystemPrompt([], reasoningGuidance: complexReasoningGuidance);
 AssertTrue(reasoningSystemPrompt.Contains("Reasoning guidance", StringComparison.OrdinalIgnoreCase), "ConversationService includes reasoning guidance when present");
 AssertTrue(reasoningSystemPrompt.Contains("Final answer discipline", StringComparison.OrdinalIgnoreCase), "Reasoning guidance reminds final-answer discipline");
+string commandExecutionRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "TelegramMessagingTool", "Tools", "CommandExecution"));
+IReadOnlyList<string> sequentialProcessReaders = Directory.GetFiles(commandExecutionRoot, "*.cs", SearchOption.AllDirectories)
+    .Where(path => File.ReadAllText(path).Contains("string output = await process.StandardOutput.ReadToEndAsync", StringComparison.Ordinal)
+        || File.ReadAllText(path).Contains("string error = await process.StandardError.ReadToEndAsync", StringComparison.Ordinal))
+    .Select(path => Path.GetFileName(path) ?? path)
+    .OrderBy(name => name)
+    .ToList();
+AssertEqual(string.Empty, string.Join(",", sequentialProcessReaders), "Command execution process runners read stdout/stderr concurrently to avoid deadlocks");
 
 string vectorStorePath = Path.Combine(Path.GetTempPath(), "telegram-vector-store-tests", Guid.NewGuid().ToString("N"), "vectors.json");
 var localVectorStore = new LocalJsonVectorStore(vectorStorePath);

@@ -9,7 +9,7 @@
 5. Improve runtime health and diagnostics. Status: complete.
 6. Improve voice/image agent harnesses. Status: complete.
 7. Add backup/export tools. Status: complete.
-8. Run final hardening pass.
+8. Run final hardening pass. Status: complete.
 9. Add better reasoning features. Status: complete.
 
 ## Execution Order
@@ -22,4 +22,4 @@
 6. Backup/export. Added `/exportdata [json]` for current chat/user data backups with secret-safe metadata and attachment delivery.
 7. Self-update. Added admin-only `/selfupdate [reason]` that creates a high-risk approval request for publish + latest-release restart.
 8. Better reasoning. Added adaptive private reasoning guidance for complex normal chat prompts, with final-answer discipline and no chain-of-thought exposure.
-9. Hardening/release.
+9. Hardening/release. Hardened command-execution process output handling so approved release/repo/git operations read stdout/stderr concurrently and avoid child-process deadlocks.

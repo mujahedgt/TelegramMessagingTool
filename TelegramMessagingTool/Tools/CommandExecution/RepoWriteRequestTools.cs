@@ -687,9 +687,12 @@ public static class RepoGitPushExecutor
             using Process process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start git.");
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutCts.CancelAfter(TimeoutMilliseconds);
-            string output = await process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
-            string error = await process.StandardError.ReadToEndAsync(timeoutCts.Token);
+            Task<string> outputTask = process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
+            Task<string> errorTask = process.StandardError.ReadToEndAsync(timeoutCts.Token);
             await process.WaitForExitAsync(timeoutCts.Token);
+            await Task.WhenAll(outputTask, errorTask);
+            string output = outputTask.Result;
+            string error = errorTask.Result;
             return new ProcessCommandResult(process.ExitCode, output, error);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -834,9 +837,12 @@ public static class RepoGitCommitExecutor
             using Process process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start git.");
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutCts.CancelAfter(TimeoutMilliseconds);
-            string output = await process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
-            string error = await process.StandardError.ReadToEndAsync(timeoutCts.Token);
+            Task<string> outputTask = process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
+            Task<string> errorTask = process.StandardError.ReadToEndAsync(timeoutCts.Token);
             await process.WaitForExitAsync(timeoutCts.Token);
+            await Task.WhenAll(outputTask, errorTask);
+            string output = outputTask.Result;
+            string error = errorTask.Result;
             return new ProcessCommandResult(process.ExitCode, output, error);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -938,9 +944,12 @@ public static class RepoPatchApplyExecutor
             using Process process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start git.");
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutCts.CancelAfter(TimeoutMilliseconds);
-            string output = await process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
-            string error = await process.StandardError.ReadToEndAsync(timeoutCts.Token);
+            Task<string> outputTask = process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
+            Task<string> errorTask = process.StandardError.ReadToEndAsync(timeoutCts.Token);
             await process.WaitForExitAsync(timeoutCts.Token);
+            await Task.WhenAll(outputTask, errorTask);
+            string output = outputTask.Result;
+            string error = errorTask.Result;
             return new ProcessCommandResult(process.ExitCode, output, error);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
