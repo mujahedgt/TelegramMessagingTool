@@ -49,6 +49,7 @@ public sealed class PendingActionExecutor
             "delete_file" => await ExecuteDeleteFileAsync(dbContext, action, cancellationToken),
             "publish_release" => await ExecutePublishReleaseAsync(action, cancellationToken),
             "restart_latest_bot" => await ExecuteRestartLatestBotAsync(action, cancellationToken),
+            "self_update_bot" => await ExecuteSelfUpdateBotAsync(action, cancellationToken),
             "repo_replace_text" => await ExecuteRepoReplaceTextAsync(action, cancellationToken),
             "repo_apply_patch" => await ExecuteRepoApplyPatchAsync(action, cancellationToken),
             "repo_commit_changes" => await ExecuteRepoCommitChangesAsync(action, cancellationToken),
@@ -178,6 +179,35 @@ public sealed class PendingActionExecutor
         return restartResult.Success
             ? PendingActionExecutionResult.Completed(restartResult.Message)
             : PendingActionExecutionResult.Failed(restartResult.Message);
+    }
+
+    private async Task<PendingActionExecutionResult> ExecuteSelfUpdateBotAsync(
+        PendingAction action,
+        CancellationToken cancellationToken)
+    {
+        if (!TryReadPublishReleasePayload(action.PayloadJson, out PublishReleasePayload publishPayload, out string error))
+        {
+            return PendingActionExecutionResult.Failed(error.Replace("publish_release", "self_update_bot", StringComparison.OrdinalIgnoreCase));
+        }
+
+        ReleasePublishResult publishResult = await ReleasePublishExecutor.PublishAsync(publishPayload, cancellationToken);
+        if (!publishResult.Success)
+        {
+            return PendingActionExecutionResult.Failed("Self-update publish failed. " + publishResult.Message);
+        }
+
+        var restartPayload = new RestartLatestBotPayload(
+            "restart_latest_bot",
+            publishPayload.ProjectRoot,
+            publishPayload.Reason,
+            DateTime.UtcNow);
+        LatestReleaseRestartResult restartResult = await _latestReleaseRestarter.RestartAsync(restartPayload, cancellationToken);
+        if (!restartResult.Success)
+        {
+            return PendingActionExecutionResult.Failed("Self-update published but restart failed. " + publishResult.Message + " " + restartResult.Message);
+        }
+
+        return PendingActionExecutionResult.Completed("Self-update completed. " + publishResult.Message + " " + restartResult.Message);
     }
 
     private static bool TryReadRestartLatestBotPayload(string payloadJson, out RestartLatestBotPayload payload, out string error)

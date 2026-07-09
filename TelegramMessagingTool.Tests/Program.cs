@@ -1617,6 +1617,7 @@ await using (var dbContext = new TelegramDbContext())
         new ProcessesCommand(),
         new StatusCommand(adminTestSettings),
         new HealthCommand(adminTestSettings, documentStorage, importDirectory),
+        new SelfUpdateCommand(pendingActionService, adminTestSettings),
         new ErrorsCommand(adminTestSettings, runtimeEventBuffer),
         new RiskConfigCommand(adminTestSettings),
         new ResetCommand(),
@@ -2313,6 +2314,22 @@ diff --git a/../outside.cs b/../outside.cs
     CommandResult healthMentionResult = await commandRouter.TryHandleAsync(TextMessage("/health@red_eye_ghost_bot"), testUser, dbContext, CancellationToken.None);
     AssertTrue(healthMentionResult.Handled, "/health@bot is handled");
     AssertFalse((await commandRouter.TryHandleAsync(TextMessage("/healthx"), testUser, dbContext, CancellationToken.None)).Handled, "/healthx is not treated as /health");
+
+    CommandResult nonAdminSelfUpdateResult = await commandRouter.TryHandleAsync(TextMessage("/selfupdate"), nonAdminUser, dbContext, CancellationToken.None);
+    AssertTrue(nonAdminSelfUpdateResult.Handled, "/selfupdate non-admin attempt is handled");
+    AssertTrue(nonAdminSelfUpdateResult.ReplyText?.Contains("admin", StringComparison.OrdinalIgnoreCase) == true, "/selfupdate requires admin");
+    AssertEqual(0, await dbContext.PendingActions.CountAsync(x => x.ConnectedUserId == nonAdminUser.Id && x.ToolName == "self_update_bot", CancellationToken.None), "/selfupdate non-admin does not create pending action");
+    CommandResult selfUpdateResult = await commandRouter.TryHandleAsync(TextMessage("/selfupdate release smoke"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(selfUpdateResult.Handled, "/selfupdate is handled");
+    AssertTrue(selfUpdateResult.ReplyText?.Contains("Approval required", StringComparison.OrdinalIgnoreCase) == true, "/selfupdate creates approval request");
+    AssertTrue(selfUpdateResult.ReplyText?.Contains("publish", StringComparison.OrdinalIgnoreCase) == true, "/selfupdate explains publish step");
+    AssertTrue(selfUpdateResult.ReplyText?.Contains("restart", StringComparison.OrdinalIgnoreCase) == true, "/selfupdate explains restart step");
+    PendingAction selfUpdatePendingAction = await dbContext.PendingActions.SingleAsync(x => x.ToolName == "self_update_bot", CancellationToken.None);
+    AssertEqual("high", selfUpdatePendingAction.RiskLevel, "/selfupdate creates high-risk pending action");
+    AssertTrue(selfUpdatePendingAction.PayloadJson.Contains("project_root", StringComparison.OrdinalIgnoreCase), "/selfupdate stores project root in payload");
+    AssertFalse((await commandRouter.TryHandleAsync(TextMessage("/selfupdatex"), testUser, dbContext, CancellationToken.None)).Handled, "/selfupdatex is not treated as /selfupdate");
+    dbContext.PendingActions.Remove(selfUpdatePendingAction);
+    await dbContext.SaveChangesAsync(CancellationToken.None);
 
     CommandResult harnessesResult = await commandRouter.TryHandleAsync(TextMessage("/harnesses"), testUser, dbContext, CancellationToken.None);
     AssertTrue(harnessesResult.Handled, "/harnesses is handled");

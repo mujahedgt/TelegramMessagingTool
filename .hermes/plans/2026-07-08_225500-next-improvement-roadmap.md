@@ -5,7 +5,7 @@
 1. Fix GitHub push credentials. Status: blocked until a usable token/SSH key is configured.
 2. Add production vector provider: Qdrant. Status: foundation started.
 3. Add vector maintenance commands: `/vectorsync`, `/vectorclear`, `/vectorrepair`. Status: complete.
-4. Add admin-only bot self-update command.
+4. Add admin-only bot self-update command. Status: complete.
 5. Improve runtime health and diagnostics. Status: complete.
 6. Improve voice/image agent harnesses. Status: complete.
 7. Add backup/export tools. Status: complete.
@@ -20,6 +20,6 @@
 4. Runtime health. Added compact `/health` diagnostics for vector/Qdrant, media providers, reasoning/runtime flags, and GitHub push readiness.
 5. Voice/image harnesses. Added readiness status, provider gates, command coverage, and next safe command candidates to `/harnesses`.
 6. Backup/export. Added `/exportdata [json]` for current chat/user data backups with secret-safe metadata and attachment delivery.
-7. Self-update.
+7. Self-update. Added admin-only `/selfupdate [reason]` that creates a high-risk approval request for publish + latest-release restart.
 8. Better reasoning.
 9. Hardening/release.

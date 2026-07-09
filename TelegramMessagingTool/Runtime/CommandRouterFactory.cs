@@ -35,6 +35,7 @@ public static class CommandRouterFactory
             new ProcessesCommand(),
             new StatusCommand(settings),
             new HealthCommand(settings, documentStorage, importDirectory),
+            new SelfUpdateCommand(pendingActionService, settings),
             new ErrorsCommand(settings, runtimeEventBuffer),
             new RiskConfigCommand(settings),
             new ResetCommand(),
