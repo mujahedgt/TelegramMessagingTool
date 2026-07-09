@@ -10,7 +10,7 @@
 6. Improve voice/image agent harnesses. Status: complete.
 7. Add backup/export tools. Status: complete.
 8. Run final hardening pass.
-9. Add better reasoning features.
+9. Add better reasoning features. Status: complete.
 
 ## Execution Order
 
@@ -21,5 +21,5 @@
 5. Voice/image harnesses. Added readiness status, provider gates, command coverage, and next safe command candidates to `/harnesses`.
 6. Backup/export. Added `/exportdata [json]` for current chat/user data backups with secret-safe metadata and attachment delivery.
 7. Self-update. Added admin-only `/selfupdate [reason]` that creates a high-risk approval request for publish + latest-release restart.
-8. Better reasoning.
+8. Better reasoning. Added adaptive private reasoning guidance for complex normal chat prompts, with final-answer discipline and no chain-of-thought exposure.
 9. Hardening/release.

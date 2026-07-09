@@ -31,6 +31,14 @@ AssertEqual("Hello world", OllamaChatClient.ParseStreamingAssistantContent(ollam
 AssertEqual("Empty response from Ollama.", OllamaChatClient.ParseStreamingAssistantContent("{\"done\":true}"), "OllamaChatClient reports empty streaming responses clearly");
 AssertEqual("Invalid response received from Ollama.", OllamaChatClient.ParseStreamingAssistantContent("not-json"), "OllamaChatClient reports invalid streaming chunks clearly");
 
+string complexReasoningGuidance = ReasoningGuidanceService.BuildGuidance("Compare two deployment options and give me a safe migration plan with trade-offs.");
+AssertTrue(complexReasoningGuidance.Contains("reasoning checklist", StringComparison.OrdinalIgnoreCase), "ReasoningGuidanceService adds guidance for complex planning prompts");
+AssertTrue(complexReasoningGuidance.Contains("Do not reveal private chain-of-thought", StringComparison.OrdinalIgnoreCase), "ReasoningGuidanceService keeps private reasoning hidden");
+AssertEqual(string.Empty, ReasoningGuidanceService.BuildGuidance("thanks"), "ReasoningGuidanceService stays quiet for simple small talk");
+string reasoningSystemPrompt = ConversationService.BuildSystemPrompt([], reasoningGuidance: complexReasoningGuidance);
+AssertTrue(reasoningSystemPrompt.Contains("Reasoning guidance", StringComparison.OrdinalIgnoreCase), "ConversationService includes reasoning guidance when present");
+AssertTrue(reasoningSystemPrompt.Contains("Final answer discipline", StringComparison.OrdinalIgnoreCase), "Reasoning guidance reminds final-answer discipline");
+
 string vectorStorePath = Path.Combine(Path.GetTempPath(), "telegram-vector-store-tests", Guid.NewGuid().ToString("N"), "vectors.json");
 var localVectorStore = new LocalJsonVectorStore(vectorStorePath);
 await localVectorStore.UpsertAsync(new DocumentVector(

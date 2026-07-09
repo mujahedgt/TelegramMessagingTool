@@ -20,6 +20,11 @@ public sealed class ConversationService
             .OrderBy(x => x.Timestamp)
             .ToListAsync(cancellationToken);
 
+        string latestUserMessage = history
+            .LastOrDefault(x => x.Role == ChatRoles.User)
+            ?.Content ?? string.Empty;
+        string reasoningGuidance = ReasoningGuidanceService.BuildGuidance(latestUserMessage);
+
         List<Memory> memories = await dbContext.Memories
             .Where(x => x.ConnectedUserId == connectedUserId)
             .OrderByDescending(x => x.UpdatedAt)
@@ -30,7 +35,7 @@ public sealed class ConversationService
         [
             new OllamaMessageDto(
                 "system",
-                BuildSystemPrompt(memories, toolInstructions))
+                BuildSystemPrompt(memories, toolInstructions, reasoningGuidance))
         ];
 
         messages.AddRange(history.Select(x => new OllamaMessageDto(
@@ -40,7 +45,7 @@ public sealed class ConversationService
         return messages;
     }
 
-    public static string BuildSystemPrompt(IReadOnlyList<Memory> memories, string toolInstructions = "")
+    public static string BuildSystemPrompt(IReadOnlyList<Memory> memories, string toolInstructions = "", string reasoningGuidance = "")
     {
         string prompt = """
 You are a helpful Telegram assistant running inside TelegramMessagingTool.
@@ -63,6 +68,11 @@ Safety rules:
         if (!string.IsNullOrWhiteSpace(toolInstructions))
         {
             prompt += "\n\nAgent tool instructions:\n" + toolInstructions.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(reasoningGuidance))
+        {
+            prompt += "\n\n" + reasoningGuidance.Trim();
         }
 
         if (memories.Count == 0)
