@@ -52,6 +52,10 @@ public static class ConfigurationTests
         string? previousEnableGitHubTools = Environment.GetEnvironmentVariable("ENABLE_GITHUB_TOOLS");
         string? previousEnableGitHubWriteTools = Environment.GetEnvironmentVariable("ENABLE_GITHUB_WRITE_TOOLS");
         string? previousImageDescriptionPrompt = Environment.GetEnvironmentVariable("IMAGE_DESCRIPTION_PROMPT");
+        string? previousEnableImageOcr = Environment.GetEnvironmentVariable("ENABLE_IMAGE_OCR");
+        string? previousImageOcrCommand = Environment.GetEnvironmentVariable("IMAGE_OCR_COMMAND");
+        string? previousImageOcrArguments = Environment.GetEnvironmentVariable("IMAGE_OCR_ARGUMENTS");
+        string? previousImageOcrTimeoutSeconds = Environment.GetEnvironmentVariable("IMAGE_OCR_TIMEOUT_SECONDS");
         string? previousAudioTranscriptionCommand = Environment.GetEnvironmentVariable("AUDIO_TRANSCRIPTION_COMMAND");
         string? previousAudioTranscriptionArguments = Environment.GetEnvironmentVariable("AUDIO_TRANSCRIPTION_ARGUMENTS");
         string? previousAudioTranscriptionTimeoutSeconds = Environment.GetEnvironmentVariable("AUDIO_TRANSCRIPTION_TIMEOUT_SECONDS");
@@ -104,6 +108,26 @@ public static class ConfigurationTests
 
             Environment.SetEnvironmentVariable("IMAGE_DESCRIPTION_PROMPT", "  Focus on UI labels and visible text.  ");
             AssertEqual("Focus on UI labels and visible text.", BotConfiguration.LoadFromEnvironment().ImageDescriptionPrompt, "LoadFromEnvironment trims IMAGE_DESCRIPTION_PROMPT");
+
+            Environment.SetEnvironmentVariable("ENABLE_IMAGE_OCR", null);
+            Environment.SetEnvironmentVariable("IMAGE_OCR_COMMAND", null);
+            Environment.SetEnvironmentVariable("IMAGE_OCR_ARGUMENTS", null);
+            Environment.SetEnvironmentVariable("IMAGE_OCR_TIMEOUT_SECONDS", null);
+            BotSettings defaultOcrProviderSettings = BotConfiguration.LoadFromEnvironment();
+            AssertFalse(defaultOcrProviderSettings.EnableImageOcr, "LoadFromEnvironment defaults image OCR to disabled");
+            AssertEqual(string.Empty, defaultOcrProviderSettings.ImageOcrCommand, "LoadFromEnvironment defaults IMAGE_OCR_COMMAND to empty");
+            AssertEqual("{file}", defaultOcrProviderSettings.ImageOcrArguments, "LoadFromEnvironment defaults IMAGE_OCR_ARGUMENTS to file placeholder");
+            AssertEqual(120, defaultOcrProviderSettings.ImageOcrTimeoutSeconds, "LoadFromEnvironment defaults IMAGE_OCR_TIMEOUT_SECONDS safely");
+
+            Environment.SetEnvironmentVariable("ENABLE_IMAGE_OCR", "yes");
+            Environment.SetEnvironmentVariable("IMAGE_OCR_COMMAND", "  tesseract-cli  ");
+            Environment.SetEnvironmentVariable("IMAGE_OCR_ARGUMENTS", " --image \"{file}\" ");
+            Environment.SetEnvironmentVariable("IMAGE_OCR_TIMEOUT_SECONDS", "700");
+            BotSettings ocrProviderSettings = BotConfiguration.LoadFromEnvironment();
+            AssertTrue(ocrProviderSettings.EnableImageOcr, "LoadFromEnvironment parses ENABLE_IMAGE_OCR truthy values");
+            AssertEqual("tesseract-cli", ocrProviderSettings.ImageOcrCommand, "LoadFromEnvironment trims IMAGE_OCR_COMMAND");
+            AssertEqual("--image \"{file}\"", ocrProviderSettings.ImageOcrArguments, "LoadFromEnvironment trims IMAGE_OCR_ARGUMENTS");
+            AssertEqual(300, ocrProviderSettings.ImageOcrTimeoutSeconds, "LoadFromEnvironment clamps IMAGE_OCR_TIMEOUT_SECONDS high");
 
             Environment.SetEnvironmentVariable("AUDIO_TRANSCRIPTION_COMMAND", null);
             Environment.SetEnvironmentVariable("AUDIO_TRANSCRIPTION_ARGUMENTS", null);
@@ -190,6 +214,10 @@ public static class ConfigurationTests
             Environment.SetEnvironmentVariable("ENABLE_GITHUB_TOOLS", previousEnableGitHubTools);
             Environment.SetEnvironmentVariable("ENABLE_GITHUB_WRITE_TOOLS", previousEnableGitHubWriteTools);
             Environment.SetEnvironmentVariable("IMAGE_DESCRIPTION_PROMPT", previousImageDescriptionPrompt);
+            Environment.SetEnvironmentVariable("ENABLE_IMAGE_OCR", previousEnableImageOcr);
+            Environment.SetEnvironmentVariable("IMAGE_OCR_COMMAND", previousImageOcrCommand);
+            Environment.SetEnvironmentVariable("IMAGE_OCR_ARGUMENTS", previousImageOcrArguments);
+            Environment.SetEnvironmentVariable("IMAGE_OCR_TIMEOUT_SECONDS", previousImageOcrTimeoutSeconds);
             Environment.SetEnvironmentVariable("AUDIO_TRANSCRIPTION_COMMAND", previousAudioTranscriptionCommand);
             Environment.SetEnvironmentVariable("AUDIO_TRANSCRIPTION_ARGUMENTS", previousAudioTranscriptionArguments);
             Environment.SetEnvironmentVariable("AUDIO_TRANSCRIPTION_TIMEOUT_SECONDS", previousAudioTranscriptionTimeoutSeconds);

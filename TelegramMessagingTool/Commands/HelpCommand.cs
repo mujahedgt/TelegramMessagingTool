@@ -40,6 +40,7 @@ TelegramMessagingTool Agent Commands
 /images - List saved sandboxed image files
 /describeimage <id> - Describe a saved image when image vision is enabled; otherwise show safe metadata
 /imageprompt <image-file-id|idea> - Draft a safe image-generation prompt without generating an image
+/ocrimage <id> - Extract image text when a trusted local OCR provider is configured
 /voicefiles - List saved sandboxed audio files
 /transcribe <id> - Transcribe a saved audio file when a trusted local provider is configured
 /voicebrief <id> - Transcribe a saved audio file, save the transcript, and return a concise brief

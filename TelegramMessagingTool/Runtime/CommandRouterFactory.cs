@@ -24,6 +24,7 @@ public static class CommandRouterFactory
         DocumentEmbeddingService documentEmbeddingService,
         VectorMaintenanceService vectorMaintenanceService,
         IImageDescriptionService imageDescriptionService,
+        IImageOcrService? imageOcrService = null,
         IAudioTranscriptionService? audioTranscriptionService = null,
         ITextToSpeechService? textToSpeechService = null,
         RuntimeEventBuffer? runtimeEventBuffer = null)
@@ -47,6 +48,7 @@ public static class CommandRouterFactory
             new ImagesCommand(),
             new DescribeImageCommand(settings, documentStorage, imageDescriptionService),
             new ImagePromptCommand(settings, documentStorage, imagePromptService, imageDescriptionService),
+            new OcrImageCommand(settings, documentStorage, imageOcrService),
             new VoiceFilesCommand(),
             new TranscribeCommand(settings, documentStorage, audioTranscriptionService),
             new VoiceBriefCommand(settings, documentStorage, audioTranscriptionService, transcriptInsightsService),

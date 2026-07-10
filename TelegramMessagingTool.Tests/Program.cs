@@ -1109,6 +1109,7 @@ string? previousOllamaModel = Environment.GetEnvironmentVariable("OLLAMA_MODEL")
 string? previousOllamaModelPlan = Environment.GetEnvironmentVariable("OLLAMA_MODEL_PLAN");
 string? previousOllamaModelDocQa = Environment.GetEnvironmentVariable("OLLAMA_MODEL_DOC_QA");
 string? previousEnableImageVision = Environment.GetEnvironmentVariable("ENABLE_IMAGE_VISION");
+string? previousEnableImageOcr = Environment.GetEnvironmentVariable("ENABLE_IMAGE_OCR");
 string? previousEnableAudioTranscription = Environment.GetEnvironmentVariable("ENABLE_AUDIO_TRANSCRIPTION");
 string? previousEnableTelegramTypingIndicator = Environment.GetEnvironmentVariable("ENABLE_TELEGRAM_TYPING_INDICATOR");
 string? previousEnableStreamingResponses = Environment.GetEnvironmentVariable("ENABLE_STREAMING_RESPONSES");
@@ -1118,6 +1119,7 @@ try
     Environment.SetEnvironmentVariable("ALLOWED_CHAT_IDS", null);
     Environment.SetEnvironmentVariable("ENABLE_ONLINE_SEARCH", null);
     Environment.SetEnvironmentVariable("ENABLE_IMAGE_VISION", null);
+    Environment.SetEnvironmentVariable("ENABLE_IMAGE_OCR", null);
     Environment.SetEnvironmentVariable("ENABLE_AUDIO_TRANSCRIPTION", null);
     Environment.SetEnvironmentVariable("ENABLE_TELEGRAM_TYPING_INDICATOR", null);
     Environment.SetEnvironmentVariable("ENABLE_STREAMING_RESPONSES", null);
@@ -1127,6 +1129,7 @@ try
     BotSettings defaultPrivacySettings = BotConfiguration.LoadFromEnvironment();
     AssertFalse(defaultPrivacySettings.AllowPublicAccess, "BotConfiguration defaults public access override to false");
     AssertFalse(defaultPrivacySettings.EnableOnlineSearch, "BotConfiguration defaults online search to disabled");
+    AssertFalse(defaultPrivacySettings.EnableImageOcr, "BotConfiguration defaults image OCR to disabled");
     AssertFalse(defaultPrivacySettings.EnableAudioTranscription, "BotConfiguration defaults audio transcription to disabled");
     AssertFalse(defaultPrivacySettings.EnableTelegramTypingIndicator, "BotConfiguration defaults Telegram typing indicator to disabled");
     AssertFalse(defaultPrivacySettings.EnableStreamingResponses, "BotConfiguration defaults streaming responses to disabled");
@@ -1142,6 +1145,7 @@ try
     Environment.SetEnvironmentVariable("OLLAMA_MODEL_PLAN", "plan-model:test");
     Environment.SetEnvironmentVariable("OLLAMA_MODEL_DOC_QA", "docqa-model:test");
     Environment.SetEnvironmentVariable("ENABLE_IMAGE_VISION", "true");
+    Environment.SetEnvironmentVariable("ENABLE_IMAGE_OCR", "yes");
     Environment.SetEnvironmentVariable("ENABLE_AUDIO_TRANSCRIPTION", "yes");
     Environment.SetEnvironmentVariable("ENABLE_TELEGRAM_TYPING_INDICATOR", "1");
     Environment.SetEnvironmentVariable("ENABLE_STREAMING_RESPONSES", "true");
@@ -1150,6 +1154,7 @@ try
     AssertEqual("plan-model:test", routedEnvironmentSettings.OllamaPlanningModel, "BotConfiguration loads OLLAMA_MODEL_PLAN");
     AssertEqual("docqa-model:test", routedEnvironmentSettings.OllamaDocumentQuestionAnsweringModel, "BotConfiguration loads OLLAMA_MODEL_DOC_QA");
     AssertTrue(routedEnvironmentSettings.EnableImageVision, "BotConfiguration parses ENABLE_IMAGE_VISION truthy values");
+    AssertTrue(routedEnvironmentSettings.EnableImageOcr, "BotConfiguration parses ENABLE_IMAGE_OCR truthy values");
     AssertTrue(routedEnvironmentSettings.EnableAudioTranscription, "BotConfiguration parses ENABLE_AUDIO_TRANSCRIPTION truthy values");
     AssertTrue(routedEnvironmentSettings.EnableTelegramTypingIndicator, "BotConfiguration parses ENABLE_TELEGRAM_TYPING_INDICATOR truthy values");
     AssertTrue(routedEnvironmentSettings.EnableStreamingResponses, "BotConfiguration parses ENABLE_STREAMING_RESPONSES truthy values");
@@ -1163,6 +1168,7 @@ finally
     Environment.SetEnvironmentVariable("OLLAMA_MODEL_PLAN", previousOllamaModelPlan);
     Environment.SetEnvironmentVariable("OLLAMA_MODEL_DOC_QA", previousOllamaModelDocQa);
     Environment.SetEnvironmentVariable("ENABLE_IMAGE_VISION", previousEnableImageVision);
+    Environment.SetEnvironmentVariable("ENABLE_IMAGE_OCR", previousEnableImageOcr);
     Environment.SetEnvironmentVariable("ENABLE_AUDIO_TRANSCRIPTION", previousEnableAudioTranscription);
     Environment.SetEnvironmentVariable("ENABLE_TELEGRAM_TYPING_INDICATOR", previousEnableTelegramTypingIndicator);
     Environment.SetEnvironmentVariable("ENABLE_STREAMING_RESPONSES", previousEnableStreamingResponses);

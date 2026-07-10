@@ -160,6 +160,52 @@ static class DocumentTests
         AssertEqual(ModelTaskKind.Image, imagePromptChatClient.ModelTaskKinds.Last(), "/imageprompt uses the image model route for idea prompts");
         AssertFalse((await imagePromptCommand.TryHandleAsync(TextMessage("/imagepromptx idea"), testUser, dbContext, CancellationToken.None)).Handled, "/imagepromptx is not treated as /imageprompt");
 
+        var fakeImageOcrService = new FakeImageOcrService("Visible text from image fixture.");
+        var ocrImageDisabledCommand = new OcrImageCommand(
+            adminTestSettings,
+            documentStorage,
+            fakeImageOcrService);
+        CommandResult disabledOcrImageResult = await ocrImageDisabledCommand.TryHandleAsync(
+            TextMessage($"/ocrimage {uploadedImage.Id}"),
+            testUser,
+            dbContext,
+            CancellationToken.None);
+        AssertTrue(disabledOcrImageResult.Handled, "/ocrimage is handled when disabled");
+        AssertTrue(disabledOcrImageResult.ReplyText?.Contains("disabled", StringComparison.OrdinalIgnoreCase) == true, "/ocrimage reports disabled OCR gate");
+        AssertEqual(0, fakeImageOcrService.CallCount, "/ocrimage does not call provider while disabled");
+
+        var ocrImageEnabledCommand = new OcrImageCommand(
+            adminTestSettings with { EnableImageOcr = true },
+            documentStorage,
+            fakeImageOcrService);
+        CommandResult ocrImageResult = await ocrImageEnabledCommand.TryHandleAsync(
+            TextMessage($"/ocrimage {uploadedImage.Id}"),
+            testUser,
+            dbContext,
+            CancellationToken.None);
+        AssertTrue(ocrImageResult.Handled, "/ocrimage enabled command is handled");
+        AssertTrue(ocrImageResult.ReplyText?.Contains("OCR text", StringComparison.OrdinalIgnoreCase) == true, "/ocrimage returns OCR output label");
+        AssertTrue(ocrImageResult.ReplyText?.Contains("Visible text from image fixture.") == true, "/ocrimage includes OCR provider output");
+        AssertTrue(ocrImageResult.ReplyText?.Contains("Saved OCR text file", StringComparison.OrdinalIgnoreCase) == true, "/ocrimage reports saved OCR text document");
+        AssertEqual(uploadedImage.Id, fakeImageOcrService.LastImageId, "/ocrimage passes selected image to OCR provider");
+        UploadedFile savedOcrFile = (await dbContext.UploadedFiles
+            .Where(x => x.ConnectedUserId == testUser.Id)
+            .ToListAsync(CancellationToken.None))
+            .Where(x => x.Source.Equals("ocr", StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(x => x.Id)
+            .First();
+        AssertTrue(savedOcrFile.OriginalFileName.EndsWith(".txt", StringComparison.OrdinalIgnoreCase), "/ocrimage stores OCR output as a sandboxed text document");
+        string savedOcrText = await documentStorage.ExtractTextAsync(savedOcrFile, CancellationToken.None);
+        AssertTrue(savedOcrText.Contains("Visible text from image fixture."), "/ocrimage persists OCR text content");
+        CommandResult nonImageOcrResult = await ocrImageEnabledCommand.TryHandleAsync(
+            TextMessage($"/ocrimage {uploadedFileId}"),
+            testUser,
+            dbContext,
+            CancellationToken.None);
+        AssertTrue(nonImageOcrResult.Handled, "/ocrimage non-image input is handled");
+        AssertTrue(nonImageOcrResult.ReplyText?.Contains("not an image", StringComparison.OrdinalIgnoreCase) == true, "/ocrimage rejects non-image files");
+        AssertFalse((await ocrImageEnabledCommand.TryHandleAsync(TextMessage("/ocrimagex 1"), testUser, dbContext, CancellationToken.None)).Handled, "/ocrimagex is not treated as /ocrimage");
+
         CommandResult emptyVoiceFilesResult = await commandRouter.TryHandleAsync(TextMessage("/voicefiles"), testUser, dbContext, CancellationToken.None);
         AssertTrue(emptyVoiceFilesResult.Handled, "/voicefiles is handled without saved audio");
         AssertTrue(emptyVoiceFilesResult.ReplyText?.Contains("No audio files", StringComparison.OrdinalIgnoreCase) == true, "/voicefiles reports no saved audio before upload");
@@ -434,6 +480,17 @@ static class DocumentTests
         AssertTrue(localTranscriptionResult.Output.Contains("Transcript from local provider", StringComparison.OrdinalIgnoreCase), "LocalCommandAudioTranscriptionService captures provider stdout transcript");
         AssertTrue(localTranscriptionResult.Output.Contains("voice-note.ogg", StringComparison.OrdinalIgnoreCase), "LocalCommandAudioTranscriptionService passes the selected audio file path to the provider");
 
+        string ocrScriptPath = Path.Combine(documentStorage.RootDirectory, "fake-ocr.ps1");
+        await File.WriteAllTextAsync(ocrScriptPath, "param([string]$ImagePath)\nWrite-Output \"OCR from local provider for $(Split-Path -Leaf $ImagePath)\"", CancellationToken.None);
+        var localImageOcrService = new LocalCommandImageOcrService(
+            powershellPath,
+            $"-NoProfile -ExecutionPolicy Bypass -File \"{ocrScriptPath}\" \"{{file}}\"",
+            timeout: TimeSpan.FromSeconds(30));
+        ImageOcrResult localOcrResult = await localImageOcrService.ExtractTextAsync(uploadedImage, CancellationToken.None);
+        AssertTrue(localOcrResult.Success, "LocalCommandImageOcrService reports success for zero-exit local provider");
+        AssertTrue(localOcrResult.Output.Contains("OCR from local provider", StringComparison.OrdinalIgnoreCase), "LocalCommandImageOcrService captures provider stdout OCR text");
+        AssertTrue(localOcrResult.Output.Contains("sample.png", StringComparison.OrdinalIgnoreCase), "LocalCommandImageOcrService passes the selected image file path to the provider");
+
         AssertFalse((await commandRouter.TryHandleAsync(TextMessage("/transcribex 1"), testUser, dbContext, CancellationToken.None)).Handled, "/transcribex is not treated as /transcribe");
 
         UploadedFile fileBeforeDelete = await dbContext.UploadedFiles.FirstAsync(x => x.Id == uploadedFileId, CancellationToken.None);
@@ -537,6 +594,29 @@ sealed class FakeImageDescriptionService : IImageDescriptionService
         LastImageId = imageFile.Id;
         LastPrompt = prompt;
         return Task.FromResult(ImageDescriptionResult.Ok(_output));
+    }
+}
+
+sealed class FakeImageOcrService : IImageOcrService
+{
+    private readonly string _output;
+
+    public FakeImageOcrService(string output)
+    {
+        _output = output;
+    }
+
+    public int? LastImageId { get; private set; }
+
+    public int CallCount { get; private set; }
+
+    public Task<ImageOcrResult> ExtractTextAsync(
+        UploadedFile imageFile,
+        CancellationToken cancellationToken)
+    {
+        LastImageId = imageFile.Id;
+        CallCount++;
+        return Task.FromResult(ImageOcrResult.Ok(_output));
     }
 }
 

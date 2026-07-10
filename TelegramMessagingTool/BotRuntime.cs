@@ -39,6 +39,14 @@ public sealed record BotSettings(
 
     public bool EnableImageVision { get; init; }
 
+    public bool EnableImageOcr { get; init; }
+
+    public string ImageOcrCommand { get; init; } = string.Empty;
+
+    public string ImageOcrArguments { get; init; } = "{file}";
+
+    public int ImageOcrTimeoutSeconds { get; init; } = 120;
+
     public bool EnableAudioTranscription { get; init; }
 
     public string AudioTranscriptionCommand { get; init; } = string.Empty;
@@ -131,6 +139,10 @@ public static class BotConfiguration
             OllamaImageModel = NormalizeModelRoute(Environment.GetEnvironmentVariable("OLLAMA_MODEL_IMAGE"), ollamaModel),
             OllamaVoiceModel = NormalizeModelRoute(Environment.GetEnvironmentVariable("OLLAMA_MODEL_VOICE"), ollamaModel),
             EnableImageVision = IsEnabled(Environment.GetEnvironmentVariable("ENABLE_IMAGE_VISION"), defaultValue: false),
+            EnableImageOcr = IsEnabled(Environment.GetEnvironmentVariable("ENABLE_IMAGE_OCR"), defaultValue: false),
+            ImageOcrCommand = NormalizeOptionalText(Environment.GetEnvironmentVariable("IMAGE_OCR_COMMAND")),
+            ImageOcrArguments = NormalizeFileProviderArguments(Environment.GetEnvironmentVariable("IMAGE_OCR_ARGUMENTS")),
+            ImageOcrTimeoutSeconds = ParseClampedInt(Environment.GetEnvironmentVariable("IMAGE_OCR_TIMEOUT_SECONDS"), defaultValue: 120, minValue: 5, maxValue: 300),
             EnableAudioTranscription = IsEnabled(Environment.GetEnvironmentVariable("ENABLE_AUDIO_TRANSCRIPTION"), defaultValue: false),
             AudioTranscriptionCommand = NormalizeOptionalText(Environment.GetEnvironmentVariable("AUDIO_TRANSCRIPTION_COMMAND")),
             AudioTranscriptionArguments = NormalizeAudioTranscriptionArguments(Environment.GetEnvironmentVariable("AUDIO_TRANSCRIPTION_ARGUMENTS")),
@@ -231,6 +243,11 @@ public static class BotConfiguration
     }
 
     public static string NormalizeAudioTranscriptionArguments(string? value)
+    {
+        return NormalizeFileProviderArguments(value);
+    }
+
+    public static string NormalizeFileProviderArguments(string? value)
     {
         string normalized = string.IsNullOrWhiteSpace(value) ? "{file}" : value.Trim();
         return normalized.Contains("{file}", StringComparison.OrdinalIgnoreCase) ? normalized : normalized + " {file}";

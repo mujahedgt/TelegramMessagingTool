@@ -36,6 +36,7 @@ $settings = [ordered]@{
     'ENABLE_ONLINE_SEARCH' = 'true'
     'SEARCH_ROUTING_MODE' = 'llm'
     'ENABLE_IMAGE_VISION' = 'true'
+    'ENABLE_IMAGE_OCR' = 'true'
     'ENABLE_AUDIO_TRANSCRIPTION' = 'true'
     'ENABLE_TEXT_TO_SPEECH' = 'true'
     'ENABLE_TELEGRAM_TYPING_INDICATOR' = 'true'

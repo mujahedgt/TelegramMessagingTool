@@ -45,6 +45,8 @@ Online search: {(_settings.EnableOnlineSearch ? "enabled" : "disabled")}
 Search routing: {_settings.SearchRoutingMode}
 Image vision: {(_settings.EnableImageVision ? "enabled" : "disabled")}
 Image prompt: {(_settings.ImageDescriptionPrompt == BotConfiguration.DefaultImageDescriptionPrompt ? "default" : "custom")}
+Image OCR: {(_settings.EnableImageOcr ? "enabled" : "disabled")}
+OCR provider: {(string.IsNullOrWhiteSpace(_settings.ImageOcrCommand) ? "not configured" : "local command configured")}
 Audio transcription: {(_settings.EnableAudioTranscription ? "enabled" : "disabled")}
 Audio provider: {(string.IsNullOrWhiteSpace(_settings.AudioTranscriptionCommand) ? "not configured" : "local command configured")}
 Text-to-speech: {(_settings.EnableTextToSpeech ? "enabled" : "disabled")}

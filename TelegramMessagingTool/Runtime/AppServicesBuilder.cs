@@ -86,6 +86,12 @@ public static class AppServicesBuilder
         var transcriptInsightsService = new TranscriptInsightsService(ollamaClient);
         var imagePromptService = new ImagePromptService(ollamaClient);
         var imageDescriptionService = new OllamaImageDescriptionService(qwenClient, settings);
+        IImageOcrService? imageOcrService = string.IsNullOrWhiteSpace(settings.ImageOcrCommand)
+            ? null
+            : new LocalCommandImageOcrService(
+                settings.ImageOcrCommand,
+                settings.ImageOcrArguments,
+                TimeSpan.FromSeconds(settings.ImageOcrTimeoutSeconds));
         IAudioTranscriptionService? audioTranscriptionService = string.IsNullOrWhiteSpace(settings.AudioTranscriptionCommand)
             ? null
             : new LocalCommandAudioTranscriptionService(
@@ -134,6 +140,7 @@ public static class AppServicesBuilder
             documentEmbeddingService,
             vectorMaintenanceService,
             imageDescriptionService,
+            imageOcrService,
             audioTranscriptionService,
             textToSpeechService,
             runtimeEventBuffer);

@@ -50,6 +50,11 @@ public static class RuntimeRiskSummary
             warnings.Add("Audio transcription is enabled, but the provider command is missing.");
         }
 
+        if (settings.EnableImageOcr && string.IsNullOrWhiteSpace(settings.ImageOcrCommand))
+        {
+            warnings.Add("Image OCR is enabled, but the provider command is missing.");
+        }
+
         if (settings.EnableTextToSpeech && string.IsNullOrWhiteSpace(settings.TextToSpeechCommand))
         {
             warnings.Add("TTS is enabled, but the provider command is missing.");
@@ -70,6 +75,7 @@ public static class RuntimeRiskSummary
             $"- Plugin loading: {FormatEnabled(settings.EnablePlugins, warnWhenEnabled: true)} (trusted local DLLs only)",
             $"- Safe command tools: {FormatEnabled(settings.EnableSafeCommandTools, warnWhenEnabled: true)}",
             $"- Search routing: {settings.SearchRoutingMode}",
+            $"- Image OCR: {FormatProviderGate(settings.EnableImageOcr, settings.ImageOcrCommand)}",
             $"- Audio transcription: {FormatProviderGate(settings.EnableAudioTranscription, settings.AudioTranscriptionCommand)}",
             $"- TTS: {FormatProviderGate(settings.EnableTextToSpeech, settings.TextToSpeechCommand)}",
             "",

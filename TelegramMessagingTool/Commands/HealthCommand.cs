@@ -64,7 +64,7 @@ Search routing: {_settings.SearchRoutingMode}
 Plugins: {(_settings.EnablePlugins ? "enabled" : "disabled")}; valid manifests {pluginScanResult.Manifests.Count}, enabled {pluginScanResult.EnabledCount}, diagnostics {pluginScanResult.Diagnostics.Count}
 Vector store: {_settings.VectorStoreProvider}; embeddings {(_settings.EnableDocumentEmbeddings ? "enabled" : "disabled")}
 Qdrant: {RenderQdrantSummary(_settings)}
-Media providers: image={(_settings.EnableImageVision ? "enabled" : "disabled")}, stt={RenderLocalProvider(_settings.EnableAudioTranscription, _settings.AudioTranscriptionCommand)}, tts={RenderLocalProvider(_settings.EnableTextToSpeech, _settings.TextToSpeechCommand)}
+Media providers: image={(_settings.EnableImageVision ? "enabled" : "disabled")}, ocr={RenderLocalProvider(_settings.EnableImageOcr, _settings.ImageOcrCommand)}, stt={RenderLocalProvider(_settings.EnableAudioTranscription, _settings.AudioTranscriptionCommand)}, tts={RenderLocalProvider(_settings.EnableTextToSpeech, _settings.TextToSpeechCommand)}
 Reasoning/runtime: streaming={(_settings.EnableStreamingResponses ? "enabled" : "disabled")}, typing={(_settings.EnableTelegramTypingIndicator ? "enabled" : "disabled")}, history={_settings.ConversationMaxHistory}
 GitHub push: {RenderGitHubPushSummary(_settings)}
 Document storage: {(Directory.Exists(_documentStorage.RootDirectory) ? "OK" : "missing")} ({_documentStorage.RootDirectory})

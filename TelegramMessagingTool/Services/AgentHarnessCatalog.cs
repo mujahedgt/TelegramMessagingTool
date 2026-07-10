@@ -24,13 +24,13 @@ public static class AgentHarnessCatalog
                 [
                     "/images lists sandboxed uploaded image files",
                     "/describeimage <id> returns safe metadata by default",
+                    "/imageprompt <image-file-id|idea> drafts safe prompt text without generating images",
+                    "/ocrimage <id> runs only when ENABLE_IMAGE_OCR and a trusted provider command are configured",
                     "ENABLE_IMAGE_VISION gates local Ollama image-description execution",
                     "IMAGE_DESCRIPTION_PROMPT customizes the local vision prompt with a 1000-character cap"
                 ],
                 LaterGatedWork:
                 [
-                    "extract_image_text: OCR text from a sandboxed uploaded image",
-                    "generate_image_prompt: turn a user idea into a structured image prompt",
                     "create_image: approval/feature-flagged image generation entry point"
                 ],
                 SafetyRules:
@@ -86,6 +86,8 @@ public static class AgentHarnessCatalog
             builder.AppendLine($"- voice_agent route: {settings.OllamaVoiceModel}");
             builder.AppendLine($"- image vision execution: {(settings.EnableImageVision ? "enabled" : "disabled")}");
             builder.AppendLine($"- image description prompt: {(settings.ImageDescriptionPrompt == BotConfiguration.DefaultImageDescriptionPrompt ? "default" : "custom")}");
+            builder.AppendLine($"- image OCR execution: {(settings.EnableImageOcr ? "enabled" : "disabled")}");
+            builder.AppendLine($"- image OCR provider: {(string.IsNullOrWhiteSpace(settings.ImageOcrCommand) ? "not configured" : "local command configured")}");
             builder.AppendLine($"- audio transcription execution: {(settings.EnableAudioTranscription ? "enabled" : "disabled")}");
             builder.AppendLine($"- audio transcription provider: {(string.IsNullOrWhiteSpace(settings.AudioTranscriptionCommand) ? "not configured" : "local command configured")}");
             builder.AppendLine($"- text-to-speech execution: {(settings.EnableTextToSpeech ? "enabled" : "disabled")}");
@@ -126,9 +128,15 @@ public static class AgentHarnessCatalog
     {
         if (string.Equals(harnessName, "image_agent", StringComparison.OrdinalIgnoreCase))
         {
-            return settings.EnableImageVision
-                ? "ready for sandboxed image description"
-                : "metadata-only; enable ENABLE_IMAGE_VISION for local image understanding";
+            bool visionReady = settings.EnableImageVision;
+            bool ocrReady = settings.EnableImageOcr && !string.IsNullOrWhiteSpace(settings.ImageOcrCommand);
+            return (visionReady, ocrReady) switch
+            {
+                (true, true) => "ready for sandboxed image description and OCR extraction",
+                (true, false) => "image description ready; OCR blocked by provider gate",
+                (false, true) => "OCR ready; image description blocked by vision gate",
+                _ => "metadata/prompt-only; enable trusted local vision/OCR providers for image understanding"
+            };
         }
 
         if (string.Equals(harnessName, "voice_agent", StringComparison.OrdinalIgnoreCase))
@@ -154,6 +162,7 @@ public static class AgentHarnessCatalog
             return
             [
                 $"ENABLE_IMAGE_VISION={(settings.EnableImageVision ? "true" : "false")}",
+                $"ENABLE_IMAGE_OCR={(settings.EnableImageOcr ? "true" : "false")}; provider={(string.IsNullOrWhiteSpace(settings.ImageOcrCommand) ? "missing" : "configured")}",
                 $"OLLAMA_MODEL_IMAGE={settings.OllamaImageModel}",
                 $"IMAGE_DESCRIPTION_PROMPT={(settings.ImageDescriptionPrompt == BotConfiguration.DefaultImageDescriptionPrompt ? "default" : "custom")}"
             ];
@@ -176,7 +185,7 @@ public static class AgentHarnessCatalog
     {
         if (string.Equals(harnessName, "image_agent", StringComparison.OrdinalIgnoreCase))
         {
-            return ["/images", "/describeimage <id>"];
+            return ["/images", "/describeimage <id>", "/imageprompt <image-file-id|idea>", "/ocrimage <id>"];
         }
 
         if (string.Equals(harnessName, "voice_agent", StringComparison.OrdinalIgnoreCase))
@@ -191,7 +200,7 @@ public static class AgentHarnessCatalog
     {
         if (string.Equals(harnessName, "image_agent", StringComparison.OrdinalIgnoreCase))
         {
-            return ["/ocrimage <id>", "/imageprompt <idea>"];
+            return ["create_image approval/feature-flagged generation entry point"];
         }
 
         if (string.Equals(harnessName, "voice_agent", StringComparison.OrdinalIgnoreCase))

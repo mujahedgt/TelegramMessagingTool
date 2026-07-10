@@ -38,6 +38,7 @@ $settings = [ordered]@{
     'SEARCH_ROUTING_MODE' = 'heuristic'
     'ENABLE_DOCUMENT_EMBEDDINGS' = 'false'
     'ENABLE_IMAGE_VISION' = 'false'
+    'ENABLE_IMAGE_OCR' = 'false'
     'ENABLE_AUDIO_TRANSCRIPTION' = 'false'
     'ENABLE_TEXT_TO_SPEECH' = 'false'
     'ENABLE_TELEGRAM_TYPING_INDICATOR' = 'false'
