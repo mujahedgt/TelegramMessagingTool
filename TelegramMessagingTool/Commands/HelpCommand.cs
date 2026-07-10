@@ -41,6 +41,8 @@ TelegramMessagingTool Agent Commands
 /describeimage <id> - Describe a saved image when image vision is enabled; otherwise show safe metadata
 /voicefiles - List saved sandboxed audio files
 /transcribe <id> - Transcribe a saved audio file when a trusted local provider is configured
+/voicebrief <id> - Transcribe a saved audio file, save the transcript, and return a concise brief
+/voiceplan <id> - Transcribe a saved audio file and draft a review-only /plan command
 /transcriptinsights <id> - Summarize and extract tasks from a saved transcript document
 /transcripttasks <id> - Draft tasks and a suggested /plan command from a saved transcript
 /speaktext <text> - Generate TTS audio into the sandbox without sending it automatically

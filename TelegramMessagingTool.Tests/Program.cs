@@ -1117,6 +1117,8 @@ try
     Environment.SetEnvironmentVariable("ALLOW_PUBLIC_ACCESS", null);
     Environment.SetEnvironmentVariable("ALLOWED_CHAT_IDS", null);
     Environment.SetEnvironmentVariable("ENABLE_ONLINE_SEARCH", null);
+    Environment.SetEnvironmentVariable("ENABLE_IMAGE_VISION", null);
+    Environment.SetEnvironmentVariable("ENABLE_AUDIO_TRANSCRIPTION", null);
     Environment.SetEnvironmentVariable("ENABLE_TELEGRAM_TYPING_INDICATOR", null);
     Environment.SetEnvironmentVariable("ENABLE_STREAMING_RESPONSES", null);
     Environment.SetEnvironmentVariable("OLLAMA_MODEL", "base-model:test");

@@ -47,6 +47,8 @@ public static class CommandRouterFactory
             new DescribeImageCommand(settings, documentStorage, imageDescriptionService),
             new VoiceFilesCommand(),
             new TranscribeCommand(settings, documentStorage, audioTranscriptionService),
+            new VoiceBriefCommand(settings, documentStorage, audioTranscriptionService, transcriptInsightsService),
+            new VoicePlanCommand(settings, documentStorage, audioTranscriptionService, transcriptInsightsService),
             new TranscriptInsightsCommand(documentStorage, transcriptInsightsService),
             new TranscriptTasksCommand(documentStorage, transcriptInsightsService),
             new SpeakTextCommand(settings, documentStorage, textToSpeechService),

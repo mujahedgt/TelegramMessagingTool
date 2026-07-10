@@ -214,6 +214,46 @@ static class DocumentTests
         string savedTranscriptText = await documentStorage.ExtractTextAsync(savedTranscriptFile, CancellationToken.None);
         AssertTrue(savedTranscriptText.Contains("Transcript text from fixture."), "/transcribe persists transcript text content");
 
+        var voiceBriefChatClient = new ScriptedChatClient([
+            "Voice summary: fixture voice note. Tasks: review the saved transcript."
+        ]);
+        var voiceBriefCommand = new VoiceBriefCommand(
+            adminTestSettings with { EnableAudioTranscription = true },
+            documentStorage,
+            new FakeAudioTranscriptionService("Direct voice brief transcript."),
+            new TranscriptInsightsService(voiceBriefChatClient));
+        CommandResult voiceBriefResult = await voiceBriefCommand.TryHandleAsync(
+            TextMessage($"/voicebrief {uploadedAudio.Id}"),
+            testUser,
+            dbContext,
+            CancellationToken.None);
+        AssertTrue(voiceBriefResult.Handled, "/voicebrief is handled");
+        AssertTrue(voiceBriefResult.ReplyText?.Contains("Voice brief for", StringComparison.OrdinalIgnoreCase) == true, "/voicebrief labels direct audio brief output");
+        AssertTrue(voiceBriefResult.ReplyText?.Contains("Voice summary", StringComparison.OrdinalIgnoreCase) == true, "/voicebrief returns transcript insight output");
+        AssertTrue(voiceBriefResult.ReplyText?.Contains("Saved transcript file", StringComparison.OrdinalIgnoreCase) == true, "/voicebrief saves a transcript document for follow-up");
+        AssertEqual(ModelTaskKind.Voice, voiceBriefChatClient.ModelTaskKinds.Single(), "/voicebrief uses the voice model route");
+
+        var voicePlanChatClient = new ScriptedChatClient([
+            "Proposed title: Direct voice plan\nDraft task list:\n- Review the voice plan\nSuggested /plan command: /plan Review direct voice plan\nMissing information: none"
+        ]);
+        var voicePlanCommand = new VoicePlanCommand(
+            adminTestSettings with { EnableAudioTranscription = true },
+            documentStorage,
+            new FakeAudioTranscriptionService("Direct voice plan transcript."),
+            new TranscriptInsightsService(voicePlanChatClient));
+        CommandResult voicePlanResult = await voicePlanCommand.TryHandleAsync(
+            TextMessage($"/voiceplan {uploadedAudio.Id}"),
+            testUser,
+            dbContext,
+            CancellationToken.None);
+        AssertTrue(voicePlanResult.Handled, "/voiceplan is handled");
+        AssertTrue(voicePlanResult.ReplyText?.Contains("Voice plan draft", StringComparison.OrdinalIgnoreCase) == true, "/voiceplan labels direct audio plan output");
+        AssertTrue(voicePlanResult.ReplyText?.Contains("Suggested /plan command", StringComparison.OrdinalIgnoreCase) == true, "/voiceplan returns suggested plan command output");
+        AssertTrue(voicePlanResult.ReplyText?.Contains("No task was created automatically", StringComparison.OrdinalIgnoreCase) == true, "/voiceplan keeps plan creation review-only");
+        AssertEqual(ModelTaskKind.Voice, voicePlanChatClient.ModelTaskKinds.Single(), "/voiceplan uses the voice model route");
+        AssertFalse((await voiceBriefCommand.TryHandleAsync(TextMessage("/voicebriefx 1"), testUser, dbContext, CancellationToken.None)).Handled, "/voicebriefx is not treated as /voicebrief");
+        AssertFalse((await voicePlanCommand.TryHandleAsync(TextMessage("/voiceplanx 1"), testUser, dbContext, CancellationToken.None)).Handled, "/voiceplanx is not treated as /voiceplan");
+
         var transcriptInsightsChatClient = new ScriptedChatClient([
             "Voice summary: user discussed the fixture transcript. Tasks: follow up on the action item."
         ]);
