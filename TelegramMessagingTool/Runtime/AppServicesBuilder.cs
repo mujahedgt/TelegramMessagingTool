@@ -84,6 +84,7 @@ public static class AppServicesBuilder
         var documentQuestionAnsweringService = new DocumentQuestionAnsweringService(ollamaClient);
         var documentSummaryService = new DocumentSummaryService(ollamaClient);
         var transcriptInsightsService = new TranscriptInsightsService(ollamaClient);
+        var imagePromptService = new ImagePromptService(ollamaClient);
         var imageDescriptionService = new OllamaImageDescriptionService(qwenClient, settings);
         IAudioTranscriptionService? audioTranscriptionService = string.IsNullOrWhiteSpace(settings.AudioTranscriptionCommand)
             ? null
@@ -129,6 +130,7 @@ public static class AppServicesBuilder
             documentQuestionAnsweringService,
             documentSummaryService,
             transcriptInsightsService,
+            imagePromptService,
             documentEmbeddingService,
             vectorMaintenanceService,
             imageDescriptionService,

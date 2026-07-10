@@ -128,6 +128,38 @@ static class DocumentTests
         AssertEqual(customImagePrompt, fakeImageDescriptionService.LastPrompt, "/describeimage passes configured image prompt to image service");
         AssertFalse((await commandRouter.TryHandleAsync(TextMessage("/describeimagex 1"), testUser, dbContext, CancellationToken.None)).Handled, "/describeimagex is not treated as /describeimage");
 
+        var imagePromptChatClient = new ScriptedChatClient([
+            "Prompt: polished dark red dashboard UI, dramatic lighting\nNegative prompt: blurry, unreadable text\nNotes: keep text legible and do not invent logos.",
+            "Prompt: product photo of a black and red backend system mascot\nNegative prompt: distorted hands\nNotes: no copyrighted logos."
+        ]);
+        var imagePromptCommand = new ImagePromptCommand(
+            adminTestSettings with { EnableImageVision = true },
+            documentStorage,
+            new ImagePromptService(imagePromptChatClient),
+            fakeImageDescriptionService);
+        CommandResult imageFilePromptResult = await imagePromptCommand.TryHandleAsync(
+            TextMessage($"/imageprompt {uploadedImage.Id}"),
+            testUser,
+            dbContext,
+            CancellationToken.None);
+        AssertTrue(imageFilePromptResult.Handled, "/imageprompt image-file is handled");
+        AssertTrue(imageFilePromptResult.ReplyText?.Contains("Image prompt for", StringComparison.OrdinalIgnoreCase) == true, "/imageprompt labels image-file prompt output");
+        AssertTrue(imageFilePromptResult.ReplyText?.Contains("Prompt:", StringComparison.OrdinalIgnoreCase) == true, "/imageprompt returns generated prompt output");
+        AssertTrue(imageFilePromptResult.ReplyText?.Contains("does not generate or send images", StringComparison.OrdinalIgnoreCase) == true, "/imageprompt makes non-generation behavior explicit");
+        AssertEqual(uploadedImage.Id, fakeImageDescriptionService.LastImageId, "/imageprompt describes the selected image when image vision is enabled");
+        AssertEqual(ModelTaskKind.Image, imagePromptChatClient.ModelTaskKinds.First(), "/imageprompt uses the image model route for image-file prompts");
+
+        CommandResult ideaPromptResult = await imagePromptCommand.TryHandleAsync(
+            TextMessage("/imageprompt black and red backend system mascot"),
+            testUser,
+            dbContext,
+            CancellationToken.None);
+        AssertTrue(ideaPromptResult.Handled, "/imageprompt idea is handled");
+        AssertTrue(ideaPromptResult.ReplyText?.Contains("Image prompt draft", StringComparison.OrdinalIgnoreCase) == true, "/imageprompt labels idea prompt output");
+        AssertTrue(ideaPromptResult.ReplyText?.Contains("product photo", StringComparison.OrdinalIgnoreCase) == true, "/imageprompt returns idea prompt output");
+        AssertEqual(ModelTaskKind.Image, imagePromptChatClient.ModelTaskKinds.Last(), "/imageprompt uses the image model route for idea prompts");
+        AssertFalse((await imagePromptCommand.TryHandleAsync(TextMessage("/imagepromptx idea"), testUser, dbContext, CancellationToken.None)).Handled, "/imagepromptx is not treated as /imageprompt");
+
         CommandResult emptyVoiceFilesResult = await commandRouter.TryHandleAsync(TextMessage("/voicefiles"), testUser, dbContext, CancellationToken.None);
         AssertTrue(emptyVoiceFilesResult.Handled, "/voicefiles is handled without saved audio");
         AssertTrue(emptyVoiceFilesResult.ReplyText?.Contains("No audio files", StringComparison.OrdinalIgnoreCase) == true, "/voicefiles reports no saved audio before upload");
