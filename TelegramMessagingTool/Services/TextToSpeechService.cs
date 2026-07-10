@@ -1,5 +1,5 @@
 using System.Diagnostics;
-using System.Text;
+
 
 namespace TelegramMessagingTool.Services;
 
@@ -67,30 +67,29 @@ public sealed class LocalCommandTextToSpeechService : ITextToSpeechService
             CreateNoWindow = true
         };
 
-        string renderedArguments = _argumentsTemplate
-            .Replace("{text}", text, StringComparison.OrdinalIgnoreCase)
-            .Replace("{output}", outputPath, StringComparison.OrdinalIgnoreCase);
-        foreach (string argument in LocalCommandAudioTranscriptionService.SplitArguments(renderedArguments))
-        {
-            startInfo.ArgumentList.Add(argument);
-        }
+        LocalCommandProcessSupport.AddTemplateArguments(
+            startInfo,
+            _argumentsTemplate,
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["{text}"] = text,
+                ["{output}"] = outputPath
+            });
 
         try
         {
-            using Process process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start local text-to-speech command.");
-            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeoutCts.CancelAfter(_timeout);
+            LocalCommandProcessResult processResult = await LocalCommandProcessSupport.RunAsync(startInfo, _timeout, cancellationToken);
+            if (processResult.TimedOut)
+            {
+                return TextToSpeechResult.Failed("Local text-to-speech provider timed out.");
+            }
 
-            Task<string> outputTask = process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
-            Task<string> errorTask = process.StandardError.ReadToEndAsync(timeoutCts.Token);
-            await process.WaitForExitAsync(timeoutCts.Token);
-
-            string output = (await outputTask).Trim();
-            string error = (await errorTask).Trim();
-            if (process.ExitCode != 0)
+            string output = processResult.Output;
+            string error = processResult.Error;
+            if (processResult.ExitCode != 0)
             {
                 string detail = string.IsNullOrWhiteSpace(error) ? output : error;
-                return TextToSpeechResult.Failed($"Local text-to-speech provider exited with code {process.ExitCode}. {Truncate(detail)}".Trim());
+                return TextToSpeechResult.Failed($"Local text-to-speech provider exited with code {processResult.ExitCode}. {LocalCommandProcessSupport.Truncate(detail)}".Trim());
             }
 
             if (!File.Exists(outputPath))
@@ -104,11 +103,7 @@ public sealed class LocalCommandTextToSpeechService : ITextToSpeechService
                 return TextToSpeechResult.Failed("Local text-to-speech provider returned an empty audio file.");
             }
 
-            return TextToSpeechResult.Ok(audioBytes, _outputExtension, string.IsNullOrWhiteSpace(output) ? "Local text-to-speech provider generated audio." : output);
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            return TextToSpeechResult.Failed("Local text-to-speech provider timed out.");
+            return TextToSpeechResult.Ok(audioBytes, _outputExtension, string.IsNullOrWhiteSpace(output) ? "Local text-to-speech provider generated audio." : LocalCommandProcessSupport.Truncate(output));
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
@@ -128,15 +123,5 @@ public sealed class LocalCommandTextToSpeechService : ITextToSpeechService
                 // Best-effort cleanup only.
             }
         }
-    }
-
-    private static string Truncate(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return string.Empty;
-        }
-
-        return value.Length <= 1000 ? value : value[..1000] + "...";
     }
 }

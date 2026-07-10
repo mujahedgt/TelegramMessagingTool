@@ -31,6 +31,7 @@ TelegramMessagingTool Agent Commands
 /status - Show runtime status
 /health - Show compact runtime health diagnostics
 /providers - Admin-only local media provider diagnostics and examples
+/selfupdate [reason] - Admin-only approval request to publish and restart the latest bot
 /errors [count] - Admin-only: show recent metadata-only runtime warnings/errors
 /riskconfig - Admin-only: show risky runtime feature flags without secrets
 /reset - Clear your conversation history
@@ -51,6 +52,7 @@ TelegramMessagingTool Agent Commands
 /speaktext <text> - Generate TTS audio into the sandbox without sending it automatically
 /sendaudio <id> - Send a saved sandboxed audio file back to Telegram
 /exportchat [txt|docx|pdf] [last N] - Export recent chat history as a TXT, DOCX, or PDF file
+/exportdata [json] - Export your chat/user data as a sandboxed JSON backup
 
 Telegram voice messages are transcribed, answered by the local model, and replied to with synthesized voice/audio when trusted local transcription and TTS providers are configured.
 /readfile <id> - Read a saved text/PDF/DOCX/XLSX document
@@ -67,6 +69,11 @@ Telegram voice messages are transcribed, answered by the local model, and replie
 /summarizedocs - Summarize all indexed documents
 /embedfile <id> - Generate local embeddings for one indexed document
 /embeddocs - Generate local embeddings for all indexed documents
+/reembeddocs - Rebuild embeddings for all indexed documents
+/vectorstatus - Show configured vector store status
+/vectorsync - Sync stored document embeddings to the configured vector store
+/vectorclear - Create approval request to clear vector-store entries
+/vectorrepair - Repair vector-store entries from indexed documents
 /tools - List available safe agent tools
 /harnesses - Show image and voice agent harness readiness
 /plugins - Show plugin manifest/loading diagnostics

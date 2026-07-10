@@ -32,15 +32,6 @@ public static class ToolCallParser
             return fullTextResult;
         }
 
-        foreach (string candidate in ExtractJsonObjectCandidates(trimmed))
-        {
-            ToolCallParseResult candidateResult = TryParseJsonToolCall(candidate);
-            if (candidateResult.IsToolCall || candidateResult.Error is not null)
-            {
-                return candidateResult;
-            }
-        }
-
         return ToolCallParseResult.NotToolCall();
     }
 
@@ -82,63 +73,6 @@ public static class ToolCallParser
         catch (JsonException)
         {
             return ToolCallParseResult.NotToolCall();
-        }
-    }
-
-    private static IEnumerable<string> ExtractJsonObjectCandidates(string text)
-    {
-        for (int start = 0; start < text.Length; start++)
-        {
-            if (text[start] != '{')
-            {
-                continue;
-            }
-
-            bool inString = false;
-            bool escaped = false;
-            int depth = 0;
-
-            for (int index = start; index < text.Length; index++)
-            {
-                char current = text[index];
-
-                if (escaped)
-                {
-                    escaped = false;
-                    continue;
-                }
-
-                if (current == '\\' && inString)
-                {
-                    escaped = true;
-                    continue;
-                }
-
-                if (current == '"')
-                {
-                    inString = !inString;
-                    continue;
-                }
-
-                if (inString)
-                {
-                    continue;
-                }
-
-                if (current == '{')
-                {
-                    depth++;
-                }
-                else if (current == '}')
-                {
-                    depth--;
-                    if (depth == 0)
-                    {
-                        yield return text[start..(index + 1)];
-                        break;
-                    }
-                }
-            }
         }
     }
 }

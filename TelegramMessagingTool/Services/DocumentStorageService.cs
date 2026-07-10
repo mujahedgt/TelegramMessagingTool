@@ -504,7 +504,9 @@ public sealed class DocumentStorageService
     private void EnsureInsideRoot(string absolutePath)
     {
         string normalized = Path.GetFullPath(absolutePath);
-        if (!normalized.StartsWith(_rootDirectory, StringComparison.OrdinalIgnoreCase))
+        string rootWithSeparator = _rootDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            + Path.DirectorySeparatorChar;
+        if (!normalized.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException("Resolved file path escaped the document sandbox.");
         }

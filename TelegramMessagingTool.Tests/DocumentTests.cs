@@ -44,6 +44,23 @@ static class DocumentTests
         AssertTrue(readFileResult.Handled, "/readfile is handled");
         AssertTrue(readFileResult.ReplyText?.Contains("This is a saved note") == true, "/readfile returns file contents");
 
+        string sandboxSiblingDirectory = documentStorage.RootDirectory + "_sibling";
+        Directory.CreateDirectory(sandboxSiblingDirectory);
+        string siblingFilePath = Path.Combine(sandboxSiblingDirectory, "outside.txt");
+        await File.WriteAllTextAsync(siblingFilePath, "outside sandbox secret", CancellationToken.None);
+        string escapedSandboxText = await documentStorage.ExtractTextAsync(new UploadedFile
+        {
+            ConnectedUserId = testUser.Id,
+            ChatId = testUser.ChatId,
+            OriginalFileName = "outside.txt",
+            StoredFileName = "outside.txt",
+            AbsolutePath = siblingFilePath,
+            RelativePath = "..\\outside.txt",
+            ContentType = "text/plain",
+            Source = "test"
+        }, CancellationToken.None);
+        AssertTrue(escapedSandboxText.Contains("outside the current document sandbox", StringComparison.OrdinalIgnoreCase), "DocumentStorageService rejects paths that only share the sandbox prefix");
+
         CommandResult indexFileResult = await commandRouter.TryHandleAsync(TextMessage($"/indexfile {uploadedFileId}"), testUser, dbContext, CancellationToken.None);
         AssertTrue(indexFileResult.Handled, "/indexfile is handled");
         AssertTrue(indexFileResult.ReplyText?.Contains("Chunks created") == true, "/indexfile reports chunk count");

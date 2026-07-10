@@ -1,5 +1,5 @@
 using System.Diagnostics;
-using System.Text;
+
 using TelegramMessagingTool.Models;
 
 namespace TelegramMessagingTool.Services;
@@ -20,7 +20,6 @@ public interface IImageOcrService
 
 public sealed class LocalCommandImageOcrService : IImageOcrService
 {
-    private const int MaxProviderOutputCharacters = 100_000;
 
     private readonly string _command;
     private readonly string _argumentsTemplate;
@@ -55,33 +54,25 @@ public sealed class LocalCommandImageOcrService : IImageOcrService
             CreateNoWindow = true
         };
 
-        foreach (string argument in SplitArguments(_argumentsTemplate))
-        {
-            startInfo.ArgumentList.Add(argument.Replace("{file}", imagePath, StringComparison.OrdinalIgnoreCase));
-        }
+        LocalCommandProcessSupport.AddTemplateArguments(
+            startInfo,
+            _argumentsTemplate,
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["{file}"] = imagePath });
 
         try
         {
-            using Process process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start local image OCR command.");
-            Task<string> outputTask = ReadLimitedAsync(process.StandardOutput, MaxProviderOutputCharacters, cancellationToken);
-            Task<string> errorTask = ReadLimitedAsync(process.StandardError, MaxProviderOutputCharacters, cancellationToken);
-            Task waitTask = process.WaitForExitAsync(cancellationToken);
-            Task timeoutTask = Task.Delay(_timeout, cancellationToken);
-            if (await Task.WhenAny(waitTask, timeoutTask) != waitTask)
+            LocalCommandProcessResult processResult = await LocalCommandProcessSupport.RunAsync(startInfo, _timeout, cancellationToken);
+            if (processResult.TimedOut)
             {
-                TryKillProcessTree(process);
-                await process.WaitForExitAsync(CancellationToken.None);
                 return ImageOcrResult.Failed("Local image OCR provider timed out.");
             }
 
-            await waitTask;
-
-            string output = (await outputTask).Trim();
-            string error = (await errorTask).Trim();
-            if (process.ExitCode != 0)
+            string output = processResult.Output;
+            string error = processResult.Error;
+            if (processResult.ExitCode != 0)
             {
                 string detail = string.IsNullOrWhiteSpace(error) ? output : error;
-                return ImageOcrResult.Failed($"Local image OCR provider exited with code {process.ExitCode}. {Truncate(detail)}".Trim());
+                return ImageOcrResult.Failed($"Local image OCR provider exited with code {processResult.ExitCode}. {LocalCommandProcessSupport.Truncate(detail)}".Trim());
             }
 
             if (string.IsNullOrWhiteSpace(output))
@@ -89,7 +80,7 @@ public sealed class LocalCommandImageOcrService : IImageOcrService
                 return ImageOcrResult.Failed("Local image OCR provider returned empty text.");
             }
 
-            return ImageOcrResult.Ok(Truncate(output));
+            return ImageOcrResult.Ok(LocalCommandProcessSupport.Truncate(output));
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
@@ -97,81 +88,5 @@ public sealed class LocalCommandImageOcrService : IImageOcrService
         }
     }
 
-    private static async Task<string> ReadLimitedAsync(StreamReader reader, int maxCharacters, CancellationToken cancellationToken)
-    {
-        var builder = new StringBuilder(capacity: Math.Min(maxCharacters, 4096));
-        char[] buffer = new char[4096];
-        int read;
-        while ((read = await reader.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken)) > 0)
-        {
-            int remaining = maxCharacters - builder.Length;
-            if (remaining > 0)
-            {
-                builder.Append(buffer, 0, Math.Min(read, remaining));
-            }
-        }
-
-        return builder.ToString();
-    }
-
-    private static void TryKillProcessTree(Process process)
-    {
-        try
-        {
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-            }
-        }
-        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
-        {
-        }
-    }
-
-    internal static IReadOnlyList<string> SplitArguments(string arguments)
-    {
-        var result = new List<string>();
-        var current = new StringBuilder();
-        bool inQuotes = false;
-
-        for (int i = 0; i < arguments.Length; i++)
-        {
-            char ch = arguments[i];
-            if (ch == '"')
-            {
-                inQuotes = !inQuotes;
-                continue;
-            }
-
-            if (char.IsWhiteSpace(ch) && !inQuotes)
-            {
-                if (current.Length > 0)
-                {
-                    result.Add(current.ToString());
-                    current.Clear();
-                }
-
-                continue;
-            }
-
-            current.Append(ch);
-        }
-
-        if (current.Length > 0)
-        {
-            result.Add(current.ToString());
-        }
-
-        return result;
-    }
-
-    private static string Truncate(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return string.Empty;
-        }
-
-        return value.Length <= 1000 ? value : value[..1000] + "...";
-    }
+    internal static IReadOnlyList<string> SplitArguments(string arguments) => LocalCommandProcessSupport.SplitArguments(arguments);
 }

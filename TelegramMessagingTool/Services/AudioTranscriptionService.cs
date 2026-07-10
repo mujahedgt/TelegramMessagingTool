@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Text;
 using TelegramMessagingTool.Models;
 
 namespace TelegramMessagingTool.Services;
@@ -53,28 +52,25 @@ public sealed class LocalCommandAudioTranscriptionService : IAudioTranscriptionS
             CreateNoWindow = true
         };
 
-        string renderedArguments = _argumentsTemplate.Replace("{file}", audioPath, StringComparison.OrdinalIgnoreCase);
-        foreach (string argument in SplitArguments(renderedArguments))
-        {
-            startInfo.ArgumentList.Add(argument);
-        }
+        LocalCommandProcessSupport.AddTemplateArguments(
+            startInfo,
+            _argumentsTemplate,
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["{file}"] = audioPath });
 
         try
         {
-            using Process process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start local transcription command.");
-            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeoutCts.CancelAfter(_timeout);
+            LocalCommandProcessResult processResult = await LocalCommandProcessSupport.RunAsync(startInfo, _timeout, cancellationToken);
+            if (processResult.TimedOut)
+            {
+                return AudioTranscriptionResult.Failed("Local transcription provider timed out.");
+            }
 
-            Task<string> outputTask = process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
-            Task<string> errorTask = process.StandardError.ReadToEndAsync(timeoutCts.Token);
-            await process.WaitForExitAsync(timeoutCts.Token);
-
-            string output = (await outputTask).Trim();
-            string error = (await errorTask).Trim();
-            if (process.ExitCode != 0)
+            string output = processResult.Output;
+            string error = processResult.Error;
+            if (processResult.ExitCode != 0)
             {
                 string detail = string.IsNullOrWhiteSpace(error) ? output : error;
-                return AudioTranscriptionResult.Failed($"Local transcription provider exited with code {process.ExitCode}. {Truncate(detail)}".Trim());
+                return AudioTranscriptionResult.Failed($"Local transcription provider exited with code {processResult.ExitCode}. {LocalCommandProcessSupport.Truncate(detail)}".Trim());
             }
 
             if (string.IsNullOrWhiteSpace(output))
@@ -82,11 +78,7 @@ public sealed class LocalCommandAudioTranscriptionService : IAudioTranscriptionS
                 return AudioTranscriptionResult.Failed("Local transcription provider returned an empty transcript.");
             }
 
-            return AudioTranscriptionResult.Ok(output);
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            return AudioTranscriptionResult.Failed("Local transcription provider timed out.");
+            return AudioTranscriptionResult.Ok(LocalCommandProcessSupport.Truncate(output));
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
@@ -94,50 +86,5 @@ public sealed class LocalCommandAudioTranscriptionService : IAudioTranscriptionS
         }
     }
 
-    internal static IReadOnlyList<string> SplitArguments(string arguments)
-    {
-        var result = new List<string>();
-        var current = new StringBuilder();
-        bool inQuotes = false;
-
-        for (int i = 0; i < arguments.Length; i++)
-        {
-            char ch = arguments[i];
-            if (ch == '"')
-            {
-                inQuotes = !inQuotes;
-                continue;
-            }
-
-            if (char.IsWhiteSpace(ch) && !inQuotes)
-            {
-                if (current.Length > 0)
-                {
-                    result.Add(current.ToString());
-                    current.Clear();
-                }
-
-                continue;
-            }
-
-            current.Append(ch);
-        }
-
-        if (current.Length > 0)
-        {
-            result.Add(current.ToString());
-        }
-
-        return result;
-    }
-
-    private static string Truncate(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return string.Empty;
-        }
-
-        return value.Length <= 1000 ? value : value[..1000] + "...";
-    }
+    internal static IReadOnlyList<string> SplitArguments(string arguments) => LocalCommandProcessSupport.SplitArguments(arguments);
 }
