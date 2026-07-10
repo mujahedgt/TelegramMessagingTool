@@ -1,17 +1,23 @@
-# Voice provider configuration
+# Media provider configuration
 
-Telegram voice-message automation needs two trusted local providers:
+Telegram media automation can use three trusted local providers:
 
-1. **Speech-to-text**: converts the incoming Telegram `.ogg` voice note to transcript text on stdout.
-2. **Text-to-speech**: converts the bot reply text to an output audio file at `{output}`.
+1. **Image OCR**: extracts readable text from a selected sandboxed image file to stdout.
+2. **Speech-to-text**: converts the incoming Telegram `.ogg` voice note to transcript text on stdout.
+3. **Text-to-speech**: converts the bot reply text to an output audio file at `{output}`.
 
-The app runs both providers directly with `UseShellExecute=false`; these are not shell command strings. Do not put secrets in these values.
+The app runs all providers directly with `UseShellExecute=false`; these are not shell command strings. Do not put secrets in these values.
 
 ## Required environment variables
 
 Set these as Windows **User** environment variables on the machine that runs the bot:
 
 ```powershell
+[Environment]::SetEnvironmentVariable('ENABLE_IMAGE_OCR', 'true', 'User')
+[Environment]::SetEnvironmentVariable('IMAGE_OCR_COMMAND', 'C:\Tools\ocr\ocr-image.cmd', 'User')
+[Environment]::SetEnvironmentVariable('IMAGE_OCR_ARGUMENTS', '"{file}"', 'User')
+[Environment]::SetEnvironmentVariable('IMAGE_OCR_TIMEOUT_SECONDS', '120', 'User')
+
 [Environment]::SetEnvironmentVariable('ENABLE_AUDIO_TRANSCRIPTION', 'true', 'User')
 [Environment]::SetEnvironmentVariable('AUDIO_TRANSCRIPTION_COMMAND', 'C:\Tools\voice\transcribe-voice.cmd', 'User')
 [Environment]::SetEnvironmentVariable('AUDIO_TRANSCRIPTION_ARGUMENTS', '"{file}"', 'User')
@@ -24,9 +30,10 @@ Set these as Windows **User** environment variables on the machine that runs the
 [Environment]::SetEnvironmentVariable('TEXT_TO_SPEECH_OUTPUT_EXTENSION', '.ogg', 'User')
 ```
 
-Restart the latest release after setting them. Use `/status` and `/riskconfig` to verify:
+Restart the latest release after setting them. Use `/providers`, `/status`, and `/riskconfig` to verify:
 
 ```text
+Image OCR: enabled, provider configured
 Audio transcription: enabled
 Audio provider: local command configured
 Text-to-speech: enabled
@@ -35,6 +42,30 @@ TTS output: .ogg
 ```
 
 ## Provider contract
+
+### `ocr-image.cmd`
+
+Input:
+
+```text
+ocr-image.cmd "C:\path\to\uploaded-image.png"
+```
+
+Required behavior:
+
+- Exit code `0` means success.
+- Write only extracted text to stdout.
+- Non-zero exit code means failure; stderr/stdout is shown safely to the user.
+
+Example wrapper around Tesseract:
+
+```cmd
+@echo off
+set IMAGE=%~1
+C:\Program Files\Tesseract-OCR\tesseract.exe "%IMAGE%" stdout --psm 6
+```
+
+If your provider prints banners, confidence tables, or JSON, wrap it so stdout contains only the readable text you want saved into the sandbox.
 
 ### `transcribe-voice.cmd`
 
@@ -89,6 +120,13 @@ del "%TMP%" >NUL 2>NUL
 ```
 
 ## Runtime behavior
+
+When you run `/ocrimage <image-id>`:
+
+1. The bot verifies the image belongs to the current chat/user and exists under the sandbox.
+2. The bot runs the OCR provider against only that saved image file.
+3. Extracted text is saved as a sandboxed `.txt` document with source `ocr`.
+4. The reply includes follow-up commands such as `/readfile`, `/askfile`, and `/indexfile`.
 
 When you send a Telegram voice message:
 

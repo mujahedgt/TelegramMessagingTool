@@ -1449,6 +1449,8 @@ await using (var dbContext = new TelegramDbContext())
         EnableSafeCommandTools = true,
         EnablePlugins = true,
         SearchRoutingMode = "llm",
+        EnableImageOcr = true,
+        ImageOcrCommand = string.Empty,
         EnableAudioTranscription = true,
         AudioTranscriptionCommand = string.Empty,
         EnableTextToSpeech = true,
@@ -1470,6 +1472,7 @@ await using (var dbContext = new TelegramDbContext())
     AssertTrue(riskConfigResult.ReplyText?.Contains("Plugin loading: ENABLED", StringComparison.OrdinalIgnoreCase) == true, "/riskconfig shows plugin loading");
     AssertTrue(riskConfigResult.ReplyText?.Contains("Safe command tools: ENABLED", StringComparison.OrdinalIgnoreCase) == true, "/riskconfig shows safe command tools");
     AssertTrue(riskConfigResult.ReplyText?.Contains("Search routing: llm", StringComparison.OrdinalIgnoreCase) == true, "/riskconfig shows search routing mode");
+    AssertTrue(riskConfigResult.ReplyText?.Contains("Image OCR: enabled, provider command missing", StringComparison.OrdinalIgnoreCase) == true, "/riskconfig warns when image OCR provider command is missing");
     AssertTrue(riskConfigResult.ReplyText?.Contains("Audio transcription: enabled, provider command missing", StringComparison.OrdinalIgnoreCase) == true, "/riskconfig warns when transcription provider command is missing");
     AssertTrue(riskConfigResult.ReplyText?.Contains("TTS: enabled, provider command missing", StringComparison.OrdinalIgnoreCase) == true, "/riskconfig warns when TTS provider command is missing");
     AssertFalse(riskConfigResult.ReplyText?.Contains("ghp_secret_value_must_not_render", StringComparison.OrdinalIgnoreCase) == true, "/riskconfig never renders GitHub token values");
@@ -1482,6 +1485,7 @@ await using (var dbContext = new TelegramDbContext())
     AssertTrue(startupRiskWarnings.Any(x => x.Contains("repo write", StringComparison.OrdinalIgnoreCase)), "Startup risk warnings include repo write tools");
     AssertTrue(startupRiskWarnings.Any(x => x.Contains("plugin", StringComparison.OrdinalIgnoreCase)), "Startup risk warnings include plugin loading");
     AssertTrue(startupRiskWarnings.Any(x => x.Contains("GitHub write", StringComparison.OrdinalIgnoreCase)), "Startup risk warnings include GitHub write tools");
+    AssertTrue(startupRiskWarnings.Any(x => x.Contains("Image OCR", StringComparison.OrdinalIgnoreCase) && x.Contains("missing", StringComparison.OrdinalIgnoreCase)), "Startup risk warnings include missing image OCR provider command");
     AssertTrue(startupRiskWarnings.Any(x => x.Contains("audio transcription", StringComparison.OrdinalIgnoreCase) && x.Contains("missing", StringComparison.OrdinalIgnoreCase)), "Startup risk warnings include missing audio provider command");
     AssertTrue(startupRiskWarnings.Any(x => x.Contains("TTS", StringComparison.OrdinalIgnoreCase) && x.Contains("missing", StringComparison.OrdinalIgnoreCase)), "Startup risk warnings include missing TTS provider command");
     string startupPanel = AgentConsoleRenderer.RenderStartupPanel(new AgentConsoleSnapshot(
@@ -2338,6 +2342,32 @@ diff --git a/../outside.cs b/../outside.cs
     CommandResult healthMentionResult = await commandRouter.TryHandleAsync(TextMessage("/health@red_eye_ghost_bot"), testUser, dbContext, CancellationToken.None);
     AssertTrue(healthMentionResult.Handled, "/health@bot is handled");
     AssertFalse((await commandRouter.TryHandleAsync(TextMessage("/healthx"), testUser, dbContext, CancellationToken.None)).Handled, "/healthx is not treated as /health");
+
+    BotSettings providerDiagnosticSettings = adminTestSettings with
+    {
+        EnableImageOcr = true,
+        ImageOcrCommand = "C:\\secret-tools\\ocr-token-provider.cmd",
+        EnableAudioTranscription = true,
+        AudioTranscriptionCommand = "C:\\secret-tools\\stt-token-provider.cmd",
+        EnableTextToSpeech = true,
+        TextToSpeechCommand = "C:\\secret-tools\\tts-token-provider.cmd",
+        TextToSpeechOutputExtension = ".ogg"
+    };
+    var providersCommand = new MediaProvidersCommand(providerDiagnosticSettings);
+    CommandResult providersResult = await providersCommand.TryHandleAsync(TextMessage("/providers"), testUser, dbContext, CancellationToken.None);
+    AssertTrue(providersResult.Handled, "/providers is handled");
+    AssertTrue(providersResult.ReplyText?.Contains("Media provider diagnostics", StringComparison.OrdinalIgnoreCase) == true, "/providers reports heading");
+    AssertTrue(providersResult.ReplyText?.Contains("Image OCR: enabled, provider configured", StringComparison.OrdinalIgnoreCase) == true, "/providers reports OCR readiness");
+    AssertTrue(providersResult.ReplyText?.Contains("Audio transcription: enabled, provider configured", StringComparison.OrdinalIgnoreCase) == true, "/providers reports STT readiness");
+    AssertTrue(providersResult.ReplyText?.Contains("Text-to-speech: enabled, provider configured", StringComparison.OrdinalIgnoreCase) == true, "/providers reports TTS readiness");
+    AssertTrue(providersResult.ReplyText?.Contains("Provider contracts:", StringComparison.OrdinalIgnoreCase) == true, "/providers includes local provider contracts");
+    AssertTrue(providersResult.ReplyText?.Contains("Windows User env examples:", StringComparison.OrdinalIgnoreCase) == true, "/providers includes setup examples");
+    AssertTrue(providersResult.ReplyText?.Contains("Secrets:", StringComparison.OrdinalIgnoreCase) == true, "/providers states secret redaction policy");
+    AssertFalse(providersResult.ReplyText?.Contains("secret-tools", StringComparison.OrdinalIgnoreCase) == true, "/providers does not render provider command paths");
+    CommandResult nonAdminProvidersResult = await providersCommand.TryHandleAsync(TextMessage("/providers"), nonAdminUser, dbContext, CancellationToken.None);
+    AssertTrue(nonAdminProvidersResult.Handled, "/providers non-admin attempt is handled");
+    AssertTrue(nonAdminProvidersResult.ReplyText?.Contains("admin", StringComparison.OrdinalIgnoreCase) == true, "/providers is admin-only");
+    AssertFalse((await providersCommand.TryHandleAsync(TextMessage("/providersx"), testUser, dbContext, CancellationToken.None)).Handled, "/providersx is not treated as /providers");
 
     CommandResult nonAdminSelfUpdateResult = await commandRouter.TryHandleAsync(TextMessage("/selfupdate"), nonAdminUser, dbContext, CancellationToken.None);
     AssertTrue(nonAdminSelfUpdateResult.Handled, "/selfupdate non-admin attempt is handled");

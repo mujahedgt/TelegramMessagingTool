@@ -28,8 +28,9 @@ TelegramMessagingTool Agent Commands
 /diskstatus - Show read-only local disk space status
 /processes [count] - Show read-only local running processes by memory
 /killprocess <pid> - Create approval request to terminate a process later
-/status - Show bot status
+/status - Show runtime status
 /health - Show compact runtime health diagnostics
+/providers - Admin-only local media provider diagnostics and examples
 /errors [count] - Admin-only: show recent metadata-only runtime warnings/errors
 /riskconfig - Admin-only: show risky runtime feature flags without secrets
 /reset - Clear your conversation history
