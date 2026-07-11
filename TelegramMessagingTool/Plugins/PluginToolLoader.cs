@@ -7,10 +7,17 @@ namespace TelegramMessagingTool.Plugins;
 public sealed class PluginToolLoader
 {
     private readonly PluginManifestScanner _scanner;
+    private readonly IReadOnlySet<string> _allowedAssemblyHashes;
+    private readonly bool _requireHashAllowlist;
 
-    public PluginToolLoader(PluginManifestScanner? scanner = null)
+    public PluginToolLoader(
+        PluginManifestScanner? scanner = null,
+        IReadOnlySet<string>? allowedAssemblyHashes = null,
+        bool requireHashAllowlist = false)
     {
         _scanner = scanner ?? new PluginManifestScanner();
+        _allowedAssemblyHashes = allowedAssemblyHashes ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        _requireHashAllowlist = requireHashAllowlist;
     }
 
     public PluginToolLoadResult LoadEnabledTools(string pluginDirectory, IEnumerable<string> existingToolNames)
@@ -33,6 +40,29 @@ public sealed class PluginToolLoader
             if (!File.Exists(assemblyPath))
             {
                 diagnostics.Add($"Skipped plugin '{discovered.Manifest.Id}' because entry assembly is missing: {assemblyPath}");
+                continue;
+            }
+
+            string assemblySha256;
+            try
+            {
+                assemblySha256 = PluginTrustDiagnostics.ComputeSha256(assemblyPath);
+                diagnostics.Add($"Plugin '{discovered.Manifest.Id}' entry assembly sha256={assemblySha256}");
+            }
+            catch (IOException ex)
+            {
+                diagnostics.Add($"Skipped plugin '{discovered.Manifest.Id}' because entry assembly hash could not be computed: {ex.Message}");
+                continue;
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                diagnostics.Add($"Skipped plugin '{discovered.Manifest.Id}' because entry assembly hash could not be computed: {ex.Message}");
+                continue;
+            }
+
+            if (_requireHashAllowlist && !PluginTrustDiagnostics.IsAllowed(assemblySha256, _allowedAssemblyHashes))
+            {
+                diagnostics.Add($"Skipped plugin '{discovered.Manifest.Id}' because entry assembly sha256={assemblySha256} is not in PLUGIN_ALLOWED_SHA256.");
                 continue;
             }
 

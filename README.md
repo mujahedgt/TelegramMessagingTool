@@ -17,6 +17,7 @@ TelegramMessagingTool is a C#/.NET console application that connects a Telegram 
 - Admin-only `/riskconfig` command summarizes risky runtime feature flags without printing tokens, database connection strings, or provider credentials
 - `/health` command reports compact runtime diagnostics including uptime, DB/migration status, model routes, search mode, plugin manifest counts, storage roots, and risk warning count without secrets
 - Admin-only `/errors [count]` command shows a bounded, metadata-only in-memory history of recent runtime warnings/errors with secret/token redaction
+- Admin-only `/agentlog [count]` command shows recent sanitized agent/tool/provider/plugin/approval activity without raw private payloads
 - Lightweight Telegram reactions are sent best-effort for successful `/approve`, `/deny`, `/done`, `/remember`, and `/reset` commands while still keeping normal text replies
 - Optional Telegram typing indicators for normal chat replies when `ENABLE_TELEGRAM_TYPING_INDICATOR=true`; commands and file/voice handling skip the indicator to avoid noisy UX
 - Ollama streaming infrastructure is staged behind `ENABLE_STREAMING_RESPONSES=false`: the client can stream deltas, and `StreamingResponseService` falls back to non-streaming replies on streaming errors before Telegram edit-in-place UX is enabled
@@ -37,7 +38,7 @@ TelegramMessagingTool is a C#/.NET console application that connects a Telegram 
 - `/imageprompt <image-file-id|idea>` drafts safe prompt text from a saved image or text idea. It can use the gated local vision route for saved images when enabled, but it never generates or sends images automatically.
 - `/ocrimage <id>` extracts readable text from a saved image only when `ENABLE_IMAGE_OCR=true` and a trusted local `IMAGE_OCR_COMMAND` provider are configured. Successful OCR output is saved as a sandboxed `.txt` document with source `ocr`.
 - `/voicebrief <audio-id>` and `/voiceplan <audio-id>` are direct voice-agent shortcuts: they transcribe a saved audio file with the trusted local STT provider, save a transcript document, then return either a concise brief or a review-only task plan draft without creating tasks automatically.
-- Document Q&A indexing, question, summary, embedding, and vector maintenance commands: `/indexfile`, `/indexdocs`, `/docchunks`, `/askfile`, `/askdocs`, `/summarizefile`, `/summarizedocs`, `/embedfile`, `/embeddocs`, `/reembeddocs`, `/vectorstatus`, `/vectorsync`, `/vectorclear`, and `/vectorrepair`
+- Document Q&A indexing, question, summary, embedding, and vector maintenance commands: `/indexfile`, `/indexdocs`, `/docchunks`, `/askfile`, `/askdocs`, `/summarizefile`, `/summarizedocs`, `/embedfile`, `/embeddocs`, `/reembeddocs`, `/vectorstatus`, `/vectorsync`, `/vectorclear`, and `/vectorrepair`. Full RAG design documentation is in `docs/rag-implementation.md`.
 - Vector-store abstraction foundation for scalable document retrieval: `IVectorStore`, `DocumentVector`, `VectorSearchResult`, and a tested `LocalJsonVectorStore` fallback. `/embedfile`, `/embeddocs`, and `/reembeddocs` can mirror embeddings into the configured vector store; `/askfile` and `/askdocs` search vector results first when `ENABLE_DOCUMENT_EMBEDDINGS=true` and fall back to SQL `DocumentChunk.EmbeddingJson`/lexical retrieval on provider failures.
 - `/health` includes database/migration state, model routing, vector/Qdrant provider state, media provider gates, reasoning/runtime response flags, GitHub push readiness, storage paths, and risk-warning count without showing secrets.
 - Admin-only `/selfupdate [reason]` creates a high-risk approval request to publish a timestamped release, update `.latest-release`, and restart the bot from the latest release after `/approve`.
@@ -48,7 +49,7 @@ TelegramMessagingTool is a C#/.NET console application that connects a Telegram 
 - Command-execution hardening reads child-process stdout and stderr concurrently for approved release/repo/git safety operations to avoid deadlocks when one stream fills.
 - Task planner commands: `/plan <goal>`, `/tasks`, `/task <id>`, `/schedule <task-id> <step-number> <time> [note]`, `/schedulelist`, `/unschedule <task-id> <step-number>`, `/done <task-id> [step-number]`, and `/cancel <task-id>`
 - `/harnesses` shows the `image_agent` and `voice_agent` safety roadmap, readiness status, provider gates, implemented command coverage, and next safe command candidates for image/voice workflows
-- Plugin manifest inspection and trusted plugin loading via `/plugins`/`/tools`; manifests show paths and entry assembly presence, and enabled trusted DLLs can be loaded from `PLUGIN_DIRECTORY` when `ENABLE_PLUGINS=true`
+- Plugin manifest inspection and trusted plugin loading via `/plugins`/`/tools`; manifests show paths, entry assembly presence, SHA256 hash prefixes, and allowlist state. Enabled trusted DLLs can be loaded from `PLUGIN_DIRECTORY` when `ENABLE_PLUGINS=true`; strict SHA256 allowlisting is available with `PLUGIN_REQUIRE_HASH_ALLOWLIST=true` and `PLUGIN_ALLOWED_SHA256`.
 - Plugin authoring starter docs/templates in `docs/plugin-authoring.md` and `plugins/SamplePlugin/plugin.json.example`
 
 ## Development note
@@ -118,6 +119,8 @@ Configuration is read from environment variables.
 | `ENABLE_REPO_WRITE_TOOLS` | No | `false` | If true, registers approval-backed repository write tools such as `repo_replace_text`. These tools require admin use, create pending actions first, validate paths under `SAFE_COMMAND_PROJECT_ROOT`, and execute only after `/approve`. |
 | `ENABLE_PLUGINS` | No | `false` | If true, enables plugin manifest discovery and trusted local plugin loading from `PLUGIN_DIRECTORY`. Use `/plugins` for manifest diagnostics and `/tools` to verify loaded plugin tools. |
 | `PLUGIN_DIRECTORY` | No | `<current working directory>/plugins` | Directory scanned by `/plugins` for plugin folders containing `plugin.json`. Plugin assemblies are trusted OS-level code and should only come from reviewed/trusted sources. |
+| `PLUGIN_ALLOWED_SHA256` | No | empty | Optional comma-separated SHA256 allowlist for trusted plugin entry assemblies. `/plugins` shows hash prefixes and allowlist state without loading secrets. |
+| `PLUGIN_REQUIRE_HASH_ALLOWLIST` | No | `false` | If true, enabled plugin assemblies are loaded only when their SHA256 is present in `PLUGIN_ALLOWED_SHA256`. |
 | `ENABLE_GITHUB_TOOLS` | No | `false` | If true, registers read-only GitHub tools such as `github_repo_info`. Keep false unless you want the model to query GitHub. |
 | `ENABLE_GITHUB_WRITE_TOOLS` | No | `false` | If true, registers approval-backed GitHub write tools such as `github_create_issue` when a pending-action context is available. Requires `GITHUB_TOKEN`; keep false unless intentional. |
 | `GITHUB_TOKEN` | No | empty | Optional token for GitHub API requests. Never log or paste it into chat. `/status` only reports configured/not configured. |
@@ -129,7 +132,7 @@ Configuration is read from environment variables.
 | `LOG_MESSAGE_CONTENT` | No | `false` | Log user messages and assistant responses. Keep disabled for privacy. |
 | `CONVERSATION_MAX_HISTORY` | No | `8` | Number of recent persisted chat messages included in normal agent context. Values are clamped from `1` to `50`. |
 
-Use `/providers` from the admin chat for local media provider readiness, contracts, and setup examples for OCR/STT/TTS without printing command paths or secrets. Use `/riskconfig` to review high-risk local machine settings such as `ALLOW_PUBLIC_ACCESS=true`, `LOG_MESSAGE_CONTENT=true`, repo/GitHub write tools, trusted plugin loading, safe command tools, `SEARCH_ROUTING_MODE=llm`, and media provider gates with missing commands. Both commands report only enabled/disabled/configured status and intentionally never print token values, database connection strings, provider command paths, or provider secrets.
+Use `/providers` from the admin chat for local media provider readiness, contracts, and setup examples for OCR/STT/TTS without printing command paths or secrets. Use `/providertest ocr|stt|tts` to run a temporary non-secret readiness check against one configured local provider. Use `/riskconfig` to review high-risk local machine settings such as `ALLOW_PUBLIC_ACCESS=true`, `LOG_MESSAGE_CONTENT=true`, repo/GitHub write tools, trusted plugin loading, safe command tools, `SEARCH_ROUTING_MODE=llm`, and media provider gates with missing commands. These commands report only enabled/disabled/configured status and intentionally never print token values, database connection strings, provider command paths, or provider secrets.
 
 ### Optional local Windows User environment profiles
 

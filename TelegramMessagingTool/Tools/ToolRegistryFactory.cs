@@ -61,7 +61,9 @@ public static class ToolRegistryFactory
         var pluginTools = new List<ToolRegistration>();
         if (settings.EnablePlugins)
         {
-            PluginToolLoadResult pluginLoadResult = new PluginToolLoader().LoadEnabledTools(
+            PluginToolLoadResult pluginLoadResult = new PluginToolLoader(
+                allowedAssemblyHashes: settings.PluginAllowedSha256,
+                requireHashAllowlist: settings.PluginRequireHashAllowlist).LoadEnabledTools(
                 settings.PluginDirectory,
                 tools.Select(x => x.Name));
             pluginTools.AddRange(pluginLoadResult.Tools);

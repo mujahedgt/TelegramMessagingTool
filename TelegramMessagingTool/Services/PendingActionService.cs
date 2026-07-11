@@ -109,6 +109,7 @@ public sealed class PendingActionService
         CancellationToken cancellationToken)
     {
         PendingAction? action = await dbContext.PendingActions
+            .AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == actionId && x.ConnectedUserId == user.Id, cancellationToken);
 
         if (action is null)
@@ -116,27 +117,60 @@ public sealed class PendingActionService
             return new PendingActionDecision(false, null, $"No pending action #{actionId} was found for your account.");
         }
 
+        DateTime now = DateTime.UtcNow;
         if (action.Status != PendingActionStatuses.Pending)
         {
             return new PendingActionDecision(false, action, $"Action #{action.Id} is already {action.Status}.");
         }
 
-        if (action.ExpiresAt <= DateTime.UtcNow)
+        if (action.ExpiresAt <= now)
         {
-            action.Status = PendingActionStatuses.Expired;
-            action.DecidedAt = DateTime.UtcNow;
-            action.DecisionNote = "Expired before user decision.";
-            await dbContext.SaveChangesAsync(cancellationToken);
-            return new PendingActionDecision(false, action, $"Action #{action.Id} expired before it was approved or denied.");
+            int expiredRows = await dbContext.PendingActions
+                .Where(x => x.Id == actionId
+                    && x.ConnectedUserId == user.Id
+                    && x.Status == PendingActionStatuses.Pending)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(x => x.Status, PendingActionStatuses.Expired)
+                    .SetProperty(x => x.DecidedAt, now)
+                    .SetProperty(x => x.DecisionNote, "Expired before user decision."), cancellationToken);
+
+            PendingAction expiredAction = await ReloadActionAsync(dbContext, actionId, user.Id, cancellationToken) ?? action;
+            string message = expiredRows == 0
+                ? $"Action #{action.Id} is already {expiredAction.Status}."
+                : $"Action #{action.Id} expired before it was approved or denied.";
+            return new PendingActionDecision(false, expiredAction, message);
         }
 
-        action.Status = newStatus;
-        action.DecidedAt = DateTime.UtcNow;
-        action.DecisionNote = note;
-        await dbContext.SaveChangesAsync(cancellationToken);
-        _observability.PendingActionDecision(action.Id, action.ToolName, action.Status);
+        int changedRows = await dbContext.PendingActions
+            .Where(x => x.Id == actionId
+                && x.ConnectedUserId == user.Id
+                && x.Status == PendingActionStatuses.Pending
+                && x.ExpiresAt > now)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.Status, newStatus)
+                .SetProperty(x => x.DecidedAt, now)
+                .SetProperty(x => x.DecisionNote, note), cancellationToken);
 
-        return new PendingActionDecision(true, action, $"Action #{action.Id} was {newStatus}.");
+        PendingAction decidedAction = await ReloadActionAsync(dbContext, actionId, user.Id, cancellationToken) ?? action;
+        if (changedRows == 0)
+        {
+            return new PendingActionDecision(false, decidedAction, $"Action #{action.Id} is already {decidedAction.Status}.");
+        }
+
+        _observability.PendingActionDecision(decidedAction.Id, decidedAction.ToolName, decidedAction.Status);
+        return new PendingActionDecision(true, decidedAction, $"Action #{decidedAction.Id} was {newStatus}.");
+    }
+
+    private static async Task<PendingAction?> ReloadActionAsync(
+        TelegramDbContext dbContext,
+        int actionId,
+        int connectedUserId,
+        CancellationToken cancellationToken)
+    {
+        dbContext.ChangeTracker.Clear();
+        return await dbContext.PendingActions
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == actionId && x.ConnectedUserId == connectedUserId, cancellationToken);
     }
 
     private static async Task MarkExpiredAsync(TelegramDbContext dbContext, ConnectedUser user, CancellationToken cancellationToken)

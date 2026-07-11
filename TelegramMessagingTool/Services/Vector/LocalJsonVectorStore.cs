@@ -1,9 +1,12 @@
 using System.Text.Json;
+using System.Collections.Concurrent;
 
 namespace TelegramMessagingTool.Services.Vector;
 
 public sealed class LocalJsonVectorStore : IVectorStore
 {
+    private static readonly ConcurrentDictionary<string, SemaphoreSlim> FileLocks = new(StringComparer.OrdinalIgnoreCase);
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         WriteIndented = true
@@ -20,18 +23,27 @@ public sealed class LocalJsonVectorStore : IVectorStore
 
     public async Task UpsertAsync(DocumentVector vector, CancellationToken cancellationToken)
     {
-        List<DocumentVector> vectors = await ReadAllAsync(cancellationToken);
-        int existingIndex = vectors.FindIndex(x => string.Equals(x.Id, vector.Id, StringComparison.OrdinalIgnoreCase));
-        if (existingIndex >= 0)
+        SemaphoreSlim fileLock = GetFileLock();
+        await fileLock.WaitAsync(cancellationToken);
+        try
         {
-            vectors[existingIndex] = vector;
-        }
-        else
-        {
-            vectors.Add(vector);
-        }
+            List<DocumentVector> vectors = await ReadAllAsync(cancellationToken);
+            int existingIndex = vectors.FindIndex(x => string.Equals(x.Id, vector.Id, StringComparison.OrdinalIgnoreCase));
+            if (existingIndex >= 0)
+            {
+                vectors[existingIndex] = vector;
+            }
+            else
+            {
+                vectors.Add(vector);
+            }
 
-        await WriteAllAsync(vectors, cancellationToken);
+            await WriteAllAsync(vectors, cancellationToken);
+        }
+        finally
+        {
+            fileLock.Release();
+        }
     }
 
     public async Task<IReadOnlyList<VectorSearchResult>> SearchAsync(
@@ -45,27 +57,47 @@ public sealed class LocalJsonVectorStore : IVectorStore
             return [];
         }
 
-        List<DocumentVector> vectors = await ReadAllAsync(cancellationToken);
-        return vectors
-            .Where(x => x.ChatId == chatId && x.Embedding.Count > 0)
-            .Select(x => new VectorSearchResult(x, CosineSimilarity(queryEmbedding, x.Embedding)))
-            .Where(x => x.Score > 0)
-            .OrderByDescending(x => x.Score)
-            .ThenBy(x => x.Vector.UploadedFileId)
-            .ThenBy(x => x.Vector.ChunkNumber)
-            .Take(limit)
-            .ToList();
+        SemaphoreSlim fileLock = GetFileLock();
+        await fileLock.WaitAsync(cancellationToken);
+        try
+        {
+            List<DocumentVector> vectors = await ReadAllAsync(cancellationToken);
+            return vectors
+                .Where(x => x.ChatId == chatId && x.Embedding.Count > 0)
+                .Select(x => new VectorSearchResult(x, CosineSimilarity(queryEmbedding, x.Embedding)))
+                .Where(x => x.Score > 0)
+                .OrderByDescending(x => x.Score)
+                .ThenBy(x => x.Vector.UploadedFileId)
+                .ThenBy(x => x.Vector.ChunkNumber)
+                .Take(limit)
+                .ToList();
+        }
+        finally
+        {
+            fileLock.Release();
+        }
     }
 
     public async Task DeleteByUploadedFileIdAsync(int uploadedFileId, CancellationToken cancellationToken)
     {
-        List<DocumentVector> vectors = await ReadAllAsync(cancellationToken);
-        int removed = vectors.RemoveAll(x => x.UploadedFileId == uploadedFileId);
-        if (removed > 0)
+        SemaphoreSlim fileLock = GetFileLock();
+        await fileLock.WaitAsync(cancellationToken);
+        try
         {
-            await WriteAllAsync(vectors, cancellationToken);
+            List<DocumentVector> vectors = await ReadAllAsync(cancellationToken);
+            int removed = vectors.RemoveAll(x => x.UploadedFileId == uploadedFileId);
+            if (removed > 0)
+            {
+                await WriteAllAsync(vectors, cancellationToken);
+            }
+        }
+        finally
+        {
+            fileLock.Release();
         }
     }
+
+    private SemaphoreSlim GetFileLock() => FileLocks.GetOrAdd(Path.GetFullPath(_path), _ => new SemaphoreSlim(1, 1));
 
     private async Task<List<DocumentVector>> ReadAllAsync(CancellationToken cancellationToken)
     {
@@ -74,9 +106,16 @@ public sealed class LocalJsonVectorStore : IVectorStore
             return [];
         }
 
-        await using FileStream stream = File.OpenRead(_path);
-        List<DocumentVector>? vectors = await JsonSerializer.DeserializeAsync<List<DocumentVector>>(stream, JsonOptions, cancellationToken);
-        return vectors ?? [];
+        try
+        {
+            await using FileStream stream = File.OpenRead(_path);
+            List<DocumentVector>? vectors = await JsonSerializer.DeserializeAsync<List<DocumentVector>>(stream, JsonOptions, cancellationToken);
+            return vectors ?? [];
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidOperationException($"Local vector store JSON is corrupted: {_path}. Repair or clear the vector store before retrying. {ex.Message}", ex);
+        }
     }
 
     private async Task WriteAllAsync(List<DocumentVector> vectors, CancellationToken cancellationToken)
@@ -87,7 +126,7 @@ public sealed class LocalJsonVectorStore : IVectorStore
             Directory.CreateDirectory(directory);
         }
 
-        string temporaryPath = _path + ".tmp";
+        string temporaryPath = _path + $".{Guid.NewGuid():N}.tmp";
         await using (FileStream stream = File.Create(temporaryPath))
         {
             await JsonSerializer.SerializeAsync(stream, vectors, JsonOptions, cancellationToken);
@@ -95,10 +134,12 @@ public sealed class LocalJsonVectorStore : IVectorStore
 
         if (File.Exists(_path))
         {
-            File.Delete(_path);
+            File.Replace(temporaryPath, _path, destinationBackupFileName: null, ignoreMetadataErrors: true);
         }
-
-        File.Move(temporaryPath, _path);
+        else
+        {
+            File.Move(temporaryPath, _path);
+        }
     }
 
     private static double CosineSimilarity(IReadOnlyList<float> left, IReadOnlyList<float> right)

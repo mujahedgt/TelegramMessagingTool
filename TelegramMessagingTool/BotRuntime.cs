@@ -81,6 +81,10 @@ public sealed record BotSettings(
 
     public string ImageDescriptionPrompt { get; init; } = BotConfiguration.DefaultImageDescriptionPrompt;
 
+    public IReadOnlySet<string> PluginAllowedSha256 { get; init; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+    public bool PluginRequireHashAllowlist { get; init; }
+
     public GitHubSettings GitHub { get; init; } = GitHubSettings.Disabled;
 }
 
@@ -160,8 +164,29 @@ public static class BotConfiguration
             QdrantUrl = NormalizeQdrantUrl(Environment.GetEnvironmentVariable("QDRANT_URL")),
             QdrantCollection = NormalizeQdrantCollection(Environment.GetEnvironmentVariable("QDRANT_COLLECTION")),
             ImageDescriptionPrompt = NormalizeImageDescriptionPrompt(Environment.GetEnvironmentVariable("IMAGE_DESCRIPTION_PROMPT")),
+            PluginAllowedSha256 = ParsePluginAllowedSha256(Environment.GetEnvironmentVariable("PLUGIN_ALLOWED_SHA256")),
+            PluginRequireHashAllowlist = IsEnabled(Environment.GetEnvironmentVariable("PLUGIN_REQUIRE_HASH_ALLOWLIST"), defaultValue: false),
             GitHub = GitHubSettings.LoadFromEnvironment()
         };
+    }
+
+    public static IReadOnlySet<string> ParsePluginAllowedSha256(string? value)
+    {
+        var hashes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return hashes;
+        }
+
+        foreach (string part in value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (part.Length == 64 && part.All(Uri.IsHexDigit))
+            {
+                hashes.Add(part.ToLowerInvariant());
+            }
+        }
+
+        return hashes;
     }
 
     public static string NormalizeVectorStoreProvider(string? value)

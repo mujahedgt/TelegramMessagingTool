@@ -36,6 +36,9 @@ public sealed class PluginsCommand : IBotCommand
         string assemblyLoading = _settings.EnablePlugins
             ? "enabled. Plugin DLLs are trusted OS-level code and are loaded only from enabled manifests in this directory."
             : "disabled. Set ENABLE_PLUGINS=true only for trusted local plugin DLLs.";
+        string hashMode = _settings.PluginRequireHashAllowlist
+            ? $"required; allowed hashes: {_settings.PluginAllowedSha256.Count}"
+            : $"optional diagnostics; allowed hashes: {_settings.PluginAllowedSha256.Count}";
         string reply = $"""
 Plugin manifest discovery
 
@@ -46,11 +49,12 @@ Enabled manifests: {scanResult.EnabledCount}
 Disabled manifests: {scanResult.DisabledCount}
 
 Assembly loading: {assemblyLoading}
+Hash allowlist: {hashMode}
 """;
 
         if (scanResult.Manifests.Count > 0)
         {
-            reply += "\n\nManifests:\n" + string.Join("\n", scanResult.Manifests.Select(RenderManifest));
+            reply += "\n\nManifests:\n" + string.Join("\n", scanResult.Manifests.Select(x => RenderManifest(x, _settings)));
         }
         else
         {
@@ -65,15 +69,32 @@ Assembly loading: {assemblyLoading}
         return Task.FromResult(new CommandResult(true, reply));
     }
 
-    private static string RenderManifest(DiscoveredPluginManifest discovered)
+    private static string RenderManifest(DiscoveredPluginManifest discovered, BotSettings settings)
     {
         PluginManifest manifest = discovered.Manifest;
         string enabled = manifest.Enabled ? "enabled" : "disabled";
         string manifestDirectory = Path.GetDirectoryName(discovered.ManifestPath) ?? string.Empty;
         string entryAssemblyPath = Path.GetFullPath(Path.Combine(manifestDirectory, manifest.EntryAssembly));
         string assemblyStatus = File.Exists(entryAssemblyPath) ? "present" : "missing";
+        string hashSummary = "sha256: missing";
+        if (File.Exists(entryAssemblyPath))
+        {
+            try
+            {
+                string sha256 = PluginTrustDiagnostics.ComputeSha256(entryAssemblyPath);
+                string allowState = settings.PluginAllowedSha256.Count == 0
+                    ? "not allowlisted"
+                    : settings.PluginAllowedSha256.Contains(sha256) ? "allowlisted" : "not allowlisted";
+                hashSummary = $"sha256: {PluginTrustDiagnostics.RenderHashPrefix(sha256)}... ({allowState})";
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                hashSummary = "sha256: unavailable";
+            }
+        }
+
         return $"- {manifest.Id} v{manifest.Version} (api {manifest.ApiVersion}, {enabled}, risk: {manifest.RiskLevel}, tools: {string.Join(", ", manifest.AllowedToolNames)})\n"
             + $"  manifest: {discovered.ManifestPath}\n"
-            + $"  entry assembly: {manifest.EntryAssembly} ({assemblyStatus})";
+            + $"  entry assembly: {manifest.EntryAssembly} ({assemblyStatus}; {hashSummary})";
     }
 }

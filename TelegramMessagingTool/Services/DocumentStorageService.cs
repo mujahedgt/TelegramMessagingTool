@@ -273,15 +273,16 @@ public sealed class DocumentStorageService
             return "Audio files are saved for the voice-agent harness. Transcription is not implemented yet. Use /voicefiles to list saved audio files.";
         }
 
+        int boundedMaxCharacters = Math.Clamp(maxCharacters, 1, 100_000);
         string text = extension switch
         {
-            ".pdf" => ExtractPdfText(absolutePath),
-            ".docx" => ExtractDocxText(absolutePath),
-            ".xlsx" => ExtractXlsxText(absolutePath),
-            _ => await File.ReadAllTextAsync(absolutePath, Encoding.UTF8, cancellationToken)
+            ".pdf" => ExtractPdfText(absolutePath, boundedMaxCharacters),
+            ".docx" => ExtractDocxText(absolutePath, boundedMaxCharacters),
+            ".xlsx" => ExtractXlsxText(absolutePath, boundedMaxCharacters),
+            _ => await ReadTextFileBoundedAsync(absolutePath, boundedMaxCharacters, cancellationToken)
         };
 
-        return Truncate(text, maxCharacters);
+        return Truncate(text, boundedMaxCharacters);
     }
 
     public FileDeletionResult DeleteStoredFile(UploadedFile uploadedFile)
@@ -430,19 +431,23 @@ public sealed class DocumentStorageService
         await stream.WriteAsync(bytes, cancellationToken);
     }
 
-    private static string ExtractPdfText(string absolutePath)
+    private static string ExtractPdfText(string absolutePath, int maxCharacters)
     {
         StringBuilder text = new();
         using PdfDocument pdf = PdfDocument.Open(absolutePath);
         foreach (var page in pdf.GetPages())
         {
             text.AppendLine(page.Text);
+            if (text.Length > maxCharacters)
+            {
+                break;
+            }
         }
 
         return text.ToString().Trim();
     }
 
-    private static string ExtractDocxText(string absolutePath)
+    private static string ExtractDocxText(string absolutePath, int maxCharacters)
     {
         using WordprocessingDocument document = WordprocessingDocument.Open(absolutePath, false);
         Body? body = document.MainDocumentPart?.Document?.Body;
@@ -450,10 +455,30 @@ public sealed class DocumentStorageService
             body?.Descendants<DocumentFormat.OpenXml.Wordprocessing.Text>()
             ?? Enumerable.Empty<DocumentFormat.OpenXml.Wordprocessing.Text>();
 
-        return string.Join(Environment.NewLine, textNodes.Select(x => x.Text).Where(x => !string.IsNullOrWhiteSpace(x))).Trim();
+        var builder = new StringBuilder();
+        foreach (DocumentFormat.OpenXml.Wordprocessing.Text textNode in textNodes)
+        {
+            if (string.IsNullOrWhiteSpace(textNode.Text))
+            {
+                continue;
+            }
+
+            if (builder.Length > 0)
+            {
+                builder.AppendLine();
+            }
+
+            builder.Append(textNode.Text);
+            if (builder.Length > maxCharacters)
+            {
+                break;
+            }
+        }
+
+        return builder.ToString().Trim();
     }
 
-    private static string ExtractXlsxText(string absolutePath)
+    private static string ExtractXlsxText(string absolutePath, int maxCharacters)
     {
         using SpreadsheetDocument document = SpreadsheetDocument.Open(absolutePath, false);
         WorkbookPart? workbookPart = document.WorkbookPart;
@@ -483,6 +508,10 @@ public sealed class DocumentStorageService
                 if (values.Count > 0)
                 {
                     text.AppendLine(string.Join("\t", values));
+                    if (text.Length > maxCharacters)
+                    {
+                        return text.ToString().Trim();
+                    }
                 }
             }
         }
@@ -499,6 +528,14 @@ public sealed class DocumentStorageService
         }
 
         return rawValue;
+    }
+
+    private static async Task<string> ReadTextFileBoundedAsync(string absolutePath, int maxCharacters, CancellationToken cancellationToken)
+    {
+        char[] buffer = new char[maxCharacters + 1];
+        using var reader = new StreamReader(absolutePath, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+        int read = await reader.ReadBlockAsync(buffer.AsMemory(0, buffer.Length), cancellationToken);
+        return new string(buffer, 0, read);
     }
 
     private void EnsureInsideRoot(string absolutePath)

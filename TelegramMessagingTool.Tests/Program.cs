@@ -155,6 +155,135 @@ CommandResult vectorRepairNoFilesResult = await new VectorRepairCommand(vectorMa
     CancellationToken.None);
 AssertTrue(vectorRepairNoFilesResult.Handled, "/vectorrepair is handled");
 
+string durableVectorStorePath = Path.Combine(Path.GetTempPath(), "telegram-vector-store-tests", Guid.NewGuid().ToString("N"), "durable-vectors.json");
+var durableVectorStore = new LocalJsonVectorStore(durableVectorStorePath);
+await Task.WhenAll(Enumerable.Range(1, 12).Select(i => durableVectorStore.UpsertAsync(new DocumentVector(
+    Id: $"concurrent-{i}",
+    ChatId: 303,
+    ConnectedUserId: 3,
+    UploadedFileId: i,
+    ChunkId: i,
+    ChunkNumber: i,
+    OriginalFileName: $"doc-{i}.txt",
+    Text: $"document {i}",
+    Embedding: [1.0f, i / 100.0f]), CancellationToken.None)));
+using (JsonDocument.Parse(await File.ReadAllTextAsync(durableVectorStorePath, CancellationToken.None)))
+{
+}
+IReadOnlyList<VectorSearchResult> concurrentVectorResults = await durableVectorStore.SearchAsync(303, [1.0f, 0.0f], 20, CancellationToken.None);
+AssertEqual(12, concurrentVectorResults.Count, "LocalJsonVectorStore preserves concurrent upserts and leaves parseable JSON");
+await File.WriteAllTextAsync(durableVectorStorePath, "not-json", CancellationToken.None);
+await AssertThrowsAsync<InvalidOperationException>(
+    () => durableVectorStore.SearchAsync(303, [1.0f, 0.0f], 5, CancellationToken.None),
+    "LocalJsonVectorStore reports corrupted JSON without silently replacing vectors");
+
+await using TelegramDbContext approvalRaceDb = EmptyDbContext();
+var approvalRaceUser = new ConnectedUser { ChatId = 9090, Name = "approval-race", CreatedAt = DateTime.UtcNow, LastSeenAt = DateTime.UtcNow };
+approvalRaceDb.Users.Add(approvalRaceUser);
+await approvalRaceDb.SaveChangesAsync(CancellationToken.None);
+var approvalRaceService = new PendingActionService();
+PendingAction approvalRaceAction = await approvalRaceService.CreateAsync(
+    approvalRaceDb,
+    approvalRaceUser,
+    "kill_process",
+    "Terminate fake process",
+    "{\"pid\":12345}",
+    "high",
+    TimeSpan.FromMinutes(5),
+    CancellationToken.None);
+PendingActionDecision firstApprovalDecision = await approvalRaceService.ApproveAsync(approvalRaceDb, approvalRaceUser, approvalRaceAction.Id, CancellationToken.None);
+PendingActionDecision secondApprovalDecision = await approvalRaceService.ApproveAsync(approvalRaceDb, approvalRaceUser, approvalRaceAction.Id, CancellationToken.None);
+AssertTrue(firstApprovalDecision.Success, "PendingActionService approves a pending action once");
+AssertFalse(secondApprovalDecision.Success, "PendingActionService rejects a duplicate approval decision");
+AssertTrue(secondApprovalDecision.Message.Contains("already", StringComparison.OrdinalIgnoreCase), "Duplicate approval receives already-decided message");
+
+string pluginTrustTestRoot = Path.Combine(Path.GetTempPath(), "telegram-plugin-trust-tests", Guid.NewGuid().ToString("N"));
+string pluginManifestDir = Path.Combine(pluginTrustTestRoot, "Sample");
+Directory.CreateDirectory(pluginManifestDir);
+string pluginAssemblyPath = Path.Combine(pluginManifestDir, "SamplePlugin.dll");
+await File.WriteAllTextAsync(pluginAssemblyPath, "fake plugin bytes", CancellationToken.None);
+await File.WriteAllTextAsync(Path.Combine(pluginManifestDir, "plugin.json"), """
+{
+  "id": "sample",
+  "name": "Sample Plugin",
+  "version": "1.0.0",
+  "apiVersion": "1.0",
+  "enabled": true,
+  "entryAssembly": "SamplePlugin.dll",
+  "allowedToolNames": ["sample_tool"],
+  "riskLevel": "low",
+  "isReadOnly": true,
+  "safetySummary": "test plugin"
+}
+""", CancellationToken.None);
+PluginScanResult pluginScan = new PluginManifestScanner().Scan(pluginTrustTestRoot);
+string pluginHash = PluginTrustDiagnostics.ComputeSha256(pluginAssemblyPath);
+AssertEqual(64, pluginHash.Length, "PluginTrustDiagnostics computes SHA256 for plugin DLLs");
+AssertTrue(PluginTrustDiagnostics.IsAllowed(pluginHash, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { pluginHash }), "PluginTrustDiagnostics matches allowlisted hashes");
+var strictPluginLoader = new PluginToolLoader(allowedAssemblyHashes: new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "different-hash" }, requireHashAllowlist: true);
+PluginToolLoadResult strictLoadResult = strictPluginLoader.LoadEnabledTools(pluginTrustTestRoot, []);
+AssertTrue(strictLoadResult.Diagnostics.Any(x => x.Contains("not in PLUGIN_ALLOWED_SHA256", StringComparison.OrdinalIgnoreCase)), "PluginToolLoader reports strict hash allowlist rejection");
+CommandResult pluginsHashResult = await new PluginsCommand(TestSettings() with
+{
+    EnablePlugins = true,
+    PluginDirectory = pluginTrustTestRoot,
+    PluginRequireHashAllowlist = true,
+    PluginAllowedSha256 = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { pluginHash }
+}).TryHandleAsync(TextMessage("/plugins"), new ConnectedUser { ChatId = 1 }, null!, CancellationToken.None);
+AssertTrue(pluginsHashResult.ReplyText?.Contains(pluginHash[..12], StringComparison.OrdinalIgnoreCase) == true, "/plugins shows plugin DLL hash prefix for trust verification");
+
+var agentLogBuffer = new RuntimeEventBuffer();
+agentLogBuffer.Record(ConsoleEventLevel.Info, "TOOL_CALL", "tool=calculator input=password=super-secret-token");
+CommandResult agentLogResult = await new AgentLogCommand(TestSettings() with { AdminChatId = 100 }, agentLogBuffer).TryHandleAsync(
+    TextMessage("/agentlog 5"),
+    new ConnectedUser { ChatId = 100 },
+    null!,
+    CancellationToken.None);
+AssertTrue(agentLogResult.Handled, "/agentlog is handled");
+AssertTrue(agentLogResult.ReplyText?.Contains("TOOL_CALL") == true, "/agentlog shows recent sanitized agent activity");
+AssertFalse(agentLogResult.ReplyText?.Contains("super-secret-token", StringComparison.OrdinalIgnoreCase) == true, "/agentlog redacts secret-like content");
+CommandResult nonAdminAgentLogResult = await new AgentLogCommand(TestSettings() with { AdminChatId = 100 }, agentLogBuffer).TryHandleAsync(
+    TextMessage("/agentlog"),
+    new ConnectedUser { ChatId = 200 },
+    null!,
+    CancellationToken.None);
+AssertTrue(nonAdminAgentLogResult.ReplyText?.Contains("admin", StringComparison.OrdinalIgnoreCase) == true, "/agentlog is admin-only");
+
+var fakeProviderRunner = new FakeProviderCommandRunner(new ProviderCommandRunResult(true, 0, TimeSpan.FromMilliseconds(25), "provider-ok", string.Empty));
+CommandResult providerUsageResult = await new ProviderTestCommand(TestSettings() with { AdminChatId = 100 }, fakeProviderRunner).TryHandleAsync(
+    TextMessage("/providertest"),
+    new ConnectedUser { ChatId = 100 },
+    null!,
+    CancellationToken.None);
+AssertTrue(providerUsageResult.ReplyText?.Contains("Usage", StringComparison.OrdinalIgnoreCase) == true, "/providertest shows usage when provider is missing");
+CommandResult providerDisabledResult = await new ProviderTestCommand(TestSettings() with { AdminChatId = 100 }, fakeProviderRunner).TryHandleAsync(
+    TextMessage("/providertest stt"),
+    new ConnectedUser { ChatId = 100 },
+    null!,
+    CancellationToken.None);
+AssertTrue(providerDisabledResult.ReplyText?.Contains("disabled", StringComparison.OrdinalIgnoreCase) == true, "/providertest reports disabled providers without running commands");
+AssertEqual(0, fakeProviderRunner.Calls, "/providertest does not execute disabled providers");
+CommandResult providerOkResult = await new ProviderTestCommand(TestSettings() with
+{
+    AdminChatId = 100,
+    EnableAudioTranscription = true,
+    AudioTranscriptionCommand = "fake-transcriber",
+    AudioTranscriptionArguments = "{file}"
+}, fakeProviderRunner).TryHandleAsync(
+    TextMessage("/providertest stt"),
+    new ConnectedUser { ChatId = 100 },
+    null!,
+    CancellationToken.None);
+AssertTrue(providerOkResult.ReplyText?.Contains("Status: OK", StringComparison.OrdinalIgnoreCase) == true, "/providertest reports successful provider command");
+AssertFalse(providerOkResult.ReplyText?.Contains("fake-transcriber", StringComparison.OrdinalIgnoreCase) == true, "/providertest does not leak provider command path");
+AssertEqual("Audio transcription", fakeProviderRunner.LastSpec?.DisplayName, "/providertest passes selected provider spec to runner");
+CommandResult nonAdminProviderTestResult = await new ProviderTestCommand(TestSettings() with { AdminChatId = 100 }, fakeProviderRunner).TryHandleAsync(
+    TextMessage("/providertest stt"),
+    new ConnectedUser { ChatId = 200 },
+    null!,
+    CancellationToken.None);
+AssertTrue(nonAdminProviderTestResult.ReplyText?.Contains("admin", StringComparison.OrdinalIgnoreCase) == true, "/providertest is admin-only");
+
 var streamingClient = new ScriptedStreamingChatClient("Hello world", ["Hello", " world"]);
 var streamingFallbackClient = new ScriptedChatClient(["fallback response"]);
 var streamingResponseService = new StreamingResponseService(streamingClient, streamingFallbackClient);
@@ -1258,6 +1387,10 @@ AssertTrue(createdFile.RelativePath.Contains("123456789"), "CreateTextFileAsync 
 AssertFalse(createdFile.RelativePath.Contains(".."), "CreateTextFileAsync does not store traversal path");
 string extractedText = await documentStorage.ExtractTextAsync(createdFile, CancellationToken.None);
 AssertTrue(extractedText.Contains("Hello document"), "ExtractTextAsync reads created text document");
+UploadedFile largeTextFile = await documentStorage.CreateTextFileAsync(storageTestUser, "large.txt", new string('A', 5000), CancellationToken.None);
+string boundedLargeText = await documentStorage.ExtractTextAsync(largeTextFile, CancellationToken.None, maxCharacters: 100);
+AssertTrue(boundedLargeText.Length <= 115, "ExtractTextAsync bounds text-file reads before returning large content");
+AssertTrue(boundedLargeText.Contains("[truncated]", StringComparison.OrdinalIgnoreCase), "ExtractTextAsync marks bounded large text as truncated");
 
 UploadedFile createdDocx = await documentStorage.CreateFileAsync(storageTestUser, "brief.docx", "DOCX capability works", CancellationToken.None);
 string extractedDocx = await documentStorage.ExtractTextAsync(createdDocx, CancellationToken.None);
@@ -1845,8 +1978,8 @@ await using (var dbContext = new TelegramDbContext())
     AssertTrue(pluginsResult.Handled, "/plugins is handled");
     AssertTrue(pluginsResult.ReplyText?.Contains("sample-plugin") == true, "/plugins lists discovered manifest id");
     AssertTrue(pluginsResult.ReplyText?.Contains("plugin.json") == true, "/plugins shows manifest path details");
-    AssertTrue(pluginsResult.ReplyText?.Contains("SamplePlugin.dll (present)") == true, "/plugins reports present entry assembly fixture");
-    AssertTrue(pluginsResult.ReplyText?.Contains("MissingAssemblyPlugin.dll (missing)") == true, "/plugins reports missing entry assembly safely");
+    AssertTrue(pluginsResult.ReplyText?.Contains("SamplePlugin.dll (present", StringComparison.OrdinalIgnoreCase) == true, "/plugins reports present entry assembly fixture");
+        AssertTrue(pluginsResult.ReplyText?.Contains("MissingAssemblyPlugin.dll (missing", StringComparison.OrdinalIgnoreCase) == true, "/plugins reports missing entry assembly safely");
     AssertTrue(pluginsResult.ReplyText?.Contains("Assembly loading: enabled", StringComparison.OrdinalIgnoreCase) == true, "/plugins explains trusted assembly loading is enabled");
     AssertTrue(pluginsResult.ReplyText?.Contains("sample_tool") == true, "/plugins lists allowed tool names");
 
@@ -2957,6 +3090,27 @@ sealed class FakeTaskReminderSender : ITaskReminderSender
     {
         SentMessages.Add((chatId, text));
         return Task.CompletedTask;
+    }
+}
+
+sealed class FakeProviderCommandRunner : IProviderCommandRunner
+{
+    private readonly ProviderCommandRunResult _result;
+
+    public FakeProviderCommandRunner(ProviderCommandRunResult result)
+    {
+        _result = result;
+    }
+
+    public int Calls { get; private set; }
+
+    public ProviderTestSpec? LastSpec { get; private set; }
+
+    public Task<ProviderCommandRunResult> RunAsync(ProviderTestSpec spec, CancellationToken cancellationToken)
+    {
+        Calls++;
+        LastSpec = spec;
+        return Task.FromResult(_result);
     }
 }
 

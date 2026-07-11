@@ -48,7 +48,7 @@ public static class CommandTests
             textToSpeechService: null);
         string commandNames = string.Join(",", router.Commands.Select(x => x.Name));
         AssertEqual(
-            "/help,/systeminfo,/diskstatus,/processes,/status,/health,/providers,/selfupdate,/errors,/riskconfig,/reset,/remember,/memory,/forget,/files,/images,/describeimage,/imageprompt,/ocrimage,/voicefiles,/transcribe,/voicebrief,/voiceplan,/transcriptinsights,/transcripttasks,/speaktext,/sendaudio,/exportchat,/exportdata,/readfile,/createfile,/importfiles,/importfile,/deletefile,/indexfile,/indexdocs,/docchunks,/askfile,/askdocs,/summarizefile,/summarizedocs,/embedfile,/embeddocs,/reembeddocs,/vectorstatus,/vectorsync,/vectorclear,/vectorrepair,/tools,/harnesses,/plugins,/killprocess,/action,/actions,/pending,/approve,/deny,/plan,/tasks,/task,/schedule,/schedulelist,/unschedule,/done,/cancel",
+            "/help,/systeminfo,/diskstatus,/processes,/status,/health,/providers,/providertest,/selfupdate,/errors,/agentlog,/riskconfig,/reset,/remember,/memory,/forget,/files,/images,/describeimage,/imageprompt,/ocrimage,/voicefiles,/transcribe,/voicebrief,/voiceplan,/transcriptinsights,/transcripttasks,/speaktext,/sendaudio,/exportchat,/exportdata,/readfile,/createfile,/importfiles,/importfile,/deletefile,/indexfile,/indexdocs,/docchunks,/askfile,/askdocs,/summarizefile,/summarizedocs,/embedfile,/embeddocs,/reembeddocs,/vectorstatus,/vectorsync,/vectorclear,/vectorrepair,/tools,/harnesses,/plugins,/killprocess,/action,/actions,/pending,/approve,/deny,/plan,/tasks,/task,/schedule,/schedulelist,/unschedule,/done,/cancel",
             commandNames,
             "CommandRouterFactory preserves Program command registration order");
     }

@@ -60,7 +60,13 @@ public sealed class PendingActionExecutor
         };
 
         action.DecisionNote = result.Message;
-        await dbContext.SaveChangesAsync(cancellationToken);
+        int noteRows = await dbContext.PendingActions
+            .Where(x => x.Id == action.Id)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.DecisionNote, result.Message), cancellationToken);
+        if (noteRows == 0)
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
         _observability.ApprovalExecutionCompleted(action.Id, action.ToolName, result.Executed, result.Success, result.Message);
         if (action.ToolName.StartsWith("repo_", StringComparison.OrdinalIgnoreCase) || string.Equals(action.ToolName, "publish_release", StringComparison.OrdinalIgnoreCase))
         {

@@ -23,4 +23,23 @@ public static class TestAssert
             throw new Exception($"{name}: expected false");
         }
     }
+
+    public static async Task AssertThrowsAsync<TException>(Func<Task> action, string name)
+        where TException : Exception
+    {
+        try
+        {
+            await action();
+        }
+        catch (TException)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            throw new Exception($"{name}: expected {typeof(TException).Name}, actual {ex.GetType().Name}");
+        }
+
+        throw new Exception($"{name}: expected {typeof(TException).Name}");
+    }
 }
